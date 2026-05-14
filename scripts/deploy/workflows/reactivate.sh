@@ -57,6 +57,6 @@ echo "==> Activating workflow..."
 call_api POST "/api/v1/workflows/$WORKFLOW_ID/activate"
 
 echo
-echo "Re-run ./scripts/list-calendly-webhooks.sh to confirm subscriptions are registered."
+echo "Re-run ./scripts/query/calendly-webhooks.sh to confirm subscriptions are registered."
 
 unset N8N_API_KEY

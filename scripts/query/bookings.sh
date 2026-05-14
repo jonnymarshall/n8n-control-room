@@ -3,15 +3,15 @@
 # Query the 'bookings' data table from the command line.
 #
 # Usage:
-#   ./scripts/query-bookings.sh                          # compact table, all rows
-#   ./scripts/query-bookings.sh status=booked            # only booked
-#   ./scripts/query-bookings.sh status=cancelled         # only cancelled
-#   ./scripts/query-bookings.sh invitee_email=jane@x.com # by attendee
-#   ./scripts/query-bookings.sh --all                    # verbose: every column, vertical layout
-#   ./scripts/query-bookings.sh --all status=cancelled   # filters + verbose
-#   ./scripts/query-bookings.sh --json                   # raw JSON dump of matched rows
-#   ./scripts/query-bookings.sh --recent 5               # 5 most recently written rows (sorted by createdAt desc)
-#   ./scripts/query-bookings.sh --recent 10 --all        # combine with --all / filters as usual
+#   ./scripts/query/bookings.sh                          # compact table, all rows
+#   ./scripts/query/bookings.sh status=booked            # only booked
+#   ./scripts/query/bookings.sh status=cancelled         # only cancelled
+#   ./scripts/query/bookings.sh invitee_email=jane@x.com # by attendee
+#   ./scripts/query/bookings.sh --all                    # verbose: every column, vertical layout
+#   ./scripts/query/bookings.sh --all status=cancelled   # filters + verbose
+#   ./scripts/query/bookings.sh --json                   # raw JSON dump of matched rows
+#   ./scripts/query/bookings.sh --recent 5               # 5 most recently written rows (sorted by createdAt desc)
+#   ./scripts/query/bookings.sh --recent 10 --all        # combine with --all / filters as usual
 #
 # Filters are ANDed. Use one or many. Values are exact string match.
 #

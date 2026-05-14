@@ -8,7 +8,7 @@
 #   N8N_API_KEY           - n8n REST API key (from /settings/api)
 #   AGENTMAIL_API_KEY     - AgentMail API token (starts with am_)
 #
-# Usage: ./scripts/create-agentmail-credential.sh
+# Usage: ./scripts/deploy/credentials/create-agentmail.sh
 
 set -euo pipefail
 

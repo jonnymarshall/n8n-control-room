@@ -4,7 +4,7 @@
 #
 # Reads from .env: N8N_URL, N8N_API_KEY, CALENDLY_PAT
 #
-# Usage: ./scripts/create-calendly-credential.sh
+# Usage: ./scripts/deploy/credentials/create-calendly.sh
 #
 # Prints the new credential ID on success. Save that ID — the next step uses it.
 

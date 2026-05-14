@@ -5,7 +5,7 @@
 #
 # Reads from .env: AGENTMAIL_API_KEY
 #
-# Usage: ./scripts/list-agentmail-inboxes.sh
+# Usage: ./scripts/query/agentmail-inboxes.sh
 
 set -euo pipefail
 

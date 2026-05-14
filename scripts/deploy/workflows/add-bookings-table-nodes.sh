@@ -8,7 +8,7 @@
 #
 # Reads from .env: N8N_URL, N8N_API_KEY
 #
-# Usage: ./scripts/add-bookings-table-nodes.sh
+# Usage: ./scripts/deploy/workflows/add-bookings-table-nodes.sh
 
 set -euo pipefail
 
@@ -290,6 +290,6 @@ fi
 echo
 echo "SUCCESS — data-table nodes added."
 echo "Open:    $N8N_URL/workflow/$WORKFLOW_ID"
-echo "Next:    ./scripts/reactivate-workflow.sh   (re-register the Calendly webhook)"
+echo "Next:    ./scripts/deploy/workflows/reactivate.sh   (re-register the Calendly webhook)"
 
 unset WF PATCHED N8N_API_KEY

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
 # Patches the Calendly → Gmail workflow to use API-key auth and binds the
-# credential created by create-calendly-credential.sh.
+# credential created by create-calendly.sh.
 #
 # Reads from .env:
 #   N8N_URL                  - base URL of your n8n instance
 #   N8N_API_KEY              - your n8n REST API key
-#   CALENDLY_CREDENTIAL_ID   - the ID printed by create-calendly-credential.sh
+#   CALENDLY_CREDENTIAL_ID   - the ID printed by create-calendly.sh
 #
-# Usage: ./scripts/bind-calendly-credential.sh
+# Usage: ./scripts/deploy/credentials/bind-calendly.sh
 
 set -euo pipefail
 
@@ -40,10 +40,10 @@ PY
 
 : "${N8N_URL:?N8N_URL not set in .env}"
 : "${N8N_API_KEY:?N8N_API_KEY not set in .env}"
-: "${CALENDLY_CREDENTIAL_ID:?CALENDLY_CREDENTIAL_ID not set in .env (run create-calendly-credential.sh first)}"
+: "${CALENDLY_CREDENTIAL_ID:?CALENDLY_CREDENTIAL_ID not set in .env (run create-calendly.sh first)}"
 
 # n8n's public API doesn't expose GET /credentials/:id, so we use the name we
-# created the credential with in create-calendly-credential.sh. The id is what
+# created the credential with in create-calendly.sh. The id is what
 # actually resolves the credential at runtime; name is for display only.
 CRED_NAME="Calendly PAT (n8n control room)"
 echo "==> Using credential: $CRED_NAME ($CALENDLY_CREDENTIAL_ID)"

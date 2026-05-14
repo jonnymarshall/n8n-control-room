@@ -330,7 +330,7 @@ echo "    webhook URL:  $N8N_URL/webhook/$WEBHOOK_PATH"
 echo
 echo "Next steps:"
 echo "    1. ./scripts/deploy/tokens/issue.sh <agent-name>"
-echo "    2. Activate the workflow in the UI (or via reactivate-workflow.sh after updating it for this ID)"
+echo "    2. Activate the workflow in the UI (or via ./scripts/deploy/workflows/reactivate.sh after updating it for this ID)"
 
 # Persist the workflow ID + webhook URL for downstream scripts.
 echo "$WORKFLOW_ID" > "$(cd "$(dirname "$0")/../../.." && pwd)/.public-api-workflow-id"
