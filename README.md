@@ -105,6 +105,8 @@ Admin actions that change server state. All read `N8N_API_KEY` from the root `.e
 | `workflows/reactivate.sh` | Deactivates then reactivates the Calendly workflow (forces webhook re-registration). |
 | `workflows/migrate-gmail-to-agentmail.sh` | Replaces the Calendly workflow's Gmail nodes with HTTP nodes pointing at AgentMail. |
 | `workflows/add-bookings-table-nodes.sh` | Inserts the Upsert/Update Data Table nodes into the Calendly workflow. |
+| `bookings/clear.sh` | Deletes every row from the `bookings` data table. The public API can't delete data-table rows, so it spins up a one-shot webhook workflow (Webhook → Data Table deleteRows → Respond), calls it, then tears it down. Prompts for confirmation; pass `-y` to skip. |
+| `bookings/backfill-from-calendly.sh` | Pulls all upcoming active bookings from Calendly (via `CALENDLY_PAT`) and inserts them into the `bookings` table with `status=booked`. Idempotent — re-reads existing `invitee_id`s and only inserts new ones. Pass `--dry-run` to preview. |
 | `credentials/create-agentmail.sh` | Creates the AgentMail `httpHeaderAuth` credential in n8n. |
 | `credentials/create-calendly.sh` | Creates the Calendly API-key credential. Prints the credential ID. |
 | `credentials/bind-calendly.sh` | Binds the Calendly credential to the Calendly workflow node. |
