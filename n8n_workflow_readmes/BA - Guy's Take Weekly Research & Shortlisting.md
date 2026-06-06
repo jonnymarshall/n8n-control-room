@@ -1,7 +1,6 @@
-# Z9dDjafBA899Hgok
+# BA: Guy's Take Weekly Research & Shortlisting
 
-> **Current display name:** `BA: Guy's Take Weekly Research & Shortlisting`
-> _Display name may change. Use the workflow ID above to find this workflow in n8n._
+> **Find this workflow in n8n by name.** Workflow IDs change whenever a workflow is rebuilt from code, so the name is the stable identifier. (ID at time of writing: `Z9dDjafBA899Hgok`.)
 
 ---
 
@@ -218,6 +217,7 @@ The Flatten step yields zero items for that channel. The workflow continues with
 
 ## Related
 
+- **Pod21: Telegram Airtable Assistant** (`Pod21 - Telegram Airtable Assistant.md` in this folder): general Telegram agent that can read/write the same Airtable data conversationally, with one-tap approval on writes.
 - **Phase 0 workflow** (`GbFwXLACjj1O6spS`): Airtable Episode status change → Telegram notification. Foundational pipe between Airtable and Telegram for the Guy's Take build.
 - **Planning doc**: `/Users/jonny/code/n8n-control-room/workflow_planning/Guys Take Workflow.md`
 - **Original Python script** (retired): `/Users/jonny/code/n8n-control-room/scripts/youtube_research/youtube_research.py` — the hermes-era prototype this workflow replaces.
