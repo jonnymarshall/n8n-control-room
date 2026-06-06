@@ -9,5 +9,20 @@
         "repo": "czlonkowski/n8n-skills"
       }
     }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "mcp__n8n-mcp__create_workflow_from_code|mcp__n8n-mcp__update_workflow",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -c '{hookSpecificOutput:{hookEventName:\"PostToolUse\",additionalContext:(\"An n8n workflow was just created or updated (\" + .tool_name + \"). REQUIRED before ending this task: write or update the explainer markdown for that workflow in /Users/jonny/code/n8n-control-room/n8n_workflow_readmes/ . Filename = workflow display name with colon replaced by hyphen, plus .md extension. Follow the existing readme format (name-keyed title, ID-at-time-of-writing note, TLDR, quick facts, required credentials, how it works, gotchas, related). If a readme exists, update stale sections in place. If the workflow was renamed, rename the readme file too.\")}}' 2>/dev/null || true",
+            "timeout": 10,
+            "statusMessage": "Reminding Claude to update the workflow readme"
+          }
+        ]
+      }
+    ]
   }
 }
