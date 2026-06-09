@@ -27,43 +27,61 @@ Artwork formats = {
 
 ## Workflow
 
-### Scheduling
-- Confirm record date & time [C]
+### Scheduling (Thursday)
+- 🤖 Create episode in Airtable
+  -- Episode.RecordingStatus: Unscheduled
+- 🤖 Suggest recoring options on Telegram to group (Monday or Tuesday, 9, 10 or 11AM ET)
+  -- Episode.RecordingStatus: Awaiting confirmation
+- ☝️ Confirm record slot (Telegram - Guy)
+- 🤖 Create calendar event for recording and invite Jonny and Guy
+  -- Episode.RecordingStatus: Scheduled
+  -- Episode.RecordDateTime: <RecordDateTime>
 
-### Research & Scripting
-- Research Trending Stories on YouTube (Auto triggered every Friday by N8N)
-- Research Trending Stories on X (Auto triggered every Friday by N8N) #Phase2
-- Research Trending Stories on Reddit (Auto triggered every Friday by N8N) #Phase2
-- Send research on via AgentEmail to Jonny & Guy (Auto triggered by N8N)
-- Notify on Telegram that research is ready and await confirmation of picked stories (Auto triggered by N8N)
-- Pick 2 Stories to record [G]
-- Confirm stories to create script for (Manual Trigger: Telegram)
-- Generate Script (Auto triggered by N8N)
+### Research & Scripting (Friday)
+- 🤖 Research trending stories
+  - 🤖 Create shortlist
+    - YouTube (Phase 1) ✅
+    - X (Phase 2)
+    - Reddit (Phase 3)
+  - 🤖 Suggest 8X shortlisted topics on Telegram (Await confirmation)
+  -- Episode.Shortlist: <Link to 8X possible topics>
+- ☝️ Confirm 2X topics to create script for (Telegram - Guy)
+- 🤖 Create 2X Topics: <Link to 2X chosen topics>
+
+### Scripting
+- 🤖 Generate Script for 2X topics and create script pages (HTML?)
+  -- Topic.Script: <Script>
+- 🤖 Send link to scripts on Telegram
 
 ### Recording
-- Record Takes [J & G]
+- 🎙️ Record 2X Take episodes
+- 🤖 Send message to Telegram asking to confirm recording complete 2H after RecordDateTime
+  -- Episode.RecordingStatus: Recorded
 
 ### Post-record
 - Download transcript from Riverside [J] (Trigger: Airtable)
-- Run export with 60% audio enhance [J] (Trigger: Airtable)
+- Run export with 60% audio enhance [C] (Trigger: Airtable)
 - Download recording [J] (Trigger: Airtable)
 
 ### Editing
-- Create edited episode [J] (Auto Trigger: Frame.io)
-- Supply references [J] (Manual Trigger: Telegram)
+- ▶️ Create edited episode [J]
+- 📝 Create references.md [J]
+- 📁 Put both on Frame.io [J]
 
-### AI Analysis
-- Generate title options (Auto Trigger: Airtable)
-- Generate thumbnail caption options (Auto Trigger: Airtable)
-- Generate Description (Auto Trigger: Airtable)
-- Generate SEO friendly chapter markers (Auto Trigger: Airtable)
-
-### Approvals
-- Approve specific title [J] (Manual Trigger: Telegram)
-- Approve specific thumbnail caption [J] (Manual Trigger: Telegram)
+### AI Titles, Thumbnail Captions, Description & Chapter Markers
+- 🤖 Generate title options
+- 🤖 Generate thumbnail caption options
+- 🤖 Generate Description
+- 🤖 Generate SEO friendly chapter markers
+- 🤖 Suggest Titles, Thumbnail Captions & Description on Telegram
+- ☝️ Approve specific title [J]
+- ☝️ Approve specific thumbnail caption [J]
 
 ### Artwork
-{Artwork formats} [J]
+- 🤖 Generate 5X 16X9 YouTube Thumbnail options and send on Telegram
+- ☝️ Confirm YouTube Thumbnail
+- 🤖 Generate 1X1 and 9X16 version of confirmed Thumbnail
+- ☝️ Confirm 1X1 and 9X16 Thumbnail versions
 
 ### Publishing & Social (Full episode)
 - {Publishing Channels}
