@@ -92,7 +92,7 @@ Exactly **one** sponsor should be `Active` at a time (the search is `limit 1`).
 
 ## Step-by-step: what the workflow does
 
-Wiring is linear: **Shortlist Row Changed → Is Picked → Fetch Sponsor Info → Generate Script → Build Script HTML → Create Episode → Upload Script HTML → Mark Shortlist Scripted → Surface HTML for Doc → Convert HTML to File → Notify Script Ready** (model + parser hang off Generate Script as subnodes).
+Wiring is linear: **Shortlist Row Changed → Is Picked → Fetch Sponsor Info → Generate Script → Shorten Reference Links → Build Script HTML → Create Episode → Upload Script HTML → Mark Shortlist Scripted → Surface HTML for Doc → Convert HTML to File → Notify Script Ready** (model + parser hang off Generate Script as subnodes).
 
 1. **Shortlist Row Changed** — Airtable Trigger polls the Shortlist `Picked` view every minute, ordered by `Last Modified Time`, pulling `Topic, Summary, Status`.
 2. **Is Picked** — IF backstop; continues only when `Status = Picked`. The `Scripted` flip drops out here, so no trigger loop.
@@ -100,13 +100,14 @@ Wiring is linear: **Shortlist Row Changed → Is Picked → Fetch Sponsor Info �
 4. **Generate Script** — Basic LLM Chain. System prompt = the talking-head framework (retention pillars; the fixed Hook/graphic/setup/3 core points/sponsor/payoff/CTA/endframe beats with their exact required lines). User message injects Topic + Summary (from the trigger via `.first()`) and the sponsor Name/Overview. A Structured Output Parser forces JSON `{ title_suggestion, references, slides }`, where **`slides` is an array of beat objects** (`heading`, `share`, `leading_questions[]`, `concepts[{point, visual_cue}]`).
    - **Script Model (OpenRouter)** subnode: `openai/gpt-5.1`, `json_object` mode, temp 0.6, 8000 max tokens.
    - **Script Output Parser** subnode: JSON-schema-from-example.
-5. **Build Script HTML** — Code node (run once for all items). From `output.slides` it builds two things: `scriptText` (clean markdown, one `##` section per beat with leading questions + cover bullets + visual cues), and `html` (a self-contained PicoCSS slideshow — title slide + one slide per beat + a references slide, with Prev/Next buttons and arrow-key/space nav). Also returns `htmlBase64` (base64 of the HTML) and a `fileName` slug. **HTML-escapes all model text.**
-6. **Create Episode** — Airtable create in `Episodes`: `Title` = Topic, `Status` = Script Ready, `Summary`, `Script` = `scriptText`, `References`, `Source Shortlist` = link to the Shortlist record. `typecast: true`.
-7. **Upload Script HTML** — HTTP POST to `content.airtable.com/v0/{base}/{recordId}/Attachments/uploadAttachment` (record id from the just-created Episode), JSON body `{ contentType: "text/html", filename, file: <base64> }`. Auth = Predefined Credential Type → Airtable API.
-8. **Mark Shortlist Scripted** — Airtable update matching on `id`, sets `Status = Scripted` **and nothing else** (see gotcha).
-9. **Surface HTML for Doc** — Set node re-surfaces `htmlBase64` + `fileName` onto the current item (the Airtable-update output dropped them) so the next node can read them.
-10. **Convert HTML to File** — Convert to File (`toBinary`): reads `htmlBase64` (`dataIsBase64: true`), writes binary property `data`, `mimeType text/html`, filename from `$json.fileName`.
-11. **Notify Script Ready** — Telegram **sendDocument** (resource `message`): sends binary `data` to chat `1512868522` with an HTML caption (topic + the new Episode's **ID** in a `<code>` block — from `$('Create Episode').first().json.ID`, per the [include-record-ID rule](CONVENTIONS.md) — working title + Airtable link).
+5. **Shorten Reference Links** — Code node that parses `output.references`, finds URLs in the Module 5 list, shortens them via Shlink, and returns the updated markdown. On error, it falls back to the original URL so the workflow never breaks.
+6. **Build Script HTML** — Code node (run once for all items). From `output.slides` it builds two things: `scriptText` (clean markdown, one `##` section per beat with leading questions + cover bullets + visual cues), and `html` (a self-contained PicoCSS slideshow — title slide + one slide per beat + a references slide, with Prev/Next buttons and arrow-key/space nav). Also returns `htmlBase64` (base64 of the HTML) and a `fileName` slug. **HTML-escapes all model text.**
+7. **Create Episode** — Airtable create in `Episodes`: `Title` = Topic, `Status` = Script Ready, `Summary`, `Script` = `scriptText`, `References` = `output.references` (shortened), `Source Shortlist` = link to the Shortlist record. `typecast: true`.
+8. **Upload Script HTML** — HTTP POST to `content.airtable.com/v0/{base}/{recordId}/Attachments/uploadAttachment` (record id from the just-created Episode), JSON body `{ contentType: "text/html", filename, file: <base64> }`. Auth = Predefined Credential Type → Airtable API.
+9. **Mark Shortlist Scripted** — Airtable update matching on `id`, sets `Status = Scripted` **and nothing else** (see gotcha).
+10. **Surface HTML for Doc** — Set node re-surfaces `htmlBase64` + `fileName` onto the current item (the Airtable-update output dropped them) so the next node can read them.
+11. **Convert HTML to File** — Convert to File (`toBinary`): reads `htmlBase64` (`dataIsBase64: true`), writes binary property `data`, `mimeType text/html`, filename from `$json.fileName`.
+12. **Notify Script Ready** — Telegram **sendDocument** (resource `message`): sends binary `data` to chat `1512868522` with an HTML caption (topic + the new Episode's **ID** in a `<code>` block — from `$('Create Episode').first().json.ID`, per the [include-record-ID rule](CONVENTIONS.md) — working title + Airtable link).
 
 ---
 
@@ -118,6 +119,9 @@ Wiring is linear: **Shortlist Row Changed → Is Picked → Fetch Sponsor Info �
 - **Flat vs nested trigger fields.** Trigger values are read defensively as `{{ $json.X ?? $json.fields?.X }}`. The record `id` is always top-level (`$json.id`).
 - **Chain output path.** Script fields read from `$json.output.*` (the parsed object). If the parser ever returns top-level fields, adjust.
 - **Output-parser reliability.** Runs in `json_object` mode. If long scripts trip the parser, enable **autoFix** on the Script Output Parser (adds a repair LLM call).
+- **Shlink config for references.** The Shorten Reference Links node expects `SHLINK_BASE_URL` and
+  `SHLINK_API_KEY` in the server environment. `SHLINK_DOMAIN` is optional. If any are missing or the API
+  errors, the node returns the original URLs.
 - **One Active sponsor.** `limit 1` on `{Status}='Active'`. Keep exactly one Active. If zero are Active, the sponsor fields come through empty and the model notes the beat is unfilled.
 - **Airtable Trigger `Fields` list rules (caused repeated failures).** If you restrict Options → Fields: (1) include the trigger field itself (`Topic,Summary,Status,Last Modified Time`), and (2) use commas with **NO spaces**. A PostToolUse hook (`.claude/hooks/airtable-trigger-fields-check.py`) lints this on every build.
 - **Don't click "Load Schema" / refresh fields** on the Airtable nodes — it wipes column mappings.
