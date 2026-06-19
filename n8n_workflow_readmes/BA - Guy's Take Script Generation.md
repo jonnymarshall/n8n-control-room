@@ -87,7 +87,7 @@ Exactly **one** sponsor should be `Active` at a time (the search is `limit 1`).
 
 ## Step-by-step: what the workflow does
 
-Wiring is linear: **Shortlist Row Changed → Is Picked → Fetch Sponsor Info → Generate Script → Create Episode → Mark Shortlist Scripted → Notify Script Ready** (model + parser hang off Generate Script as subnodes).
+Wiring is linear: **Shortlist Row Changed → Is Picked → Fetch Sponsor Info → Generate Script → Shorten Reference Links → Create Episode → Mark Shortlist Scripted → Notify Script Ready** (model + parser hang off Generate Script as subnodes).
 
 1. **Shortlist Row Changed** — Airtable Trigger polls the Shortlist `Picked` view every minute, ordered by `Last Modified Time`, pulling `Topic, Summary, Status`.
 2. **Is Picked** — IF node backstop; continues only when `Status = Picked`. The `Scripted` flip this workflow makes drops out here, so there's no trigger loop.
@@ -95,9 +95,10 @@ Wiring is linear: **Shortlist Row Changed → Is Picked → Fetch Sponsor Info �
 4. **Generate Script** — Basic LLM Chain. The system prompt is the ported `guys-take-script` framework (core retention pillars, the 6 modules, the fixed Hook/graphic/sponsor/payoff/CTA/endframe beats, the exact required lines). The user message injects Topic + Summary (from the trigger via `.first()`) and the sponsor Name/Overview (from Fetch Sponsor Info). A Structured Output Parser forces JSON `{ title_suggestion, references, script }`, where `script` is the **whole asset package** markdown.
    - **Script Model (OpenRouter)** subnode: `google/gemini-2.5-flash`, `json_object` mode, temp 0.6, 8000 max tokens.
    - **Script Output Parser** subnode: JSON-schema-from-example.
-5. **Create Episode** — Airtable create in `Episodes`: `Title` = Topic, `Status` = Script Ready, `Summary`, `Script` = `output.script` (full package), `References` = `output.references`, `Source Shortlist` = link to the Shortlist record. `typecast: true`. All cross-node refs use `.first()` (not `.item`) so pairing survives the path through the search node.
-6. **Mark Shortlist Scripted** — Airtable update matching on `id`, sets the Shortlist row `Status = Scripted`.
-7. **Notify Script Ready** — Telegram message (HTML) with the working title and the first ~600 chars of the package.
+5. **Shorten Reference Links** — Code node that parses `output.references`, finds URLs in the Module 5 list, shortens them via Shlink, and returns the updated markdown. On error, it falls back to the original URL so the workflow never breaks.
+6. **Create Episode** — Airtable create in `Episodes`: `Title` = Topic, `Status` = Script Ready, `Summary`, `Script` = `output.script` (full package), `References` = `output.references` (shortened), `Source Shortlist` = link to the Shortlist record. `typecast: true`. All cross-node refs use `.first()` (not `.item`) so pairing survives the path through the search node.
+7. **Mark Shortlist Scripted** — Airtable update matching on `id`, sets the Shortlist row `Status = Scripted`.
+8. **Notify Script Ready** — Telegram message (HTML) with the working title and the first ~600 chars of the package.
 
 ---
 
@@ -113,6 +114,9 @@ Wiring is linear: **Shortlist Row Changed → Is Picked → Fetch Sponsor Info �
   so the model must escape a big markdown block. It runs in `json_object` mode to make that reliable. If
   you see output-parser failures on long packages, enable **autoFix** on the Script Output Parser (adds a
   second LLM repair call) or lower the package length. (The research workflow uses autoFix for the same reason.)
+- **Shlink config for references.** The Shorten Reference Links node expects `SHLINK_BASE_URL` and
+  `SHLINK_API_KEY` in the server environment. `SHLINK_DOMAIN` is optional. If any are missing or the API
+  errors, the node returns the original URLs.
 - **Full asset package lives in `Script`.** The `Script` field holds all 6 modules (titles, captions,
   SEO, storyboard, sponsor, references, editor resources), not just spoken lines. If you'd rather split
   these into their own Episode fields, that's a follow-up.

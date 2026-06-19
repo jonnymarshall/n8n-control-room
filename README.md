@@ -66,6 +66,17 @@ CALENDLY_PAT='your-calendly-personal-access-token'
 CALENDLY_CREDENTIAL_ID='...'                # after running deploy/credentials/create-calendly.sh
 ```
 
+If you are enabling Guy's Take reference URL shortening via Shlink, also add:
+
+```bash
+# Optional: only for Guy's Take Script Generation reference-link shortening
+SHLINK_BASE_URL='https://your-shlink-host.example.com'
+SHLINK_API_KEY='your-shlink-api-key'
+SHLINK_DOMAIN='s.example.com'               # optional custom short domain
+```
+
+Keep those values only in your local `.env` (gitignored). Do not add secrets to `.env.example`.
+
 Each script's header comment lists exactly which env vars it reads.
 
 ### 5. Smoke-test it
