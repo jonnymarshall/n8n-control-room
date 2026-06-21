@@ -10,6 +10,9 @@ client/.env
 # Claude Code per-user state (not shared)
 .claude/settings.local.json
 
+# Playwright MCP browser session dumps (local only)
+.playwright-mcp/
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
