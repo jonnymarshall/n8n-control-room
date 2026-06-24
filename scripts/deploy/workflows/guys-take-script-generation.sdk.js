@@ -370,7 +370,7 @@ const notifyScriptReady = node({
       additionalFields: {
         appendAttribution: false,
         parse_mode: 'HTML',
-        caption: expr("✍️ <b>Script ready</b>\n\n<b>{{ $('Shortlist Row Changed').first().json.Topic ?? $('Shortlist Row Changed').first().json.fields?.Topic }}</b>\nWorking title: <i>{{ $('Build Script HTML').first().json.title }}</i>\n\nEpisode created with Status = Script Ready. The full talking-head script is attached as a browser slideshow.\n\nOpen Airtable: https://airtable.com/app8Xw9Tq0XLjhmp9")
+        caption: expr("✍️ <b>Script ready</b>\n\n<b>{{ $('Shortlist Row Changed').first().json.Topic ?? $('Shortlist Row Changed').first().json.fields?.Topic }}</b> · <code>{{ $('Create Episode').first().json.ID || 'no-id' }}</code>\nWorking title: <i>{{ $('Build Script HTML').first().json.title }}</i>\n\nEpisode created with Status = Script Ready. The full talking-head script is attached as a browser slideshow.\n\nOpen Airtable: https://airtable.com/app8Xw9Tq0XLjhmp9")
       }
     },
     credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
