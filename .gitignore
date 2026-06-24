@@ -25,3 +25,13 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Local n8n sync baselines (used by the manual-edit guard hook)
+.claude/n8n-sync-state.json
+
+# Python bytecode (hooks)
+.claude/hooks/__pycache__/
+**/__pycache__/
+
+# Local scratch / temp work (session notes, build scraps)
+tmp/

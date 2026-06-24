@@ -28,7 +28,7 @@ for (const it of items) {
   const ml = f.media_links || {};
   const rend = ml.efficient || ml.high_quality || ml.original || {};
   const lk = f.links || {};
-  const webUrl = f.web_url || f.player_url || lk.web || lk.player || lk.download || '';
+  const webUrl = f.web_url || f.player_url || f.view_url || lk.web || lk.player || lk.download || '';
   out.push({ json: {
     fileName: name,
     episodeId: m ? m[1] : null,
@@ -94,14 +94,26 @@ Output exactly five fields:
 - titles: an array of 5 high-CTR YouTube title options. Punchy, curiosity-driven, honest (no clickbait lies), max ~70 characters each, no emojis. Grounded in the actual content.
 - thumbnail_captions: an array of 5 ultra-short viral thumbnail captions, 2-5 words each, the bold text overlaid on a thumbnail. Scroll-stopping and true to the episode.
 - description: a single YouTube description string. Open with a 2-3 sentence hook paragraph. Then a "Chapters:" section listing timecoded chapter markers derived from the transcript's timecodes, one per line as "MM:SS Chapter title". Start the first chapter at 00:00. Use 5-10 chapters covering the real topic shifts. Clean and copy-paste ready.
-- summary: a concise 2-3 sentence episode summary suitable for a podcast listing. Accurate, no spoilers beyond what a title would reveal.
+- summary: a concise 2-3 sentence episode summary suitable for a podcast listing. Accurate, no spoilers beyond what a title would reveal. Gear its VOICE and framing to the EPISODE TYPE (see the type guide below): first person as the host (Guy) for Take/Chat/Roundtable; THIRD person centred on the GUEST for Clip.
 - chapters: an array of chapter objects derived from the transcript's [MM:SS] timecodes. Each object has "startTime" (integer seconds, converted from MM:SS — e.g. [02:14] → 134) and "title" (short chapter title, 2-5 words). Start first chapter at 0. Use 5-10 chapters covering the real topic shifts.
+
+EPISODE TYPE guide — the prompt states the type (and, where relevant, the GUEST); use it to frame the summary (and to inform the titles/captions):
+- Take: a solo episode, just the host giving his own breakdown on a topic. First person as the host — "I break down…", "Here's my take on…".
+- Chat: a longform conversation where the host sits down with the GUEST(s) on a topic. First person as the host, naming the guest where known — "I sit down with {GUEST} to dig into…", "{GUEST} and I get into…".
+- Roundtable: a monthly rundown of the latest in Bitcoin and beyond with the regular group. First person as the host — recap the month's key developments.
+- Clip: a short snippet from a longer episode (usually a Chat). The person speaking is the GUEST, not the host — so write the summary in the THIRD person, centred on what the guest says: "In this clip, {GUEST} explains…", "{GUEST} breaks down…". Do NOT use the host's first person. If GUEST is Unknown, refer to "the guest" rather than inventing a name.
+- Unknown or missing type: write a sensible general first-person summary.
 
 Base everything strictly on the transcript. Never invent facts, names, numbers, or timecodes not supported by it. Match the show's confident, slightly contrarian Bitcoin voice.`;
 
-const metadataPromptText = "Generate the packaging options for this Guy's Take episode.\n\nWORKING TITLE: {{ $('Extract Episode Info').first().json.fileName }}\n\nTRANSCRIPT (with timecodes):\n{{ $('Extract Transcript').first().json.transcript }}";
+const metadataPromptText = "Generate the packaging options for this Guy's Take episode.\n\nEPISODE TYPE: {{ $('Find Episode').all().length ? ($('Find Episode').first().json.Type || $('Find Episode').first().json.Category || 'Unknown') : 'Unknown' }}\n\nGUEST: {{ $('Find Episode').all().length && $('Find Episode').first().json['Guest Name'] ? (Array.isArray($('Find Episode').first().json['Guest Name']) ? $('Find Episode').first().json['Guest Name'].join(', ') : $('Find Episode').first().json['Guest Name']) : 'Unknown' }}\n\nWORKING TITLE: {{ $('Extract Episode Info').first().json.fileName }}\n\nTRANSCRIPT (with timecodes):\n{{ $('Extract Transcript').first().json.transcript }}";
 
-const transcribeBody = "{{ { contents: [ { parts: [ { fileData: { mimeType: $('Extract Episode Info').first().json.mimeType, fileUri: $('Upload Bytes to Gemini').first().json.file.uri } }, { text: " + JSON.stringify(transcribePrompt) + " } ] } ], generationConfig: { temperature: 0.2 } } }}";
+// Transcription only needs the AUDIO; the video frames are pure token waste and
+// blow the 1M context past ~58 min. Sample frames sparsely (fps 0.2) at low media
+// resolution so frame tokens go near-zero while audio (32 tok/s) is untouched —
+// lifts the practical ceiling to ~6h. mediaResolution/videoMetadata don't affect
+// audio fidelity, so transcript quality is unchanged.
+const transcribeBody = "{{ { contents: [ { parts: [ { fileData: { mimeType: $('Extract Episode Info').first().json.mimeType, fileUri: $('Upload Bytes to Gemini').first().json.file.uri }, videoMetadata: { fps: 0.2 } }, { text: " + JSON.stringify(transcribePrompt) + " } ] } ], generationConfig: { temperature: 0.2, mediaResolution: 'MEDIA_RESOLUTION_LOW' } } }}";
 
 // ---------------------------------------------------------------------------
 const frameioTrigger = trigger({
@@ -144,7 +156,7 @@ const showFile = node({
     credentials: { oAuth2Api: frameioOAuthCred },
     position: [680, 300]
   },
-  output: [{ id: 'file-uuid', name: 'EP042 - The Final Cut.mp4', media_type: 'video/mp4', media_links: { efficient: { download_url: 'https://assets.frame.io/.../efficient.mp4?signature' } } }]
+  output: [{ id: 'file-uuid', name: 'EP042 - The Final Cut.mp4', media_type: 'video/mp4', media_links: { efficient: { download_url: 'https://assets.frame.io/.../efficient.mp4?signature' } }, view_url: 'https://next.frame.io/project/abc/view/def' }]
 });
 
 const extractInfo = node({
@@ -155,7 +167,7 @@ const extractInfo = node({
     parameters: { mode: 'runOnceForAllItems', language: 'javaScript', jsCode: extractInfoCode },
     position: [900, 300]
   },
-  output: [{ fileName: 'EP042 - The Final Cut.mp4', episodeId: 42, downloadUrl: 'https://assets.frame.io/.../efficient.mp4?signature', mimeType: 'video/mp4' }]
+  output: [{ fileName: 'EP042 - The Final Cut.mp4', episodeId: 42, downloadUrl: 'https://assets.frame.io/.../efficient.mp4?signature', mimeType: 'video/mp4', webUrl: 'https://next.frame.io/project/abc/view/def' }]
 });
 
 const createReviewLink = node({
@@ -293,7 +305,7 @@ const getFileState = node({
     credentials: { httpHeaderAuth: geminiCred },
     position: [2440, 300]
   },
-  output: [{ name: 'files/abc123', uri: 'https://generativelanguage.googleapis.com/v1beta/files/abc123', state: 'ACTIVE' }]
+  output: [{ name: 'files/abc123', uri: 'https://generativelanguage.googleapis.com/v1beta/files/abc123', state: 'ACTIVE', videoMetadata: { videoDuration: '202s' } }]
 });
 
 const isActive = ifElse({
@@ -418,9 +430,9 @@ const findEpisode = node({
     },
     credentials: { airtableTokenApi: airtableCred },
     onError: 'continueRegularOutput',
-    position: [3760, 220]
+    position: [1120, 460]
   },
-  output: [{ id: 'recEPISODEXXXXXXX', Title: 'EP042 - The Final Cut', ID: 42 }]
+  output: [{ id: 'recEPISODEXXXXXXX', Title: 'EP042 - The Final Cut', ID: 42, Type: 'Clip', Guest: ['recGUEST0000000'], 'Guest Name': ['Alice Nakamoto'], 'Duration (s)': 1500 }]
 });
 
 const updateStatus = node({
@@ -442,7 +454,7 @@ const updateStatus = node({
           Summary: expr("{{ $('Build Outputs').first().json.summary }}"),
           Chapters: expr("{{ $('Build Outputs').first().json.chaptersText }}"),
           Transcript: expr("{{ $('Build Outputs').first().json.transcriptText }}"),
-          'Frami.io URL': expr("{{ $('Build Outputs').first().json.frameioUrl }}"),
+          'Frame.io URL': expr("{{ $('Build Outputs').first().json.frameioUrl }}"),
           'Chapters JSON': []
         },
         matchingColumns: ['id'],
@@ -452,7 +464,7 @@ const updateStatus = node({
           { id: 'Summary', displayName: 'Summary', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'string', readOnly: false, removed: false },
           { id: 'Chapters', displayName: 'Chapters', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'string', readOnly: false, removed: false },
           { id: 'Transcript', displayName: 'Transcript', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'string', readOnly: false, removed: false },
-          { id: 'Frami.io URL', displayName: 'Frami.io URL', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'string', readOnly: false, removed: false },
+          { id: 'Frame.io URL', displayName: 'Frame.io URL', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'string', readOnly: false, removed: false },
           { id: 'Chapters JSON', displayName: 'Chapters JSON', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'array', readOnly: false, removed: false }
         ],
         attemptToConvertTypes: false,
@@ -550,25 +562,221 @@ const sendToTelegram = node({
       }
     },
     credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
+    retryOnFail: true,
+    maxTries: 4,
+    waitBetweenTries: 5000,
     position: [4860, 220]
   },
   output: [{ ok: true, result: { message_id: 1 } }]
 });
 
+// ---- Duration from Gemini -------------------------------------------------
+// Frame.io's file object exposes NO duration field, so we read it from the
+// Gemini file resource (videoMetadata.videoDuration, e.g. "202s") once the file
+// is ACTIVE. This node sits on Is File Active's true branch, so $json is the
+// ACTIVE Get File State output (unambiguous even after multiple poll runs).
+const parseDuration = node({
+  type: 'n8n-nodes-base.set',
+  version: 3.4,
+  config: {
+    name: 'Parse Duration',
+    parameters: {
+      mode: 'manual',
+      assignments: { assignments: [
+        { id: 'pd1', name: 'durationSeconds', value: expr("{{ Math.round(Number(String(($json.videoMetadata && $json.videoMetadata.videoDuration) || '0').replace(/[^0-9.]/g, '')) || 0) }}"), type: 'number' }
+      ] },
+      includeOtherFields: true,
+      options: {}
+    },
+    position: [2880, 420]
+  },
+  output: [{ durationSeconds: 202 }]
+});
+
+// ---- Same-length short-circuit -------------------------------------------
+// On a re-upload, if the new Gemini duration exactly matches the duration we
+// stored last time, assume a bug-fix re-export: skip transcription + AI metadata
+// and just refresh the Frame.io URL. Needs durationSeconds > 0 AND equal to the
+// stored value, so a missing/zero baseline always falls through to the full run.
+const sameLengthIf = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Same Length?',
+    parameters: {
+      conditions: {
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 3 },
+        conditions: [
+          { id: 'cond-dur-positive', leftValue: expr("{{ $('Parse Duration').first().json.durationSeconds }}"), operator: { type: 'number', operation: 'gt' }, rightValue: 0 },
+          { id: 'cond-dur-equal', leftValue: expr("{{ $('Parse Duration').first().json.durationSeconds }}"), operator: { type: 'number', operation: 'equals' }, rightValue: expr("{{ $('Find Episode').first().json['Duration (s)'] }}") }
+        ],
+        combinator: 'and'
+      },
+      options: {}
+    },
+    position: [3100, 420]
+  }
+});
+
+const swapUrl = node({
+  type: 'n8n-nodes-base.airtable',
+  version: 2.2,
+  config: {
+    name: 'Swap Frame.io URL',
+    parameters: {
+      resource: 'record',
+      operation: 'update',
+      authentication: 'airtableTokenApi',
+      base: { __rl: true, mode: 'id', value: 'app8Xw9Tq0XLjhmp9', cachedResultName: "Guy's Take" },
+      table: { __rl: true, mode: 'id', value: 'tbl3uYLIvtB9APZp6', cachedResultName: 'Episodes' },
+      columns: {
+        mappingMode: 'defineBelow',
+        value: {
+          id: expr("{{ $('Find Episode').first().json.id }}"),
+          'Frame.io URL': expr("{{ $('Extract Episode Info').first().json.webUrl || (($('Create Review Link').first().json.data || {}).short_url) || $('Extract Episode Info').first().json.downloadUrl }}")
+        },
+        matchingColumns: ['id'],
+        schema: [
+          { id: 'id', displayName: 'id', required: false, defaultMatch: true, display: true, type: 'string', readOnly: true },
+          { id: 'Frame.io URL', displayName: 'Frame.io URL', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'string', readOnly: false, removed: false }
+        ],
+        attemptToConvertTypes: false,
+        convertFieldsToString: false
+      },
+      options: {}
+    },
+    credentials: { airtableTokenApi: airtableCred },
+    onError: 'continueRegularOutput',
+    position: [3320, 560]
+  },
+  output: [{ id: 'recEPISODEXXXXXXX', 'Frame.io URL': 'https://next.frame.io/project/abc/view/def' }]
+});
+
+// Persists the duration on full runs so the next re-upload has a baseline.
+// Kept as its OWN node (error-continue) so a missing 'Duration (s)' field can
+// never fail the main metadata write in 'Set Status AI Analysis Complete'.
+const storeDuration = node({
+  type: 'n8n-nodes-base.airtable',
+  version: 2.2,
+  config: {
+    name: 'Store Duration',
+    parameters: {
+      resource: 'record',
+      operation: 'update',
+      authentication: 'airtableTokenApi',
+      base: { __rl: true, mode: 'id', value: 'app8Xw9Tq0XLjhmp9', cachedResultName: "Guy's Take" },
+      table: { __rl: true, mode: 'id', value: 'tbl3uYLIvtB9APZp6', cachedResultName: 'Episodes' },
+      columns: {
+        mappingMode: 'defineBelow',
+        value: {
+          id: expr("{{ $('Find Episode').first().json.id }}"),
+          'Duration (s)': expr("{{ $('Parse Duration').first().json.durationSeconds }}")
+        },
+        matchingColumns: ['id'],
+        schema: [
+          { id: 'id', displayName: 'id', required: false, defaultMatch: true, display: true, type: 'string', readOnly: true },
+          { id: 'Duration (s)', displayName: 'Duration (s)', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'number', readOnly: false, removed: false }
+        ],
+        attemptToConvertTypes: false,
+        convertFieldsToString: false
+      },
+      options: {}
+    },
+    credentials: { airtableTokenApi: airtableCred },
+    onError: 'continueRegularOutput',
+    position: [3980, 400]
+  },
+  output: [{ id: 'recEPISODEXXXXXXX', 'Duration (s)': 1500 }]
+});
+
+// ---- _Bypass short-circuit ------------------------------------------------
+// If the Frame.io file name ends with "_Bypass" (case-insensitive, extension
+// ignored), skip the whole AI pipeline — no transcript, no metadata, no
+// Telegram — and just refresh the episode's 'Frame.io URL' via the existing
+// 'Swap Frame.io URL' node, the same effect as the same-length re-upload path.
+const bypassIf = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Name Ends _Bypass?',
+    parameters: {
+      conditions: {
+        options: { caseSensitive: false, leftValue: '', typeValidation: 'loose', version: 3 },
+        conditions: [
+          { id: 'cond-bypass', leftValue: expr("{{ /_bypass$/i.test(String($('Extract Episode Info').first().json.fileName || '').replace(/\\.[a-zA-Z0-9]+$/, '').trim()) }}"), operator: { type: 'boolean', operation: 'true', singleValue: true }, rightValue: '' }
+        ],
+        combinator: 'and'
+      },
+      options: {}
+    },
+    position: [1340, 460]
+  }
+});
+
+// ---- Non-video guard ------------------------------------------------------
+// The webhook fires on EVERY file.ready in the Frame.io project, including audio
+// shares (mp3) and other non-video files. Those have no 'efficient' video proxy
+// (download_url is null), which crashed Download Proxy on an empty URL (exec #787).
+// Gate the pipeline on a real video + proxy URL; non-video uploads get a heads-up.
+const isVideoIf = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Is Video?',
+    parameters: {
+      conditions: {
+        options: { caseSensitive: false, leftValue: '', typeValidation: 'loose', version: 3 },
+        conditions: [
+          { id: 'cond-mime-video', leftValue: expr("{{ $('Extract Episode Info').first().json.mimeType }}"), operator: { type: 'string', operation: 'startsWith' }, rightValue: 'video/' },
+          { id: 'cond-has-url', leftValue: expr("{{ $('Extract Episode Info').first().json.downloadUrl }}"), operator: { type: 'string', operation: 'startsWith' }, rightValue: 'http' }
+        ],
+        combinator: 'and'
+      },
+      options: {}
+    },
+    position: [1120, 140]
+  }
+});
+
+const notifySkipped = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'Notify Skipped (Non-Video)',
+    parameters: {
+      resource: 'message',
+      operation: 'sendMessage',
+      chatId: '-5254203539',
+      text: expr("⏭️ <b>Ignored non-video upload</b>\nEpisode <code>{{ $('Extract Episode Info').first().json.episodeId || 'no-id' }}</code>\n<code>{{ $('Extract Episode Info').first().json.fileName }}</code> ({{ $('Extract Episode Info').first().json.mimeType }})\nFrame.io only builds a proxy for video files, so there's nothing to transcribe."),
+      additionalFields: { appendAttribution: false, parse_mode: 'HTML' }
+    },
+    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
+    retryOnFail: true,
+    maxTries: 4,
+    waitBetweenTries: 5000,
+    position: [1340, 140]
+  },
+  output: [{ ok: true, result: { message_id: 1 } }]
+});
+
 const setupNote = sticky(
-  "## Frame.io -> AI metadata -> Telegram\n\nTrigger: Frame.io file.ready webhook. Register it to this node's Production URL with events=['file.ready'].\n\nCredentials: Frame.io OAuth2 (Adobe IMS) on Show File; Gemini API Key [n8n] (header auth); OpenRouter, Telegram, Airtable PAT.\n\nAirtable: Episodes.ID is a string matched by the BA-xxxx prefix (e.g. BA-hPtPmN_Title.mp4 → ID=BA-hPtPmN). V4 API wraps response in a 'data' key.",
+  "## Frame.io -> AI metadata -> Telegram\n\nNon-video uploads are skipped via 'Is Video?'. A file name ending '_Bypass' skips the whole AI pipeline and just refreshes 'Frame.io URL'. Duration comes from Gemini (videoMetadata.videoDuration), not Frame.io. Same-length re-upload just refreshes 'Frame.io URL'. Summary geared to Episodes 'Type' + 'Guest Name'.",
   [frameioTrigger, parseEvent, showFile],
   { color: 4 }
 );
 
-export default workflow('jroXHciDvy0sWlRM', 'BA - Frame.io: Episode uploaded → AI metadata → Telegram')
+export default workflow('jroXHciDvy0sWlRM', 'BA - Frame.io Uploaded > AI Metadata')
   .add(setupNote)
   .add(frameioTrigger)
   .to(parseEvent)
   .to(showFile)
   .to(extractInfo)
-  .to(createReviewLink)
-  .to(downloadProxy)
+  .to(isVideoIf
+    .onTrue(createReviewLink)
+    .onFalse(notifySkipped))
+  .add(createReviewLink)
+  .to(findEpisode)
+  .to(bypassIf
+    .onTrue(swapUrl)
+    .onFalse(downloadProxy))
+  .add(downloadProxy)
   .to(startResumable)
   .to(getUploadUrl)
   .to(mergeUpload.input(0))
@@ -580,15 +788,20 @@ export default workflow('jroXHciDvy0sWlRM', 'BA - Frame.io: Episode uploaded →
   .to(getFileState)
   .to(isActive
     .onTrue(
-      transcribe
-        .to(extractTranscript)
-        .to(generateMetadata)
-        .to(buildOutputs)
-        .to(findEpisode)
-        .to(updateStatus)
-        .to(uploadChaptersAttachment)
-        .to(injectMdData)
-        .to(convertToFile)
-        .to(sendToTelegram)
+      parseDuration
+        .to(sameLengthIf
+          .onTrue(swapUrl)
+          .onFalse(
+            transcribe
+              .to(extractTranscript)
+              .to(generateMetadata)
+              .to(buildOutputs)
+              .to(updateStatus)
+              .to(storeDuration)
+              .to(uploadChaptersAttachment)
+              .to(injectMdData)
+              .to(convertToFile)
+              .to(sendToTelegram)
+          ))
     )
     .onFalse(waitProcessing));

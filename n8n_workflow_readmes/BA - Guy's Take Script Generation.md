@@ -14,7 +14,7 @@ When Guy marks a Shortlist topic as `Picked`, this workflow:
 4. Builds a **PicoCSS slideshow HTML file** from the beats (one slide per beat, keyboard/button navigation) plus a plain-markdown version of the script
 5. Creates an `Episodes` record (`Status = Script Ready`) with the markdown script + references + a link back to the source Shortlist row, and **attaches the HTML slideshow** to that record
 6. Flips the Shortlist row to `Status = Scripted` (so it won't re-trigger)
-7. Sends the HTML slideshow to Telegram **as a document** with a caption (working title + Airtable link)
+7. Sends the HTML slideshow to Telegram **as a document** with a caption (topic + **episode ID** in a `<code>` block + working title + Airtable link)
 
 This is the handoff downstream of `BA - Guy's Take Weekly Research & Shortlisting`. One Picked topic → one Episode (decision 2026-06-07).
 
@@ -106,7 +106,7 @@ Wiring is linear: **Shortlist Row Changed → Is Picked → Fetch Sponsor Info �
 8. **Mark Shortlist Scripted** — Airtable update matching on `id`, sets `Status = Scripted` **and nothing else** (see gotcha).
 9. **Surface HTML for Doc** — Set node re-surfaces `htmlBase64` + `fileName` onto the current item (the Airtable-update output dropped them) so the next node can read them.
 10. **Convert HTML to File** — Convert to File (`toBinary`): reads `htmlBase64` (`dataIsBase64: true`), writes binary property `data`, `mimeType text/html`, filename from `$json.fileName`.
-11. **Notify Script Ready** — Telegram **sendDocument** (resource `message`): sends binary `data` to chat `1512868522` with an HTML caption (working title + Airtable link).
+11. **Notify Script Ready** — Telegram **sendDocument** (resource `message`): sends binary `data` to chat `1512868522` with an HTML caption (topic + the new Episode's **ID** in a `<code>` block — from `$('Create Episode').first().json.ID`, per the [include-record-ID rule](CONVENTIONS.md) — working title + Airtable link).
 
 ---
 

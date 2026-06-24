@@ -11,7 +11,31 @@
     }
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__n8n-mcp__update_workflow",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/jonny/code/n8n-control-room/.claude/hooks/n8n-sync-guard.py",
+            "timeout": 15,
+            "statusMessage": "Checking n8n for manual edits before pushing"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
+      {
+        "matcher": "mcp__n8n-mcp__create_workflow_from_code|mcp__n8n-mcp__update_workflow|mcp__n8n-mcp__get_workflow_details",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/jonny/code/n8n-control-room/.claude/hooks/n8n-sync-guard.py",
+            "timeout": 15,
+            "statusMessage": "Recording n8n sync baseline"
+          }
+        ]
+      },
       {
         "matcher": "mcp__n8n-mcp__create_workflow_from_code|mcp__n8n-mcp__update_workflow",
         "hooks": [
@@ -26,6 +50,12 @@
             "command": "python3 /Users/jonny/code/n8n-control-room/.claude/hooks/airtable-trigger-fields-check.py",
             "timeout": 10,
             "statusMessage": "Linting Airtable Trigger Fields config"
+          },
+          {
+            "type": "command",
+            "command": "python3 /Users/jonny/code/n8n-control-room/.claude/hooks/telegram-include-id-check.py",
+            "timeout": 10,
+            "statusMessage": "Checking Telegram messages include the record ID"
           }
         ]
       }

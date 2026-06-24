@@ -2,6 +2,10 @@
 
 > **Find this workflow in n8n by name.** Workflow IDs change whenever the workflow is rebuilt from code (credential bindings don't survive API updates, so structural changes are done as create-new + archive-old). The name is the stable identifier.
 
+> ✅ **"photos" reply path — LIVE & VERIFIED (2026-06-23).** The `photos` action (sends the actual thumbnail images as one album + a details message, instead of links) was built via the n8n SDK as a duplicate workflow, **`Hx8Ul6M41fM8HuxU`**, to keep the original `peTIs4kiluFZHoLg` untouched during the build. It's now confirmed working and, because it's been activated to receive live Telegram messages, **it holds the bot's webhook — so `Hx8Ul6M41fM8HuxU` is the de-facto live workflow now** (one Telegram trigger per bot). Its display name reverted to `BA: Telegram Airtable Assistant` on the last API update, so it currently shares a name with the dormant original — tell them apart by ID.
+>
+> **Remaining cleanup (optional, not yet done):** archive the old `peTIs4kiluFZHoLg` so the duplicate name is gone and it can't reclaim the webhook if someone reactivates it. SDK source of truth: `scripts/deploy/workflows/telegram-airtable-assistant.sdk.js`. Note on this instance: SDK `update_workflow` skips credentials on the 4 Airtable HTTP nodes (rebind by hand) and only saves a draft — you must call `publish_workflow` (or toggle Active) for changes to actually run.
+
 ---
 
 ## TL;DR
@@ -11,10 +15,13 @@ A general-purpose AI agent reachable on Telegram via `@pod21_n8n_agent_bot`, in 
 1. **Read anything** in any Airtable base the PAT can see, and answer questions directly ("what episodes are in the pipeline?")
 2. **Propose writes** (create / update / delete) but never execute them itself; every write becomes an approval message with native one-tap ✅ Approve / ❌ Cancel buttons
 3. **Ask clarifying questions** when a request is ambiguous instead of guessing
+4. **Send real images** (`photos` action — thumbnails, artwork, any image attachment) straight into the chat as Telegram photos instead of pasting attachment links *(pending cutover, see note above)*
 
 Reads need no approval. Writes always do. The agent has no write tools at all, so even a confused model cannot mutate Airtable without a button tap.
 
 **Addressing it in a group:** the bot only acts on a group message that **@mentions it** (`@pod21_n8n_agent_bot ...`) or is a **reply to one of its own messages**. Everything else in the group is ignored. Replying to its messages is the natural way to follow up ("delete this episode" as a reply to its "✅ Done. Created ..." message).
+
+> **Convention — episode/record ID in every message.** Other workflows that notify this chat (metadata ready, script ready, thumbnail picks, skip/error notices) are required to print the episode's unique ID (`BA-xxxx`, in a `<code>` block) in the message. When Jonny replies to one of those messages, that ID is the anchor that tells you which episode the reply ("change the title", "delete this") is about — read it out of the replied-to message rather than guessing. See `CONVENTIONS.md` in this folder.
 
 ---
 
@@ -69,8 +76,10 @@ The **Airtable PAT** should have `schema.bases:read`, `data.records:read`, and `
 6. The agent must reply with a strict JSON envelope, one of:
    - `{ "action": "respond", "message": "..." }` — answers, read results, clarifying questions
    - `{ "action": "write", "summary": "...", "method": "...", "path": "...", "body": {...} }` — a write proposal
-7. **Parse Agent Decision** (Code node) enforces the contract: malformed output, bad methods, or empty paths all degrade to a plain text reply, **never** to a write.
-8. `respond` → message sent back to the chat, done. `write` → the proposal's raw API call is serialized into the approval message and you get inline ✅ Approve (`wa`) / ❌ Cancel (`wc`) buttons.
+   - `{ "action": "photos", "urls": [...], "caption": "details text" }` — send the real images (thumbnails, artwork, any image attachment) as **one Telegram album** followed by a **separate text message**, instead of pasting links. The agent defaults to this whenever asked to see/send/show image attachments. `caption` is the follow-up message: it leads with the episode code `BA-xxxx` (the reply anchor) and lists each option and its current status, e.g. "BA-eObmD9 — Options: #1 (Rejected), #2 (Selected), #3, #4". 2–10 images.
+7. **Parse Agent Decision** (Code node) enforces the contract: malformed output, bad methods, or empty paths all degrade to a plain text reply, **never** to a write. A `photos` envelope with no valid `http(s)` URL also degrades to a text reply.
+8. Routing after the parser: `respond` → message sent back to the chat, done. `write` → `Is Write Request?` true → the proposal's raw API call is serialized into the approval message with inline ✅ Approve (`wa`) / ❌ Cancel (`wc`) buttons. `photos` → `Is Write Request?` false → `Is Photo Reply?` true → **Build Photo Album** (Code node → one item with the chat ID, the HTML-escaped caption, and a `urls` array padded to exactly 4) → **Send Album** (native Telegram `sendMediaGroup` with **4 static media slots**, each slot's `media` = `{{ $('Build Photo Album').item.json.urls[i] }}`, so all images arrive as one album) → **Send Album Details** (`sendMessage`, `executeOnce` so it fires once even though the album returns N message items; text = the caption). Telegram fetches each Airtable signed URL itself, so no in-workflow download is needed.
+   - **Why static slots (not an array expression, not HTTP):** the native `sendMediaGroup` node ignores an array-expression on `media.media` (Telegram returns `can't parse InputMedia: media not found`), so the slots must be static. The HTTP alternative (`/bot<token>/sendMediaGroup` with the token via `{{ $credentials.accessToken }}`) does **not** work either — `$credentials` isn't exposed on a Predefined-Credential-Type HTTP node, so the token resolves empty and Telegram returns 404. The native node with static slots is the reliable path, and it auto-binds the `telegramApi` credential. **Constraint:** 4 static slots = it sends exactly 4 images (the thumbnail case); `Build Photo Album` pads short sets to 4 by repeating the last URL so it never crashes (Telegram albums are 2–10 items). To support a different fixed count, change the slot count + the pad target together.
 
 ### Button path (you tap Approve or Cancel)
 
