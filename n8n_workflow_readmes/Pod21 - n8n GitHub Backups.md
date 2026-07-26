@@ -40,6 +40,13 @@ The repo's commit history doubles as a change log: every edit to any workflow is
 
 ⚠️ **Rebuild gotcha:** if this workflow is recreated via the n8n API, the two HTTP Request nodes always lose their GitHub credential binding and must be re-bound by hand.
 
+### n8n API key — rotation & the `.env` leak lesson
+
+The `n8n account` (`n8nApi`) credential holds an **n8n public API key** (Settings → n8n API). It is the *only* thing `Fetch All Workflows` needs; if that key is revoked or expired, the node **401s and the whole backup fails** (you get the `⚠️ n8n GitHub backup failed` Telegram DM).
+
+- **Rebind after a rotation:** open `Fetch All Workflows` → its **n8n API credential (`n8n account`)** → set **API Key** to the new value, leave the base URL (`http://localhost:5678/api/v1`) unchanged → Save → run the workflow once to confirm a green `Fetch All Workflows`.
+- **Rotation log:** key **`N8N_API_SELF_V05`** (created 2026-07-21; named with underscores so it's a valid shell identifier) replaced **`N8N-API-[SELF]-V04`**, which was **revoked 2026-07-21 after its value leaked to a terminal**. `n8n account` was **rebound to V05 on 2026-07-21** (confirmed by Jonny). The leak came from a *copy of the key that had been stored in the repo's `.env`* under a key name containing brackets/hyphens: the deploy scripts `eval`-export every `.env` line, and bash echoes the whole `KEY=VALUE` when the name isn't a valid shell identifier (letters/digits/underscore only). **Lesson: keep this n8n API key in the n8n credential (and a password manager); it isn't needed in `.env` at all.** The shell scripts authenticate with a *different* key via the `N8N_API_KEY` variable.
+
 ---
 
 ## Security: what is and isn't in the backups

@@ -202,6 +202,9 @@ const generateScript = node({
   version: 1.9,
   config: {
     name: 'Generate Script',
+    retryOnFail: true,
+    maxTries: 3,
+    waitBetweenTries: 5000,
     parameters: {
       promptType: 'define',
       text: expr("Generate the Guy's Take talking-head script for this episode.\n\nTOPIC: {{ $('Shortlist Row Changed').first().json.Topic ?? $('Shortlist Row Changed').first().json.fields?.Topic }}\n\nSUMMARY: {{ $('Shortlist Row Changed').first().json.Summary ?? $('Shortlist Row Changed').first().json.fields?.Summary }}\n\nSPONSOR (use dynamically, do not hardcode):\nName: {{ $('Fetch Sponsor Info').first().json.Name ?? $('Fetch Sponsor Info').first().json.fields?.Name }}\nOverview: {{ $('Fetch Sponsor Info').first().json.Overview ?? $('Fetch Sponsor Info').first().json.fields?.Overview }}\nExtra notes: {{ $('Fetch Sponsor Info').first().json['Attachment Summary'] ?? $('Fetch Sponsor Info').first().json.fields?.['Attachment Summary'] ?? '' }}"),
