@@ -26,7 +26,7 @@ for (const it of items) {
   const name = f.name || f.file_name || '';
   const m = String(name).match(/^(BA-[^_\\s.]+)/i);
   const ml = f.media_links || {};
-  const rend = ml.efficient || ml.high_quality || ml.original || {};
+  const rend = [ml.efficient, ml.high_quality, ml.original].find(function(r) { return r && r.download_url; }) || {};
   const lk = f.links || {};
   const webUrl = f.web_url || f.player_url || f.view_url || lk.web || lk.player || lk.download || '';
   out.push({ json: {
@@ -86,25 +86,9 @@ for (const it of items) {
 }
 return out;`;
 
-const transcribePrompt = "You are a precise transcription engine. Transcribe the ENTIRE audio of the supplied video verbatim. Do not summarise, paraphrase, or omit anything. At the start of each new topic or roughly every 30-60 seconds, insert a timecode marker in the form [MM:SS] on its own. Where two or more distinct speakers are present, label turns as 'Speaker 1:', 'Speaker 2:' etc. Output plain text only.";
+const transcribePrompt = "You are a precise transcription engine. Transcribe the ENTIRE audio of the supplied video or audio file verbatim. Do not summarise, paraphrase, or omit anything. At the start of each new topic or roughly every 30-60 seconds, insert a timecode marker in the form [MM:SS] on its own. Where two or more distinct speakers are present, label turns as 'Speaker 1:', 'Speaker 2:' etc. Output plain text only.";
 
-const metadataSystemPrompt = `You are the YouTube growth editor for "Guy's Take", a punchy Bitcoin and sovereign-tech commentary show hosted by Guy. From the supplied episode transcript you produce packaging options the team picks from.
-
-Output exactly five fields:
-- titles: an array of 5 high-CTR YouTube title options. Punchy, curiosity-driven, honest (no clickbait lies), max ~70 characters each, no emojis. Grounded in the actual content.
-- thumbnail_captions: an array of 5 ultra-short viral thumbnail captions, 2-5 words each, the bold text overlaid on a thumbnail. Scroll-stopping and true to the episode.
-- description: a single YouTube description string. Open with a 2-3 sentence hook paragraph. Then a "Chapters:" section listing timecoded chapter markers derived from the transcript's timecodes, one per line as "MM:SS Chapter title". Start the first chapter at 00:00. Use 5-10 chapters covering the real topic shifts. Clean and copy-paste ready.
-- summary: a concise 2-3 sentence episode summary suitable for a podcast listing. Accurate, no spoilers beyond what a title would reveal. Gear its VOICE and framing to the EPISODE TYPE (see the type guide below): first person as the host (Guy) for Take/Chat/Roundtable; THIRD person centred on the GUEST for Clip.
-- chapters: an array of chapter objects derived from the transcript's [MM:SS] timecodes. Each object has "startTime" (integer seconds, converted from MM:SS — e.g. [02:14] → 134) and "title" (short chapter title, 2-5 words). Start first chapter at 0. Use 5-10 chapters covering the real topic shifts.
-
-EPISODE TYPE guide — the prompt states the type (and, where relevant, the GUEST); use it to frame the summary (and to inform the titles/captions):
-- Take: a solo episode, just the host giving his own breakdown on a topic. First person as the host — "I break down…", "Here's my take on…".
-- Chat: a longform conversation where the host sits down with the GUEST(s) on a topic. First person as the host, naming the guest where known — "I sit down with {GUEST} to dig into…", "{GUEST} and I get into…".
-- Roundtable: a monthly rundown of the latest in Bitcoin and beyond with the regular group. First person as the host — recap the month's key developments.
-- Clip: a short snippet from a longer episode (usually a Chat). The person speaking is the GUEST, not the host — so write the summary in the THIRD person, centred on what the guest says: "In this clip, {GUEST} explains…", "{GUEST} breaks down…". Do NOT use the host's first person. If GUEST is Unknown, refer to "the guest" rather than inventing a name.
-- Unknown or missing type: write a sensible general first-person summary.
-
-Base everything strictly on the transcript. Never invent facts, names, numbers, or timecodes not supported by it. Match the show's confident, slightly contrarian Bitcoin voice.`;
+const metadataSystemPrompt = "You are the YouTube growth editor for Guy's Take, a punchy Bitcoin and sovereign-tech commentary show hosted by Guy. From the supplied transcript produce packaging options. Return a JSON object with EXACTLY these five keys: (1) titles: array of exactly 5 high-CTR YouTube title strings, punchy, max 70 chars, no emojis; (2) thumbnail_captions: array of exactly 5 ultra-short viral thumbnail captions, 2-5 words each; (3) description: a single string opening with a 2-3 sentence hook paragraph, then a line 'Chapters:' followed by timecoded chapter markers each on its own line formatted as 'MM:SS Chapter title', first chapter at 00:00, 5-10 chapters total; (4) summary: a single concise 2-3 sentence podcast-listing summary — voice depends on EPISODE TYPE: Take/Chat/Roundtable = first person as host Guy; Clip = THIRD PERSON about the GUEST (e.g. 'In this clip, {GUEST} explains...'); Unknown = general first person; (5) chapters: array of chapter objects, each with startTime as an INTEGER number of seconds converted from the [MM:SS] timecode in the transcript (e.g. [02:14] becomes the integer 134, NOT the string '02:14') and title as a 2-5 word string — 5-10 chapters, first at startTime 0. Base everything strictly on the transcript. Never invent facts or timecodes not present in the transcript.";
 
 const metadataPromptText = "Generate the packaging options for this Guy's Take episode.\n\nEPISODE TYPE: {{ $('Find Episode').all().length ? ($('Find Episode').first().json.Type || $('Find Episode').first().json.Category || 'Unknown') : 'Unknown' }}\n\nGUEST: {{ $('Find Episode').all().length && $('Find Episode').first().json['Guest Name'] ? (Array.isArray($('Find Episode').first().json['Guest Name']) ? $('Find Episode').first().json['Guest Name'].join(', ') : $('Find Episode').first().json['Guest Name']) : 'Unknown' }}\n\nWORKING TITLE: {{ $('Extract Episode Info').first().json.fileName }}\n\nTRANSCRIPT (with timecodes):\n{{ $('Extract Transcript').first().json.transcript }}";
 
@@ -150,7 +134,7 @@ const showFile = node({
       genericAuthType: 'oAuth2Api',
       sendQuery: true,
       specifyQuery: 'keypair',
-      queryParameters: { parameters: [{ name: 'include', value: 'media_links.efficient' }] },
+      queryParameters: { parameters: [{ name: 'include', value: 'media_links.efficient,media_links.original' }] },
       options: {}
     },
     credentials: { oAuth2Api: frameioOAuthCred },
@@ -367,7 +351,7 @@ const metadataModel = languageModel({
   version: 1,
   config: {
     name: 'Metadata Model (OpenRouter)',
-    parameters: { model: 'openai/gpt-5.1', options: { maxTokens: 4000, responseFormat: 'json_object', temperature: 0.8 } },
+    parameters: { model: 'openai/gpt-5.1', options: { maxTokens: 8192, responseFormat: 'json_object', temperature: 0.8 } },
     credentials: { openRouterApi: newCredential('OpenRouter [n8n]') },
     position: [3320, 420]
   }
@@ -711,20 +695,20 @@ const bypassIf = ifElse({
   }
 });
 
-// ---- Non-video guard ------------------------------------------------------
-// The webhook fires on EVERY file.ready in the Frame.io project, including audio
-// shares (mp3) and other non-video files. Those have no 'efficient' video proxy
-// (download_url is null), which crashed Download Proxy on an empty URL (exec #787).
-// Gate the pipeline on a real video + proxy URL; non-video uploads get a heads-up.
+// ---- Media type guard -------------------------------------------------------
+// The webhook fires on EVERY file.ready in the Frame.io project, including
+// non-media files. Gate the pipeline on a real video/audio + a download URL.
+// Audio files use ml.original as their download URL (no efficient proxy).
+// Non-media uploads (images, PDFs, etc.) get a heads-up Telegram message.
 const isVideoIf = ifElse({
   version: 2.3,
   config: {
-    name: 'Is Video?',
+    name: 'Is Video or Audio?',
     parameters: {
       conditions: {
         options: { caseSensitive: false, leftValue: '', typeValidation: 'loose', version: 3 },
         conditions: [
-          { id: 'cond-mime-video', leftValue: expr("{{ $('Extract Episode Info').first().json.mimeType }}"), operator: { type: 'string', operation: 'startsWith' }, rightValue: 'video/' },
+          { id: 'cond-mime-media', leftValue: expr("{{ $('Extract Episode Info').first().json.mimeType }}"), operator: { type: 'string', operation: 'regex' }, rightValue: '^(video|audio)/' },
           { id: 'cond-has-url', leftValue: expr("{{ $('Extract Episode Info').first().json.downloadUrl }}"), operator: { type: 'string', operation: 'startsWith' }, rightValue: 'http' }
         ],
         combinator: 'and'
@@ -739,12 +723,12 @@ const notifySkipped = node({
   type: 'n8n-nodes-base.telegram',
   version: 1.2,
   config: {
-    name: 'Notify Skipped (Non-Video)',
+    name: 'Notify Skipped (Non-Media)',
     parameters: {
       resource: 'message',
       operation: 'sendMessage',
       chatId: '-5254203539',
-      text: expr("⏭️ <b>Ignored non-video upload</b>\nEpisode <code>{{ $('Extract Episode Info').first().json.episodeId || 'no-id' }}</code>\n<code>{{ $('Extract Episode Info').first().json.fileName }}</code> ({{ $('Extract Episode Info').first().json.mimeType }})\nFrame.io only builds a proxy for video files, so there's nothing to transcribe."),
+      text: expr("⏭️ <b>Ignored non-media upload</b>\nEpisode <code>{{ $('Extract Episode Info').first().json.episodeId || 'no-id' }}</code>\n<code>{{ $('Extract Episode Info').first().json.fileName }}</code> ({{ $('Extract Episode Info').first().json.mimeType }})\nOnly video and audio files are transcribed. Skipping."),
       additionalFields: { appendAttribution: false, parse_mode: 'HTML' }
     },
     credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
@@ -757,7 +741,7 @@ const notifySkipped = node({
 });
 
 const setupNote = sticky(
-  "## Frame.io -> AI metadata -> Telegram\n\nNon-video uploads are skipped via 'Is Video?'. A file name ending '_Bypass' skips the whole AI pipeline and just refreshes 'Frame.io URL'. Duration comes from Gemini (videoMetadata.videoDuration), not Frame.io. Same-length re-upload just refreshes 'Frame.io URL'. Summary geared to Episodes 'Type' + 'Guest Name'.",
+  "## Frame.io -> AI metadata -> Telegram\n\nVideo and audio uploads are both transcribed via Gemini. Non-media uploads (images, PDFs, etc.) are skipped via 'Is Video or Audio?'. A file name ending '_Bypass' skips the whole AI pipeline and just refreshes 'Frame.io URL'. Duration comes from Gemini (videoMetadata.videoDuration), not Frame.io. Same-length re-upload just refreshes 'Frame.io URL'. Summary geared to Episodes 'Type' + 'Guest Name'. Telegram sends retry on transient (e.g. DNS) failures.",
   [frameioTrigger, parseEvent, showFile],
   { color: 4 }
 );

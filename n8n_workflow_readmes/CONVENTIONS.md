@@ -54,6 +54,41 @@ The Final Cut · <code>{{ $('Build Outputs').first().json.episodeId }}</code>
 
 ---
 
+## RULE: SDK code in the repo is the source of truth for workflows
+
+We are moving n8n workflows to **SDK code committed in this repo**
+(`scripts/deploy/workflows/*.sdk.js`) as the authoritative definition, instead
+of editing only the live workflow on the server. Code is diffable, reviewable,
+and reproducible; opaque server state is not.
+
+- **Migrate opportunistically, not big-bang.** Convert a workflow to SDK the
+  next time it is *substantively* changed (adding a trigger, a branch, etc.).
+  Do **not** reconstruct a working, hand-built workflow into SDK purely to have
+  it in code, that is regression risk for no functional gain. Trivial one-field
+  tweaks can still be done on the canvas (then reconciled into the `.sdk.js`).
+- **Rebuild as a NEW workflow, verify, then cut over.** Never overwrite the live
+  workflow in place during a rebuild. Push the SDK build as a new workflow,
+  verify it, then deactivate + archive the old one and activate the new.
+- **Reconstruct parameters verbatim.** When rebuilding an existing workflow from
+  its live JSON, emit each node's `parameters` byte-for-byte
+  (`parameters: <JSON.stringify(liveParams)>`). The SDK accepts `=`-prefixed
+  expression strings verbatim, so **no `expr()` conversion is needed**.
+- **Prove fidelity by structural diff before cutover.** Pull the new workflow
+  (`get_workflow_details`), `jq` its nodes + connections, and diff `parameters`
+  (especially Code `jsCode`) and edges against the live JSON. Zero diffs on the
+  pre-existing nodes/edges = a faithful rebuild.
+- **Budget for the credential rebind tax.** `newCredential('Name')` binds on
+  **triggers and Telegram** nodes but is **skipped on every HTTP Request node**
+  on this instance, and the SDK has no bind-by-ID option. So every SDK push
+  requires manually re-binding all HTTP-node credentials in the UI afterwards.
+  This is the one real cost of the SDK workflow; expect it per push. See
+  memory `feedback_sdk_source_of_truth`.
+
+First workflow on this model: **Guy's Take Thumbnail Artwork**
+(`scripts/deploy/workflows/guys-take-thumbnail-artwork.sdk.js`).
+
+---
+
 ## Related conventions enforced elsewhere
 
 - **Airtable Trigger Fields** — when restricting the Fields list, include the

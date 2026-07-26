@@ -5,7 +5,12 @@
 > the data model, the confirmation mechanism, and the Frame.io integration.
 >
 > Build status for each workflow lives in `Guys Take Build Status.md` (same folder). Tick workflows
-> off there, not here.
+> off there, not here. That file was expanded 2026-07-06 into the full **Content Machine — Build
+> Status & Roadmap**: it now also carries the implementer orientation (constraints, design rules,
+> key IDs), the system-wide phased roadmap (ops/observability, assistant level-up, scheduling,
+> publishing fan-out, engagement sweeps), and open decisions. This doc remains the narrative
+> annotation of Jonny's raw pipeline plan; for anything build-order or system-architecture related,
+> the roadmap wins.
 
 ---
 
