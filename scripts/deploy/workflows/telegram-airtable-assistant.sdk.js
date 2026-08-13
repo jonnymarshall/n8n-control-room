@@ -508,9 +508,25 @@ const parseAgentDecision = node({
   let parsed = null;
   try { parsed = JSON.parse(cleaned); } catch (e) {
     const start = cleaned.indexOf('{');
-    const end = cleaned.lastIndexOf('}');
-    if (start !== -1 && end > start) {
-      try { parsed = JSON.parse(cleaned.slice(start, end + 1)); } catch (e2) { parsed = null; }
+    if (start !== -1) {
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      for (let i = start; i < cleaned.length; i++) {
+        const char = cleaned[i];
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (char === '\\') escaped = true;
+          else if (char === '"') inString = false;
+          continue;
+        }
+        if (char === '"') inString = true;
+        else if (char === '{') depth++;
+        else if (char === '}' && --depth === 0) {
+          try { parsed = JSON.parse(cleaned.slice(start, i + 1)); } catch (e2) { parsed = null; }
+          break;
+        }
+      }
     }
   }
   if (!parsed || typeof parsed !== 'object') {
