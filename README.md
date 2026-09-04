@@ -4,13 +4,13 @@ The admin side of our n8n automation server.
 
 This repo bundles three things:
 
-1. **Claude Code wiring** so you can build and edit n8n workflows by chatting with an AI ("create a workflow that emails me every morning..."), and Claude builds, validates, and saves it for you.
+1. **AI-agent wiring** so you can build and edit n8n workflows by chatting with an AI ("create a workflow that emails me every morning..."), and the agent builds, validates, and saves it for you. Works with opencode or Claude Code (see `AGENTS.md` / `CLAUDE.md`).
 2. **Admin shell scripts** (`scripts/`) that you run from your own machine to mutate the n8n server: deploy workflows, mint client tokens, create credentials, query data tables.
 3. **A `client/` folder** with everything you hand to a third party (or their AI agent) so they can call our Public API with their own bearer token.
 
 ## What you need
 
-1. **Claude Code** installed on your machine. Download from https://claude.com/claude-code and sign in.
+1. **An AI coding agent** installed on your machine: **opencode** (this repo has an `AGENTS.md` and a project `opencode.json`) or **Claude Code** (`AGENTS.md` is imported by `CLAUDE.md`). Sign in to whichever you use.
 2. **An n8n MCP access token** (for the AI workflow builder). Log in to your n8n instance (the admin will share the URL with you privately), go to `/settings/mcp`, and copy the token shown there. Treat it like a password.
 3. **An n8n REST API key** (for the admin shell scripts). Same n8n instance, go to `/settings/api`, generate a key. Also private.
 
@@ -23,21 +23,22 @@ git clone <repo-url> n8n-control-room
 cd n8n-control-room
 ```
 
-### 2. Open it in Claude Code
+### 2. Open it in your agent
 
 ```bash
-claude
+opencode          # or: claude
 ```
 
-The first time you open the folder, Claude Code will ask if you trust the project settings. Say **yes**. This auto-installs the n8n skills plugin (a bundle of expert guides on how to build n8n workflows correctly).
+The repo ships instructions both tools read automatically (`AGENTS.md`, and `CLAUDE.md` which imports it). On first open, accept any project-settings / trust prompt. In Claude Code that also auto-installs the n8n skills plugin; opencode reads the same guidance from the vendored copy in `vendor/n8n-skills/`.
 
 ### 3. Wire up your n8n MCP token
 
-Paste the contents of `n8n_mcp_configuration.json` to Claude and say:
+The repo already has the MCP connection templated for both tools:
 
-> "Wire up my n8n MCP using the instructions in Setup.md."
+- **opencode**: `opencode.json` (reads the token from the `N8N_MCP_ACCESS_TOKEN` env var)
+- **Claude Code**: `n8n_mcp_configuration.json`
 
-Claude will prompt you (privately, hidden input) for your MCP token. Your token never appears in chat.
+Paste `n8n_mcp_configuration.json` to your agent and say "Wire up my n8n MCP using the instructions in Setup.md", or follow `Setup.md` yourself. Your token never appears in chat. In opencode, put the token in `.env` (step 4) as `N8N_MCP_ACCESS_TOKEN` and it is picked up automatically.
 
 ### 4. Create your `.env` for the admin scripts
 
@@ -72,7 +73,7 @@ Each script's header comment lists exactly which env vars it reads.
 
 Either side works as a check.
 
-Via Claude (MCP): "Create me a simple workflow with no dependencies to check it's working." You should get back a link to a new workflow in n8n.
+Via the agent (MCP): "Create me a simple workflow with no dependencies to check it's working." You should get back a link to a new workflow in n8n.
 
 Via shell scripts:
 
@@ -85,9 +86,13 @@ Via shell scripts:
 | Path | What it does |
 |---|---|
 | `README.md` | This file. |
-| `Setup.md` | Step-by-step recipe Claude follows to wire your MCP token into Claude Code. |
-| `n8n_mcp_configuration.json` | MCP connection details (URL + placeholder token). |
-| `.claude/settings.json` | Auto-loads the n8n skills plugin when you open the project. Shared. |
+| `AGENTS.md` | Agent instructions (opencode reads this; `CLAUDE.md` imports it for Claude Code). |
+| `CLAUDE.md` | Imports `AGENTS.md` so Claude Code gets the same instructions. |
+| `opencode.json` | Project opencode config: the n8n MCP connection (token via `.env`). |
+| `vendor/n8n-skills/` | Vendored n8n expert guidance (from `czlonkowski/n8n-skills`, MIT) that opencode reads. |
+| `Setup.md` | Step-by-step recipe for wiring your MCP token into your coding agent. |
+| `n8n_mcp_configuration.json` | MCP connection details for Claude Code (URL + placeholder token). |
+| `.claude/settings.json` | Auto-loads the n8n skills plugin + guard hooks in Claude Code. |
 | `.gitignore` | Lists files that should never be committed (secrets, local state, OS junk). |
 | `scripts/deploy/` | Scripts that mutate n8n: install workflows, create credentials, issue/revoke tokens. |
 | `scripts/query/` | Read-only scripts that inspect n8n state: list workflows, dump nodes, query data tables. |
@@ -142,7 +147,7 @@ What you hand to a third party (a person or their AI agent) so they can hit our 
 
 ## Troubleshooting
 
-- **"Claude doesn't see the n8n tools"**: restart Claude Code after wiring the MCP token. The MCP connection loads at startup.
-- **"It says the plugin can't be found"**: open the repo folder fresh in Claude Code and accept the project settings prompt. That triggers the plugin install.
+- **"The agent doesn't see the n8n tools"**: restart the agent after wiring the MCP token. The MCP connection loads at startup. In opencode, confirm `N8N_MCP_ACCESS_TOKEN` is set in `.env`.
+- **"Claude Code says the plugin can't be found"**: open the repo folder fresh in Claude Code and accept the project settings prompt. That triggers the plugin install. (opencode doesn't need the plugin; it reads `vendor/n8n-skills/`.)
 - **"A deploy script says `.env` not found"**: the scripts expect `.env` at the repo root. Even subfolder scripts walk up to find it.
 - **"My token leaked into chat"**: rotate it immediately. For an MCP token, regenerate at `/settings/mcp`. For a client/agent token, run `./scripts/deploy/tokens/revoke.sh <client-name>` and reissue.

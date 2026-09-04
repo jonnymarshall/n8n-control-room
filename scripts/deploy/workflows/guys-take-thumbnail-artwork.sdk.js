@@ -258,7 +258,7 @@ const planGenerate = node({
   config: {
     name: "Plan Generate",
     position: [224,-32],
-    parameters: {"jsCode":"// ── Plan Generate ─────────────────────────────────────────────\n// Reads the episode that entered the \"Ready for 16X9 Thumbnail\" view and\n// derives everything the downstream nodes need: delete query, layout,\n// guest list, Airtable filter formula, and the auto-art flag.\n\n// HTML-escape helper (& < >) for any text that goes into a Telegram HTML message.\nconst esc = s => String(s == null ? '' : s)\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;');\n\n// The triggering episode record. `fields` when nested, else the record itself.\nconst rec = $('Ready for 16X9 Thumbnail').first().json;\nconst f = rec.fields || rec;\n\n// Old thumbnail rows still linked to this episode -> build the batch-delete query\n// so a re-run starts from a clean slate.\nconst oldIds = Array.isArray(f['Thumbnails']) ? f['Thumbnails'] : [];\nconst deleteQuery = oldIds.map(id => 'records[]=' + encodeURIComponent(id)).join('&');\n\n// Content type drives the layout. Missing Type defaults to Take (solo host).\nconst type = f['Type'] || 'Take';\nconst layout = type === 'Take'\n  ? 'solo'\n  : (type === 'Roundtable' ? 'roundtable' : 'duo'); // Chat / Clip -> duo\nconst autoArt = ['Take', 'Chat', 'Clip', 'Roundtable'].indexOf(type) !== -1;\n\n// Guests to composite into the frame.\n// The host (Guy) is ALWAYS drawn from the Thumbnail References library, so if\n// he's also sitting in the episode's Guests link he'd be rendered twice\n// (this is exactly what happened in exec #1318: Guy + Guy + Bitcoin Mechanic).\n// Strip his guest record here so he can never be double-added.\n// `.filter` tolerates both shapes n8n may return: bare id strings and { id } objects.\nconst HOST_GUEST_REC_ID = 'recs8srWCoJwDuzLn'; // \"Guy\" — host, never a guest\nconst guestIds = (Array.isArray(f['Guests']) ? f['Guests'] : [])\n  .filter(g => (g && g.id ? g.id : g) !== HOST_GUEST_REC_ID);\n\n// Airtable filterByFormula for \"Fetch Guests\" — only this episode's real guests.\n// FALSE() returns nothing when there are no guests (solo / guestless episode).\nconst guestFilter = guestIds.length\n  ? 'OR(' + guestIds.map(id => \"RECORD_ID()='\" + id + \"'\").join(',') + ')'\n  : 'FALSE()';\n\nreturn [{\n  json: {\n    episodeId: rec.id,\n    episodeDisplayId: f['ID'] || rec.id,\n    title: f['Title'] || '',\n    titleHtml: esc(f['Title'] || ''),     // pre-escaped for Telegram HTML mode\n    caption: f['Thumbnail Caption'] || f['Title'] || '',\n    summary: f['Summary'] || '',\n    deleteQuery: deleteQuery,\n    hasOld: oldIds.length > 0,\n    type: type,\n    guestIds: guestIds,\n    guestFilter: guestFilter,\n    layout: layout,\n    autoArt: autoArt\n  }\n}];"}
+    parameters: {"jsCode":"// ── Plan Generate ────────────────────────────────────\n// Reads the episode that entered the \"Ready for 16X9 Thumbnail\" view and\n// derives everything the downstream nodes need: delete query, layout,\n// guest list, Airtable filter formula, and the auto-art flag.\n\n// HTML-escape helper (& < >) for any text that goes into a Telegram HTML message.\nconst esc = s => String(s == null ? '' : s)\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;');\n\n// The triggering episode record. `fields` when nested, else the record itself.\nconst rec = $('Ready for 16X9 Thumbnail').first().json;\nconst f = rec.fields || rec;\n\n// Old thumbnail rows still linked to this episode -> build the batch-delete query\n// so a re-run starts from a clean slate.\nconst oldIds = Array.isArray(f['Thumbnails']) ? f['Thumbnails'] : [];\nconst deleteQuery = oldIds.map(id => 'records[]=' + encodeURIComponent(id)).join('&');\n\n// Content type drives the layout. Missing Type defaults to Take (solo host).\nconst type = f['Type'] || 'Take';\nconst layout = type === 'Take'\n  ? 'solo'\n  : (type === 'Roundtable' ? 'roundtable' : 'duo'); // Chat / Clip -> duo\nconst autoArt = ['Take', 'Chat', 'Clip', 'Roundtable'].indexOf(type) !== -1;\n\n// Guests to composite into the frame.\n// The host (Guy) is ALWAYS drawn from the Thumbnail References library, so if\n// he's also sitting in the episode's Guests link he'd be rendered twice\n// (this is exactly what happened in exec #1318: Guy + Guy + Bitcoin Mechanic).\n// Strip his guest record here so he can never be double-added.\n// `.filter` tolerates both shapes n8n may return: bare id strings and { id } objects.\nconst HOST_GUEST_REC_ID = 'recs8srWCoJwDuzLn'; // \"Guy\" — host, never a guest\nconst guestIds = (Array.isArray(f['Guests']) ? f['Guests'] : [])\n  .filter(g => (g && g.id ? g.id : g) !== HOST_GUEST_REC_ID);\n\n// Airtable filterByFormula for \"Fetch Guests\" — only this episode's real guests.\n// FALSE() returns nothing when there are no guests (solo / guestless episode).\nconst guestFilter = guestIds.length\n  ? 'OR(' + guestIds.map(id => \"RECORD_ID()='\" + id + \"'\").join(',') + ')'\n  : 'FALSE()';\n\n// ── Jonny's answers from the metadata workflow's packaging message ──\n// The episode field is \"Moods\": a comma-separated list of mood NAMES he picked\n// off the list Telegram showed him. Resolve Vibes matches these against the\n// Thumbnail References library by name and cycles them across the 4 slots; an\n// empty or unmatched value falls back to the whole library rather than failing.\n// \"Thumbnail Moods\" is kept as a fallback read: the docs, the readmes and the\n// assistant's system prompt all called it that, but the field Jonny actually\n// created on Episodes is \"Moods\", so reading only the documented name threw\n// away every pick and quietly fell back to the whole library.\nconst moods = String(f['Moods'] || f['Thumbnail Moods'] || '')\n  .split(',')\n  .map(s => s.trim())\n  .filter(Boolean);\n\n// \"Custom Image Prompt\" is his free-text art direction for THIS episode. It\n// fills the {{CUSTOM}} token in the Airtable prompt template. The trigger view\n// requires it to be non-empty, so it should never be blank here; \"default\"\n// means \"no extra direction\" and resolves to an empty token.\nlet customPrompt = String(f['Custom Image Prompt'] || '').trim();\nif (/^(default|none|n\\/a|-)$/i.test(customPrompt)) customPrompt = '';\n\nreturn [{\n  json: {\n    episodeId: rec.id,\n    episodeDisplayId: f['ID'] || rec.id,\n    title: f['Title'] || '',\n    titleHtml: esc(f['Title'] || ''),     // pre-escaped for Telegram HTML mode\n    caption: f['Thumbnail Caption'] || f['Title'] || '',\n    summary: f['Summary'] || '',\n    deleteQuery: deleteQuery,\n    hasOld: oldIds.length > 0,\n    type: type,\n    guestIds: guestIds,\n    guestFilter: guestFilter,\n    layout: layout,\n    autoArt: autoArt,\n    moods: moods,\n    customPrompt: customPrompt\n  }\n}];"}
   },
   output: [{}]
 });
@@ -322,36 +322,67 @@ const fetchGuests = node({
   output: [{}]
 });
 
-const buildMoodPrompt = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Build Mood Prompt",
-    position: [1792,-128],
-    parameters: {"jsCode":"const refs = (($('Fetch Mood References').first() || {}).json || {}).records || [];\n  const moods = refs.map(r => r.fields && r.fields['Mood']).filter(Boolean);\n  const ep = $('Plan Generate').first().json;\n  \n  const prompt =\n  `You are assigning facial-expression vibes to the 4 thumbnail options for a Bitcoin podcast episode.\n  \n  Episode title: ${ep.title}\n  Thumbnail headline: ${ep.caption}\n  ${ep.summary ? 'Episode summary: ' + ep.summary : ''}\n  \n  Available vibes (use ONLY these): ${moods.join(', ')}\n  \n  First decide how strongly ONE vibe dominates this episode. If a single vibe clearly fits best (for example a hack, crash or crisis is clearly Dramatic/Intense), assign that vibe to MOST \n  or ALL of the 4 slots. Only spread across several different vibes when the episode is genuinely ambiguous and multiple vibes fit equally well.\n  \n  Assign one vibe to each of the 4 slots. Repeats are strongly encouraged when one vibe dominates.\n  \n  Respond ONLY as JSON: {\"slots\":[\"vibe\",\"vibe\",\"vibe\",\"vibe\"]} with exactly 4 entries, each taken from the available list.`;\n  \n  return [{\n    json: {\n      episodeId: ep.episodeId,\n      title: ep.title,\n      caption: ep.caption,\n      requestBody: { contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.3 } }\n    } \n  }];"}
-  },
-  output: [{}]
-});
+// The moods are now PICKED BY JONNY, not by Gemini. The metadata workflow lists
+// the Thumbnail References library in its Telegram packaging message; his reply
+// is stored on the episode as "Moods" (comma-separated names). The two
+// nodes that used to do this — "Build Mood Prompt" and "Pick Moods (Gemini)" —
+// were removed on 2026-08-04, which also drops one Gemini call per run.
+const resolveVibesCode = `
+const refs = (($('Fetch Mood References').first() || {}).json || {}).records || [];
+const moodMap = {};
+for (const r of refs) {
+  const m = r.fields && r.fields['Mood'];
+  const photo = r.fields && r.fields['Reference Photo'];
+  const att = Array.isArray(photo) && photo[0] ? photo[0] : null;
+  if (m && att && att.url) moodMap[m] = { url: att.url, type: att.type || 'image/jpeg' };
+}
+const avail = Object.keys(moodMap);
+if (!avail.length) throw new Error('No vibes with reference photos in the Thumbnail References table');
 
-const pickMoodsGemini = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Pick Moods (Gemini)",
-    position: [2016,-128],
-    parameters: {"method":"POST","url":"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ $json.requestBody }}","options":{"timeout":60000}},
-    credentials: { httpHeaderAuth: newCredential("Gemini API Key [n8n]") }
-  },
-  output: [{}]
-});
+const plan = ($('Plan Generate').first() || {}).json || {};
+
+// Match his picks to the library by name, case-insensitively, so "Confident"
+// and "confident" both resolve. Unknown names are dropped, not fatal.
+const byLower = {};
+for (const k of avail) byLower[k.toLowerCase()] = k;
+const picked = (plan.moods || [])
+  .map(m => byLower[String(m).toLowerCase().trim()])
+  .filter(Boolean);
+
+// Nothing usable (field left empty, or every name mistyped) -> fall back to the
+// whole library. A typo should cost variety, never the run.
+const pool = picked.length ? picked : avail;
+
+// Cycle the pool across the 4 slots: 1 mood -> all four use it, 2 moods -> ABAB.
+const out = [];
+for (let i = 0; i < 4; i++) {
+  const vibe = pool[i % pool.length];
+  const ref = moodMap[vibe];
+  out.push({
+    json: {
+      episodeId: plan.episodeId,
+      title: plan.title,
+      caption: plan.caption,
+      summary: plan.summary || '',
+      vibe: vibe,
+      optionIndex: i + 1,
+      photoUrl: ref.url,
+      photoType: ref.type || 'image/jpeg',
+      moodSource: picked.length ? 'picked' : 'fallback-all-moods'
+    },
+    pairedItem: { item: 0 }
+  });
+}
+return out;
+`;
 
 const resolveVibes = node({
   type: "n8n-nodes-base.code",
   version: 2,
   config: {
     name: "Resolve Vibes",
-    position: [2240,-128],
-    parameters: {"jsCode":"const refs = (($('Fetch Mood References').first() || {}).json || {}).records || [];\n  const moodMap = {};\n  for (const r of refs) {\n    const m = r.fields && r.fields['Mood'];\n    const photo = r.fields && r.fields['Reference Photo'];\n    const att = Array.isArray(photo) && photo[0] ? photo[0] : null;\n    if (m && att && att.url) moodMap[m] = { url: att.url, type: att.type || 'image/jpeg' };\n  } \n  const avail = Object.keys(moodMap);\n  if (!avail.length) throw new Error('No vibes with reference photos in the Thumbnail References table');\n  \n  const ep = $('Build Mood Prompt').first().json;\n  const plan = ($('Plan Generate').first() || {}).json || {};\n  const summary = plan.summary || '';\n  \n  let slots = [];\n  try {\n    const resp = $input.first().json;\n    const parts = ((((resp.candidates || [])[0] || {}).content) || {}).parts || [];\n    const j = JSON.parse((parts[0] || {}).text || '{}');\n    if (Array.isArray(j.slots)) slots = j.slots.filter(m => moodMap[m]);\n  } catch (e) {}\n  \n  const pool = slots.length ? slots : avail;\n  const out = [];\n  for (let i = 0; i < 4; i++) {\n    const vibe = pool[i % pool.length];\n    const ref = moodMap[vibe];\n    out.push({\n      json: {\n        episodeId: ep.episodeId, title: ep.title, caption: ep.caption, summary: summary,\n        vibe: vibe, optionIndex: i + 1, photoUrl: ref.url, photoType: ref.type || 'image/jpeg'\n      },\n      pairedItem: { item: 0 }\n    });\n  } \n  return out;"}
+    position: [1792,-128],
+    parameters: { jsCode: resolveVibesCode }
   },
   output: [{}]
 });
@@ -362,7 +393,7 @@ const planDownloads = node({
   config: {
     name: "Plan Downloads",
     position: [2464,-128],
-    parameters: {"jsCode":"\nconst vibes = $('Resolve Vibes').all();\nconst plan = $('Plan Generate').first().json;\nconst tasks = [];\n\nfor (let i = 0; i < vibes.length; i++) {\n  const v = (vibes[i] || {}).json || {};\n  tasks.push({ kind: 'host', slot: i, photoUrl: v.photoUrl, mime: v.photoType || 'image/jpeg' });\n}\n\n// Fetch Guests is already filtered to this episode's guests, so take all of them.\nif (plan.layout === 'duo') {\n  const guestRecs = ((($('Fetch Guests').first() || {}).json) || {}).records || [];\n  for (const g of guestRecs) {\n    const photo = g.fields && g.fields['Headshot'];\n    const att = Array.isArray(photo) && photo[0] ? photo[0] : null;\n    if (att && att.url) tasks.push({ kind: 'guest', photoUrl: att.url, mime: att.type || 'image/jpeg' });\n  }\n}\n\nreturn tasks.map(t => ({ json: t, pairedItem: { item: 0 } }));\n"}
+    parameters: {"jsCode":"\nconst vibes = $('Resolve Vibes').all();\nconst plan = $('Plan Generate').first().json;\nconst tasks = [];\n\nfor (let i = 0; i < vibes.length; i++) {\n  const v = (vibes[i] || {}).json || {};\n  tasks.push({ kind: 'host', slot: i, photoUrl: v.photoUrl, mime: v.photoType || 'image/jpeg' });\n}\n\n// Fetch Guests is already filtered to this episode's guests, so take all of them.\n// Roundtable was missing here until 2026-08-04, so every Roundtable episode\n// silently produced zero guest images and fell back to the solo prompt.\nif (plan.layout === 'duo' || plan.layout === 'roundtable') {\n  const guestRecs = ((($('Fetch Guests').first() || {}).json) || {}).records || [];\n  for (const g of guestRecs) {\n    const photo = g.fields && g.fields['Headshot'];\n    const att = Array.isArray(photo) && photo[0] ? photo[0] : null;\n    if (att && att.url) tasks.push({ kind: 'guest', photoUrl: att.url, mime: att.type || 'image/jpeg' });\n  }\n}\n\nreturn tasks.map(t => ({ json: t, pairedItem: { item: 0 } }));\n"}
   },
   output: [{}]
 });
@@ -396,7 +427,7 @@ const buildImageRequests = node({
   config: {
     name: "Build Image Requests",
     position: [3136,-128],
-    parameters: {"jsCode":"const IMAGE_SIZE = '1K';\nconst tasks  = $('Plan Downloads').all();\nconst files  = $('Image To Base64').all();\nconst vibes  = $('Resolve Vibes').all();\nconst plan   = $('Plan Generate').first().json;\nconst layout = plan.layout || 'solo';   // 'solo' | 'duo' | 'roundtable'\n\n// ---- prompt templates pulled from Airtable (Thumbnail Prompts table) ----\nconst promptRecs = (($('Fetch Prompts').first() || {}).json || {}).records || [];\nconst P = {};\nfor (const r of promptRecs) {\n  const rf = r.fields || {};\n  if (rf.Name) P[rf.Name] = rf.Prompt || '';\n}\nconst ROW_BY_LAYOUT = { solo: 'Solo Thumbnail', duo: 'Duo Thumbnail', roundtable: 'Roundtable Thumbnail' };\nfunction tpl(lay) {\n  const rowName = ROW_BY_LAYOUT[lay];\n  const t = P[rowName];\n  if (!t) throw new Error('Missing prompt row \"' + rowName + '\" in Thumbnail Prompts (layout: ' + lay + ')');\n  return t;\n}\nconst render = (t, v) => t.replace(/\\{\\{(\\w+)\\}\\}/g, (_, k) => (v[k] != null ? v[k] : ''));\n\n// per-option framing (solo/duo only; the roundtable template has no {{VARIATION}} slot)\nconst variations = [\n  'Tight close-up framing with the headline across the top; warm orange key light.',\n  'Slightly wider framing with the headline in a lower band; clean, punchy, high-key lighting.',\n  'Dramatic low camera angle with strong shadows and a single bright rim light.',\n  'Bold off-centre composition with strong negative space reserved for the headline.'\n];\n\n// zip download tasks with their base64 by position (hosts first, then guests)\nconst hostBySlot = {};\nconst guestParts = [];\nfor (let i = 0; i < tasks.length; i++) {\n  const t = (tasks[i] || {}).json || {};\n  const b64 = ((files[i] || {}).json || {}).dataB64;\n  if (!b64) continue;\n  if (t.kind === 'host') hostBySlot[t.slot] = { mime: t.mime || 'image/jpeg', data: b64 };\n  else if (t.kind === 'guest') guestParts.push({ inline_data: { mime_type: t.mime || 'image/jpeg', data: b64 } });\n}\n\nconst useGuests = layout !== 'solo' && guestParts.length > 0;\nconst key = useGuests ? layout : 'solo';   // duo/roundtable with no guest images fall back to solo\n\nconst out = [];\nfor (let i = 0; i < vibes.length; i++) {\n  const m = (vibes[i] || {}).json || {};\n  const host = hostBySlot[i];\n  if (!host) throw new Error('No host image for option ' + (i + 1));\n  const prompt = render(tpl(key), {\n    HOOK: m.caption,\n    CONTEXT: m.summary || m.caption,\n    VIBE: m.vibe,\n    VARIATION: variations[i % variations.length]\n  });\n  const parts = [{ text: prompt }, { inline_data: { mime_type: host.mime, data: host.data } }];\n  if (useGuests) for (let g = 0; g < guestParts.length; g++) parts.push(guestParts[g]);\n  out.push({\n    json: {\n      episodeId: m.episodeId, title: m.title, caption: m.caption, mood: m.vibe,\n      optionIndex: m.optionIndex || (i + 1), layout: key, imageCount: parts.length - 1,\n      requestBody: { contents: [{ parts: parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9', imageSize: IMAGE_SIZE } } }\n    },\n    pairedItem: { item: 0 }\n  });\n}\nreturn out;"}
+    parameters: {"jsCode":"const IMAGE_SIZE = '1K';\nconst tasks  = $('Plan Downloads').all();\nconst files  = $('Image To Base64').all();\nconst vibes  = $('Resolve Vibes').all();\nconst plan   = $('Plan Generate').first().json;\nconst layout = plan.layout || 'solo';   // 'solo' | 'duo' | 'roundtable'\n\n// ---- prompt templates pulled from Airtable (Thumbnail Prompts table) ----\nconst promptRecs = (($('Fetch Prompts').first() || {}).json || {}).records || [];\nconst P = {};\nfor (const r of promptRecs) {\n  const rf = r.fields || {};\n  if (rf.Name) P[rf.Name] = rf.Prompt || '';\n}\nconst ROW_BY_LAYOUT = { solo: 'Solo Thumbnail', duo: 'Duo Thumbnail', roundtable: 'Roundtable Thumbnail' };\nfunction tpl(lay) {\n  const rowName = ROW_BY_LAYOUT[lay];\n  const t = P[rowName];\n  if (!t) throw new Error('Missing prompt row \"' + rowName + '\" in Thumbnail Prompts (layout: ' + lay + ')');\n  return t;\n}\nconst render = (t, v) => t.replace(/\\{\\{(\\w+)\\}\\}/g, (_, k) => (v[k] != null ? v[k] : ''));\n\n// Jonny's per-episode art direction, from the \"Custom Image Prompt\" he gave in\n// reply to the metadata workflow's packaging message. It fills the {{CUSTOM}}\n// token wherever he's positioned it in the Airtable template. \"default\" was\n// already normalised to '' in Plan Generate, so the token just disappears.\nconst customPrompt = plan.customPrompt || '';\n\n// NOTE: the four hardcoded per-option framing lines ({{VARIATION}}) were removed\n// on 2026-08-04. Variety across the 4 options now comes from the moods Jonny\n// picks; his custom prompt is the only other steer. {{VARIATION}} still renders\n// as empty if an old template still contains it.\n\n// zip download tasks with their base64 by position (hosts first, then guests)\nconst hostBySlot = {};\nconst guestParts = [];\nfor (let i = 0; i < tasks.length; i++) {\n  const t = (tasks[i] || {}).json || {};\n  const b64 = ((files[i] || {}).json || {}).dataB64;\n  if (!b64) continue;\n  if (t.kind === 'host') hostBySlot[t.slot] = { mime: t.mime || 'image/jpeg', data: b64 };\n  else if (t.kind === 'guest') guestParts.push({ inline_data: { mime_type: t.mime || 'image/jpeg', data: b64 } });\n}\n\nconst useGuests = layout !== 'solo' && guestParts.length > 0;\nconst key = useGuests ? layout : 'solo';   // duo/roundtable with no guest images fall back to solo\n\nconst out = [];\nfor (let i = 0; i < vibes.length; i++) {\n  const m = (vibes[i] || {}).json || {};\n  const host = hostBySlot[i];\n  if (!host) throw new Error('No host image for option ' + (i + 1));\n  const prompt = render(tpl(key), {\n    HOOK: m.caption,\n    CONTEXT: m.summary || m.caption,\n    VIBE: m.vibe,\n    CUSTOM: customPrompt,\n    VARIATION: ''\n  });\n  const parts = [{ text: prompt }, { inline_data: { mime_type: host.mime, data: host.data } }];\n  if (useGuests) for (let g = 0; g < guestParts.length; g++) parts.push(guestParts[g]);\n  out.push({\n    json: {\n      episodeId: m.episodeId, title: m.title, caption: m.caption, mood: m.vibe,\n      optionIndex: m.optionIndex || (i + 1), layout: key, imageCount: parts.length - 1,\n      requestBody: { contents: [{ parts: parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9', imageSize: IMAGE_SIZE } } }\n    },\n    pairedItem: { item: 0 }\n  });\n}\nreturn out;"}
   },
   output: [{}]
 });
@@ -541,7 +572,7 @@ const resolveSelected = node({
   config: {
     name: "Resolve Selected",
     position: [432,384],
-    parameters: {"jsCode":"// Pick the first Selected row that is actually linked to an episode.\n// Skips orphan rows (Selected but no Episode) instead of bailing, so a real\n// pick sitting behind an orphan in the same poll still gets processed.\n// Downstream handles ONE selection; Check Extra Picks warns about extras.\nlet rec = null, f = null, ep = null;\nfor (const item of $input.all()) {\n  const cand = item.json;\n  const cf = cand.fields || cand;\n  const cep = Array.isArray(cf['Episode']) ? cf['Episode'][0] : (cf['Episode'] || null);\n  if (cep) { rec = cand; f = cf; ep = cep; break; }\n}\nif (!ep) return [];\nconst att = Array.isArray(f['16x9']) && f['16x9'][0] ? f['16x9'][0] : null;\n\nconst has1x1  = Array.isArray(f['1x1'])  && f['1x1'].length  > 0;\nconst has9x16 = Array.isArray(f['9x16']) && f['9x16'].length > 0;\n\nreturn [{\n  json: {\n    selectedRowId: rec.id,\n    episodeId: ep,\n    caption: f['Caption'] || '',\n    sixteenUrl: att && att.url ? att.url : '',\n    sixteenType: att && att.type ? att.type : 'image/png',\n    need1x1: !has1x1,\n    need9x16: !has9x16,\n    url1x1: has1x1 ? (f['1x1'][0].url || '') : '',\n    url9x16: has9x16 ? (f['9x16'][0].url || '') : ''\n  },\n  pairedItem: { item: 0 }\n}];"}
+    parameters: {"jsCode":"// Pick the first Selected row that is actually linked to an episode.\n// Skips orphan rows (Selected but no Episode) instead of bailing on them,\n// so a real pick sitting behind an orphan in the same poll still gets processed.\n// Downstream handles ONE selection, so we still emit at most one item;\n// \"Check Extra Picks\" warns about any additional valid picks in the same poll.\nlet rec = null, f = null, ep = null;\nfor (const item of $input.all()) {\n  const cand = item.json;\n  const cf = cand.fields || cand;\n  const cep = Array.isArray(cf['Episode']) ? cf['Episode'][0] : (cf['Episode'] || null);\n  if (cep) { rec = cand; f = cf; ep = cep; break; }\n}\nif (!ep) return [];\n\nconst att = Array.isArray(f['16x9']) && f['16x9'][0] ? f['16x9'][0] : null;\nconst has1x1  = Array.isArray(f['1x1'])  && f['1x1'].length  > 0;\nconst has9x16 = Array.isArray(f['9x16']) && f['9x16'].length > 0;\n\n// \"Episode Type\" is a lookup through the Episode link, so it arrives as an array\n// (e.g. [\"Clip\"]). The 1:1 / 9:16 reversions are skipped for these types: a Clip\n// is cut from an episode that already has its own artwork, and Read / Audionauts\n// never get auto-generated artwork in the first place.\nconst NO_REVERSION = ['Read', 'Clip', 'Audionauts'];\nconst epTypeRaw = f['Episode Type'];\nconst epType = Array.isArray(epTypeRaw) ? (epTypeRaw[0] || '') : (epTypeRaw || '');\n\nreturn [{\n  json: {\n    selectedRowId: rec.id,\n    episodeId: ep,\n    episodeType: epType,\n    reversionOk: NO_REVERSION.indexOf(epType) === -1,\n    caption: f['Caption'] || '',\n    sixteenUrl: att && att.url ? att.url : '',\n    sixteenType: att && att.type ? att.type : 'image/png',\n    need1x1: !has1x1,\n    need9x16: !has9x16,\n    url1x1: has1x1 ? (f['1x1'][0].url || '') : '',\n    url9x16: has9x16 ? (f['9x16'][0].url || '') : ''\n  },\n  pairedItem: { item: 0 }\n}];"}
   },
   output: [{}]
 });
@@ -611,7 +642,7 @@ const confirmThumbnailSet = node({
   config: {
     name: "Confirm Thumbnail Set",
     position: [1776,288],
-    parameters: {"chatId":"-5254203539","text":"=Thumbnail selected for \"{{ $(\"Compute Rejects\").item.json.titleHtml }}\" ({{ $(\"Compute Rejects\").item.json.episodeDisplayId || \"no-id\" }}). Episode is now Artwork Ready. {{ ($(\"Resolve Selected\").first().json.need1x1 && $(\"Resolve Selected\").first().json.need9x16) ? \"Generating 1:1 and 9:16 versions now.\" : ($(\"Resolve Selected\").first().json.need1x1 ? \"Generating the 1:1 version now.\" : ($(\"Resolve Selected\").first().json.need9x16 ? \"Generating the 9:16 version now.\" : \"Both 1:1 and 9:16 versions are already in place.\")) }}","additionalFields":{"appendAttribution":false,"parse_mode":"HTML"}},
+    parameters: {"chatId":"-5254203539","text":"=Thumbnail selected for \"{{ $(\"Compute Rejects\").item.json.titleHtml }}\" ({{ $(\"Compute Rejects\").item.json.episodeDisplayId || \"no-id\" }}). Episode is now Artwork Ready. {{ !$(\"Resolve Selected\").first().json.reversionOk ? (\"No 1:1 or 9:16 versions are generated for \" + ($(\"Resolve Selected\").first().json.episodeType || \"this\") + \" episodes.\") : ( ($(\"Resolve Selected\").first().json.need1x1 && $(\"Resolve Selected\").first().json.need9x16) ? \"Generating 1:1 and 9:16 versions now.\" : ($(\"Resolve Selected\").first().json.need1x1 ? \"Generating the 1:1 version now.\" : ($(\"Resolve Selected\").first().json.need9x16 ? \"Generating the 9:16 version now.\" : \"Both 1:1 and 9:16 versions are already in place.\")) ) }}","additionalFields":{"appendAttribution":false,"parse_mode":"HTML"}},
     credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
     webhookId: "9ea34dee-3ad3-4f8a-b294-2cd7a853dabd"
   },
@@ -755,7 +786,7 @@ const needsReversion = ifElse({
   config: {
     name: "Needs Reversion?",
     position: [656,480],
-    parameters: {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"cond-needrev","leftValue":"={{ $json.need1x1 || $json.need9x16 }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+    parameters: {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"cond-needrev","leftValue":"={{ $json.need1x1 || $json.need9x16 }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}},{"id":"cond-revtype","leftValue":"={{ $json.reversionOk }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
   },
   output: [{}]
 });
@@ -792,7 +823,7 @@ export default workflow('guys-take-thumbnail-artwork', "BA: Guy's Take Thumbnail
   .to(autoArtableType
     .onTrue(markGenerating
       .to(deleteOldThumbnails).to(fetchMoodReferences).to(fetchPrompts).to(fetchGuests)
-      .to(buildMoodPrompt).to(pickMoodsGemini).to(resolveVibes).to(planDownloads)
+      .to(resolveVibes).to(planDownloads)
       .to(downloadImage).to(imageToBase64).to(buildImageRequests).to(generateThumbnailNanoBanana)
       .to(extractImages).to(createThumbnailRow).to(upload16x9).to(collectThumbnails)
       .to(sendThumbnailOptions).to(sendPickInstructions).to(markAwaitingPick))

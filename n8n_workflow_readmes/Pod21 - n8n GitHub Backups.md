@@ -101,5 +101,5 @@ The n8n **database** (credentials, execution history, static data such as the as
 
 ## Related
 
-- **Pod21: Telegram Airtable Assistant** (`Pod21 - Telegram Airtable Assistant.md` in this folder): most frequently edited workflow, i.e. the main beneficiary of these backups
+- **BA: Telegram Airtable Assistant** (`BA - Telegram Airtable Assistant.md` in this folder): most frequently edited workflow, i.e. the main beneficiary of these backups
 - **BA: Guy's Take Weekly Research & Shortlisting** (`BA - Guy's Take Weekly Research & Shortlisting.md` in this folder)

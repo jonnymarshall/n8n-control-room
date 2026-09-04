@@ -217,7 +217,7 @@ The Flatten step yields zero items for that channel. The workflow continues with
 
 ## Related
 
-- **Pod21: Telegram Airtable Assistant** (`Pod21 - Telegram Airtable Assistant.md` in this folder): general Telegram agent that can read/write the same Airtable data conversationally, with one-tap approval on writes.
+- **BA: Telegram Airtable Assistant** (`BA - Telegram Airtable Assistant.md` in this folder): general Telegram agent that can read/write the same Airtable data conversationally, with one-tap approval on writes.
 - **Phase 0 workflow** (`GbFwXLACjj1O6spS`): Airtable Episode status change → Telegram notification. Foundational pipe between Airtable and Telegram for the Guy's Take build.
 - **Planning doc**: `/Users/jonny/code/n8n-control-room/workflow_planning/Guys Take Workflow.md`
 - **Original Python script** (retired): `/Users/jonny/code/n8n-control-room/scripts/youtube_research/youtube_research.py` — the hermes-era prototype this workflow replaces.
