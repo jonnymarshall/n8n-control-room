@@ -59,6 +59,32 @@ function secondsToHMS(s) {
   var sec = s % 60;
   return ('00' + h).slice(-2) + ':' + ('00' + m).slice(-2) + ':' + ('00' + sec).slice(-2);
 }
+// Telegram messages are sent with parse_mode HTML, so anything that reaches a
+// message body must have & < > escaped. The markdown FILE keeps the raw text.
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+// ---- context for the "your turn" message ----------------------------------
+// What's already on the episode (so Jonny can see it before deciding whether to
+// change it) plus the mood library, so the message can list the moods he picks from.
+let currentTitle = '';
+let guestNames = [];
+try {
+  const ep = $('Find Episode').first().json;
+  currentTitle = ep.Title || '';
+  const gn = ep['Guest Name'];   // lookup on the Guests link -> always an array
+  guestNames = Array.isArray(gn) ? gn.filter(Boolean) : (gn ? [gn] : []);
+} catch (e) {}
+let moodList = [];
+try {
+  const recs = (($('Fetch Mood Library').first() || {}).json || {}).records || [];
+  moodList = recs.map(function (r) { return (r.fields || {})['Mood']; }).filter(Boolean);
+} catch (e) {}
+const moodsText = moodList.length
+  ? moodList.map(function (m, i) { return (i + 1) + '. ' + esc(m); }).join(NL)
+  : '(none — the Thumbnail References table is empty)';
+const guestsText = guestNames.length ? esc(guestNames.join(', ')) : 'none linked yet';
+const currentTitleText = currentTitle ? esc(currentTitle) : 'not set yet';
+
 for (const it of items) {
   const o = (it.json && it.json.output) ? it.json.output : (it.json || {});
   const titles = Array.isArray(o.titles) ? o.titles : [];
@@ -80,9 +106,14 @@ for (const it of items) {
   if (summary) md += NL + '## Summary' + NL + NL + summary + NL;
   const titlesText = titles.slice(0, 5).map(function (t, i) { return (i + 1) + '. ' + t; }).join(NL);
   const capsText = caps.slice(0, 5).map(function (c, i) { return (i + 1) + '. ' + c; }).join(NL);
+  // Labelled + HTML-escaped variants for the Telegram message. The labels match
+  // the reply codes exactly (T1 / TC1) so the assistant can map a reply straight
+  // back to an option without inferring the numbering.
+  const titlesTextHtml = titles.slice(0, 5).map(function (t, i) { return 'T' + (i + 1) + '. ' + esc(t); }).join(NL);
+  const capsTextHtml = caps.slice(0, 5).map(function (c, i) { return 'TC' + (i + 1) + '. ' + esc(c); }).join(NL);
   const b64 = Buffer.from(md, 'utf8').toString('base64');
   const safe = String(title).split('').filter(function (c) { return /[a-zA-Z0-9 _-]/.test(c); }).join('').trim().slice(0, 50) || 'episode';
-  out.push({ json: { md: md, mdBase64: b64, fileName: 'Metadata - ' + safe + '.md', titlesText: titlesText, capsText: capsText, episodeTitle: title, episodeId: episodeId, summary: summary, chaptersJson: chaptersJson, chaptersText: chaptersText, chaptersJsonBase64: chaptersJsonBase64, chaptersFileName: chaptersFileName, frameioUrl: frameioUrl, transcriptText: transcriptText } });
+  out.push({ json: { md: md, mdBase64: b64, fileName: 'Metadata - ' + safe + '.md', titlesText: titlesText, capsText: capsText, titlesTextHtml: titlesTextHtml, capsTextHtml: capsTextHtml, episodeTitle: title, episodeTitleHtml: esc(title), episodeId: episodeId, moodsText: moodsText, guestsText: guestsText, currentTitleText: currentTitleText, summary: summary, chaptersJson: chaptersJson, chaptersText: chaptersText, chaptersJsonBase64: chaptersJsonBase64, chaptersFileName: chaptersFileName, frameioUrl: frameioUrl, transcriptText: transcriptText } });
 }
 return out;`;
 
@@ -138,6 +169,9 @@ const showFile = node({
       options: {}
     },
     credentials: { oAuth2Api: frameioOAuthCred },
+    retryOnFail: true,
+    maxTries: 5,
+    waitBetweenTries: 5000,
     position: [680, 300]
   },
   output: [{ id: 'file-uuid', name: 'EP042 - The Final Cut.mp4', media_type: 'video/mp4', media_links: { efficient: { download_url: 'https://assets.frame.io/.../efficient.mp4?signature' } }, view_url: 'https://next.frame.io/project/abc/view/def' }]
@@ -187,6 +221,9 @@ const downloadProxy = node({
       url: expr("{{ $('Extract Episode Info').first().json.downloadUrl }}"),
       options: { response: { response: { fullResponse: true, responseFormat: 'file', outputPropertyName: 'data' } }, timeout: 300000 }
     },
+    retryOnFail: true,
+    maxTries: 5,
+    waitBetweenTries: 5000,
     position: [1340, 300]
   },
   output: [{ headers: { 'content-length': '48211234' }, statusCode: 200 }]
@@ -217,6 +254,9 @@ const startResumable = node({
       options: { response: { response: { fullResponse: true } } }
     },
     credentials: { httpHeaderAuth: geminiCred },
+    retryOnFail: true,
+    maxTries: 5,
+    waitBetweenTries: 5000,
     position: [1340, 220]
   },
   output: [{ headers: { 'x-goog-upload-url': 'https://generativelanguage.googleapis.com/upload/v1beta/files?upload_id=abc&upload_protocol=resumable' }, statusCode: 200 }]
@@ -287,6 +327,9 @@ const getFileState = node({
       options: {}
     },
     credentials: { httpHeaderAuth: geminiCred },
+    retryOnFail: true,
+    maxTries: 5,
+    waitBetweenTries: 5000,
     position: [2440, 300]
   },
   output: [{ name: 'files/abc123', uri: 'https://generativelanguage.googleapis.com/v1beta/files/abc123', state: 'ACTIVE', videoMetadata: { videoDuration: '202s' } }]
@@ -325,6 +368,11 @@ const transcribe = node({
       options: { timeout: 600000 }
     },
     credentials: { httpHeaderAuth: geminiCred },
+    // Gemini returns transient 503 "Service unavailable" under load. Generation is
+    // idempotent here (we only read the text back), so retry is safe.
+    retryOnFail: true,
+    maxTries: 5,
+    waitBetweenTries: 5000,
     position: [2880, 220]
   },
   output: [{ candidates: [{ content: { parts: [{ text: '[00:00] Speaker 1: Welcome back to Guys Take...' }] } }] }]
@@ -344,6 +392,35 @@ const extractTranscript = node({
     position: [3100, 220]
   },
   output: [{ transcript: '[00:00] Speaker 1: Welcome back to Guys Take...' }]
+});
+
+// The mood library ("Thumbnail References") is read here purely so the Telegram
+// message can LIST the moods for Jonny to pick from. Picking used to be done by
+// Gemini inside the artwork workflow; that node is gone and the choice is his.
+// Sits on the full-run path only, so a _Bypass / same-length re-upload never
+// pays for it. Its output item is irrelevant downstream (Generate Metadata
+// builds its prompt entirely from expressions), so inserting it here is safe.
+const fetchMoodLibrary = node({
+  type: 'n8n-nodes-base.httpRequest',
+  version: 4.4,
+  config: {
+    name: 'Fetch Mood Library',
+    parameters: {
+      url: 'https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnail%20References',
+      authentication: 'predefinedCredentialType',
+      nodeCredentialType: 'airtableTokenApi',
+      // A missing/renamed table must not sink an otherwise good metadata run —
+      // Build Outputs falls back to "(none)" and the message still goes out.
+      options: { response: { response: { neverError: true } }, timeout: 30000 }
+    },
+    credentials: { airtableTokenApi: airtableCred },
+    onError: 'continueRegularOutput',
+    retryOnFail: true,
+    maxTries: 3,
+    waitBetweenTries: 5000,
+    position: [3210, 220]
+  },
+  output: [{ records: [{ id: 'recMOOD000000001', fields: { Mood: 'confident' } }, { id: 'recMOOD000000002', fields: { Mood: 'shocked' } }] }]
 });
 
 const metadataModel = languageModel({
@@ -542,7 +619,10 @@ const sendToTelegram = node({
       additionalFields: {
         appendAttribution: false,
         parse_mode: 'HTML',
-        caption: expr("📺 <b>Episode metadata ready</b>\n\n<b>{{ $('Build Outputs').first().json.episodeTitle }}</b> · <code>{{ $('Build Outputs').first().json.episodeId }}</code>\n\n<b>Title Options</b>\n{{ $('Build Outputs').first().json.titlesText }}\nReply <b>T1–T5</b> to select a title, or suggest your own.\n\n<b>Thumbnail Caption Options</b>\n{{ $('Build Outputs').first().json.capsText }}\nReply <b>TC1–TC5</b> to select a caption, or suggest your own.\n\nFull timecoded description in the attached file.")
+        // Deliberately SHORT. A sendDocument caption is capped at 1024 chars and
+        // the full option set no longer fits; everything Jonny replies to now
+        // lives in the separate "Send Packaging Request" message below.
+        caption: expr("📺 <b>Episode metadata ready</b>\n\n<b>{{ $('Build Outputs').first().json.episodeTitleHtml }}</b> · <code>{{ $('Build Outputs').first().json.episodeId }}</code>\n\nFull timecoded description is in this file. Your options are in the next message.")
       }
     },
     credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
@@ -552,6 +632,42 @@ const sendToTelegram = node({
     position: [4860, 220]
   },
   output: [{ ok: true, result: { message_id: 1 } }]
+});
+
+// ---- The "your turn" message ----------------------------------------------
+// This is the message Jonny REPLIES to, and the Telegram Airtable Assistant
+// treats the replied-to message as its spec — so everything needed to act must
+// be in this one message: the options, their labels, what's already set, and
+// which field each answer lands in. A sendMessage allows 4096 chars (vs 1024
+// for a document caption), which is why the file and this are now separate.
+const sendPackagingRequest = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'Send Packaging Request',
+    parameters: {
+      resource: 'message',
+      operation: 'sendMessage',
+      chatId: '-5254203539',
+      text: expr(
+        "🎬 <b>Packaging for {{ $('Build Outputs').first().json.episodeTitleHtml }}</b> · <code>{{ $('Build Outputs').first().json.episodeId }}</code>\n\n" +
+        "<b>Already set</b>\nTitle: {{ $('Build Outputs').first().json.currentTitleText }}\nGuests: {{ $('Build Outputs').first().json.guestsText }}\n\n" +
+        "<b>1 · Title</b> → <i>Title</i>\n{{ $('Build Outputs').first().json.titlesTextHtml }}\nReply <b>T1</b>–<b>T5</b>, or write your own. Skip this to keep the title above.\n\n" +
+        "<b>2 · Thumbnail caption</b> → <i>Thumbnail Caption</i>\n{{ $('Build Outputs').first().json.capsTextHtml }}\nReply <b>TC1</b>–<b>TC5</b>, or write your own.\n\n" +
+        "<b>3 · Guests</b> → <i>Guests</i>\nName anyone to add, e.g. \"add Bitcoin Mechanic\". They must already exist in the Guests table — I'll tell you if there's no match rather than creating a half-empty record.\n\n" +
+        "<b>4 · Thumbnail moods</b> → <i>Thumbnail Moods</i>\n{{ $('Build Outputs').first().json.moodsText }}\nReply with the names you want, e.g. \"moods: confident, shocked\". They cycle across the 4 artwork options. Skip this to use the whole library.\n\n" +
+        "<b>5 · Image prompt</b> → <i>Custom Image Prompt</i> <b>(required)</b>\nDescribe the artwork you want and it's added to the standard prompt. Reply <b>default</b> for no extra direction.\n\n" +
+        "⚠️ Artwork does not start until the image prompt is filled in."
+      ),
+      additionalFields: { appendAttribution: false, parse_mode: 'HTML' }
+    },
+    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
+    retryOnFail: true,
+    maxTries: 4,
+    waitBetweenTries: 5000,
+    position: [5080, 220]
+  },
+  output: [{ ok: true, result: { message_id: 2 } }]
 });
 
 // ---- Duration from Gemini -------------------------------------------------
@@ -741,7 +857,7 @@ const notifySkipped = node({
 });
 
 const setupNote = sticky(
-  "## Frame.io -> AI metadata -> Telegram\n\nVideo and audio uploads are both transcribed via Gemini. Non-media uploads (images, PDFs, etc.) are skipped via 'Is Video or Audio?'. A file name ending '_Bypass' skips the whole AI pipeline and just refreshes 'Frame.io URL'. Duration comes from Gemini (videoMetadata.videoDuration), not Frame.io. Same-length re-upload just refreshes 'Frame.io URL'. Summary geared to Episodes 'Type' + 'Guest Name'. Telegram sends retry on transient (e.g. DNS) failures.",
+  "## Frame.io -> AI metadata -> Telegram\n\nVideo and audio uploads are both transcribed via Gemini. Non-media uploads (images, PDFs, etc.) are skipped via 'Is Video or Audio?'. A file name ending '_Bypass' skips the whole AI pipeline and just refreshes 'Frame.io URL'. Duration comes from Gemini (videoMetadata.videoDuration), not Frame.io. Same-length re-upload just refreshes 'Frame.io URL'. Summary geared to Episodes 'Type' + 'Guest Name'. Delivery is TWO Telegram messages: the description file (short caption), then 'Send Packaging Request' — the message Jonny replies to, carrying title/caption options, the guests + title already set, the mood library, and the required Custom Image Prompt. Artwork will not start until 'Custom Image Prompt' is filled. Telegram sends and the idempotent Frame.io/Gemini calls (Show File, Download Proxy, Start Gemini Upload, Get File State, Transcribe with Gemini) retry 5x/5s on transient failures (DNS, Gemini 503).",
   [frameioTrigger, parseEvent, showFile],
   { color: 4 }
 );
@@ -778,6 +894,7 @@ export default workflow('jroXHciDvy0sWlRM', 'BA - Frame.io Uploaded > AI Metadat
           .onFalse(
             transcribe
               .to(extractTranscript)
+              .to(fetchMoodLibrary)
               .to(generateMetadata)
               .to(buildOutputs)
               .to(updateStatus)
@@ -786,6 +903,7 @@ export default workflow('jroXHciDvy0sWlRM', 'BA - Frame.io Uploaded > AI Metadat
               .to(injectMdData)
               .to(convertToFile)
               .to(sendToTelegram)
+              .to(sendPackagingRequest)
           ))
     )
     .onFalse(waitProcessing));

@@ -2,8 +2,10 @@
 
 Cross-workflow rules that every n8n automation in this repo must follow. These
 are durable expectations, not per-workflow details. Each rule below is also
-enforced or reinforced somewhere (a PostToolUse hook and/or a Claude memory) so
-it survives context resets.
+enforced or reinforced somewhere (a PostToolUse hook in Claude Code, and the
+`AGENTS.md` instructions any agent reads) so it survives context resets. Under
+opencode the hooks don't fire, so the same checks are done by hand per
+`AGENTS.md` → "Guardrails under opencode".
 
 ---
 
@@ -46,20 +48,34 @@ The Final Cut · <code>{{ $('Build Outputs').first().json.episodeId }}</code>
 - PostToolUse hook `.claude/hooks/telegram-include-id-check.py` scans every
   `create_workflow_from_code` / `update_workflow` call, finds Telegram **send**
   nodes, and warns when a `text` / `caption` has no record-ID reference. Soft
-  reminder, never blocks.
-- Claude memory `telegram-include-record-id` carries the same rule into every
-  session.
+  reminder, never blocks (Claude Code only; under opencode it's a manual check
+  per `AGENTS.md`).
+- The same rule is in `AGENTS.md` so any agent carries it into every session.
 - When pasting an `=`-prefixed expression into a UI field, note the
-  double-`=` gotcha (`feedback_n8n_expression_equals_prefix`).
+  double-`=` gotcha.
 
 ---
 
-## RULE: SDK code in the repo is the source of truth for workflows
+## RULE: Live n8n state is the source of truth; SDK files are a local copy
 
-We are moving n8n workflows to **SDK code committed in this repo**
-(`scripts/deploy/workflows/*.sdk.js`) as the authoritative definition, instead
-of editing only the live workflow on the server. Code is diffable, reviewable,
-and reproducible; opaque server state is not.
+The **live workflow on the n8n server is always the source of truth.** Jonny edits
+workflows directly in the n8n UI and changes Airtable by hand, so the repo's
+`scripts/deploy/workflows/*.sdk.js` files are a **local, reviewable copy** of what
+was last pushed, not the authority. When the two disagree, **live wins.**
+
+**Mandatory diff-before-touch protocol.** Before changing any `.sdk.js` file:
+
+1. Pull the live workflow (`get_workflow_details` via the n8n MCP, or the REST
+   API).
+2. Diff its nodes/parameters against the `.sdk.js` (a structural diff, see below).
+3. If they differ, **stop.** Surface the exact differences to Jonny and ask which
+   is correct. It will almost always be the live server. Reconcile the `.sdk.js`
+   to match live first, commit that, and only then build the new change on top.
+
+Never push an `.sdk.js` that is known-stale over a live workflow that has drifted;
+that silently destroys Jonny's manual edits. (This is exactly what the
+`n8n-sync-guard` hook protects against in Claude Code, and what you must do by
+hand under any other tool.)
 
 - **Migrate opportunistically, not big-bang.** Convert a workflow to SDK the
   next time it is *substantively* changed (adding a trigger, a branch, etc.).
@@ -76,13 +92,13 @@ and reproducible; opaque server state is not.
 - **Prove fidelity by structural diff before cutover.** Pull the new workflow
   (`get_workflow_details`), `jq` its nodes + connections, and diff `parameters`
   (especially Code `jsCode`) and edges against the live JSON. Zero diffs on the
-  pre-existing nodes/edges = a faithful rebuild.
+  pre-existing nodes/edges = a faithful rebuild. Use the same structural-diff
+  technique for the diff-before-touch check above.
 - **Budget for the credential rebind tax.** `newCredential('Name')` binds on
   **triggers and Telegram** nodes but is **skipped on every HTTP Request node**
   on this instance, and the SDK has no bind-by-ID option. So every SDK push
   requires manually re-binding all HTTP-node credentials in the UI afterwards.
-  This is the one real cost of the SDK workflow; expect it per push. See
-  memory `feedback_sdk_source_of_truth`.
+  This is the one real cost of the SDK workflow; expect it per push.
 
 First workflow on this model: **Guy's Take Thumbnail Artwork**
 (`scripts/deploy/workflows/guys-take-thumbnail-artwork.sdk.js`).
@@ -93,10 +109,8 @@ First workflow on this model: **Guy's Take Thumbnail Artwork**
 
 - **Airtable Trigger Fields** — when restricting the Fields list, include the
   trigger field itself and use commas with **no spaces**. Hook:
-  `.claude/hooks/airtable-trigger-fields-check.py`. Memory:
-  `airtable-trigger-fields`.
-- **Workflow naming** — name a workflow after its trigger, not its actions
-  (memory `workflow-naming`).
+  `.claude/hooks/airtable-trigger-fields-check.py` (Claude Code); manual check
+  under opencode per `AGENTS.md`.
+- **Workflow naming** — name a workflow after its trigger, not its actions.
 - **One Telegram trigger per bot** — only one active workflow can hold the
-  Telegram Trigger for a given bot; other workflows may *send* but not *trigger*
-  (memory `telegram-one-webhook-per-bot`).
+  Telegram Trigger for a given bot; other workflows may *send* but not *trigger*.

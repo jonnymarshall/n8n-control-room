@@ -43,6 +43,36 @@ const handleButtonPress = node({
   const fromId = cq.from?.id;
   const queryId = cq.id;
   const data = String(cq.data || '');
+  // Link fields want plain record-ID strings, but the agent sometimes proposes [{"id":"rec..."}],
+  // which Airtable rejects with INVALID_RECORD_ID and the whole write fails. Unwrap those here too,
+  // so an approval message written before this fix still executes correctly on a re-tap.
+  // Only touches values inside "fields", and only a bare {id} / {id, name} record ref, so
+  // attachment objects ({url, filename}) and the record wrapper itself are left alone.
+  const unwrapFields = (fields) => {
+    if (!fields || typeof fields !== 'object') { return fields; }
+    const copy = {};
+    for (const k of Object.keys(fields)) {
+      const v = fields[k];
+      copy[k] = !Array.isArray(v) ? v : v.map(e => {
+        if (!e || typeof e !== 'object' || Array.isArray(e)) { return e; }
+        const keys = Object.keys(e);
+        const isRecordRef = typeof e.id === 'string' && /^rec[A-Za-z0-9]{10,}$/.test(e.id)
+          && keys.every(x => x === 'id' || x === 'name');
+        return isRecordRef ? e.id : e;
+      });
+    }
+    return copy;
+  };
+  const normalizeLinkFields = (b) => {
+    if (!b || typeof b !== 'object') { return b; }
+    if (Array.isArray(b.records)) {
+      b.records = b.records.map(r => (r && typeof r === 'object' && r.fields)
+        ? Object.assign({}, r, { fields: unwrapFields(r.fields) })
+        : r);
+    }
+    if (b.fields) { b.fields = unwrapFields(b.fields); }
+    return b;
+  };
   let out = { execute: false, queryId: queryId, chatId: chatId, reasonMessage: '', method: 'POST', path: '', body: {}, summary: '' };
 
   const approvers = [1512868522, 8923732358];
@@ -85,6 +115,7 @@ const handleButtonPress = node({
     if (body.records && !Array.isArray(body.records)) {
       body.records = [body.records];
     }
+    body = normalizeLinkFields(body);
     out.execute = true;
     out.method = payload.method || 'POST';
     let path = payload.path || '';
@@ -212,7 +243,11 @@ const addressedToBot = ifElse({
         options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 },
         conditions: [
           { id: '890dca68-3f64-43a1-8cab-e4fc8f786ed1', leftValue: expr("{{ ($json.message?.entities || []).some(entity => entity.type === 'mention' && $json.message.text.substring(entity.offset, entity.offset + entity.length) === '@pod21_n8n_agent_bot') }}"), rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } },
-          { id: 'cb830762-aa6a-44f5-8ee1-b92fdf622053', leftValue: expr("{{ ($json.message?.entities || []).some(entity => entity.type === 'mention' && $json.message.text.substring(entity.offset, entity.offset + entity.length) === '@pod21_n8n_agent_bot') || $json.message?.reply_to_message?.from?.username === 'pod21_n8n_agent_bot' }}"), rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } }
+          { id: 'cb830762-aa6a-44f5-8ee1-b92fdf622053', leftValue: expr("{{ ($json.message?.entities || []).some(entity => entity.type === 'mention' && $json.message.text.substring(entity.offset, entity.offset + entity.length) === '@pod21_n8n_agent_bot') || $json.message?.reply_to_message?.from?.username === 'pod21_n8n_agent_bot' }}"), rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } },
+          // In a 1:1 DM with the bot there is nobody else to address, so treat any
+          // message as addressed to it. Group chats still require an @mention or a
+          // reply. The next IF still restricts senders to Jonny + Charlie.
+          { id: 'private-chat-1', leftValue: expr("{{ $json.message?.chat?.type === 'private' }}"), rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } }
         ],
         combinator: 'or'
       },
@@ -250,9 +285,14 @@ const prepAgentInput = node({
     parameters: {
       jsCode: `const results = [];
 
+  // The agent only ever sees promptText, so the sender has to be carried in the
+  // text itself. Without this it cannot fill "Reported By" on an issue report.
+  const SENDERS = { 1512868522: 'Jonny', 8923732358: 'Charlie' };
+
   // Loop through all incoming items to prevent dropping batched messages
   for (const item of $input.all()) {
     const msg = item.json.message || {};
+    const sender = SENDERS[msg.from?.id] || 'an unknown user';
 
     // Strip the bot @mention from the user's own text
     let text = (msg.text || '').replace('@pod21_n8n_agent_bot', '').trim();
@@ -271,7 +311,7 @@ const prepAgentInput = node({
       json: {
         ...item.json, // keep all original Telegram data
         recentActionsNote: '',
-        promptText: text
+        promptText: '[Message from ' + sender + '] ' + text
       }
     });
   }
@@ -417,11 +457,12 @@ const airtableAgent = node({
   3. Show real images as ONE album with a separate details message below — use this INSTEAD of pasting attachment links:
      { "action": "photos", "urls": ["https://...", "https://..."], "caption": "details text for the message below the album" }
      Read the attachment record(s) with your tools and put each full-size attachment URL in "urls", in option order (2-10
-  images). They are sent as a SINGLE Telegram album (one message). "caption" is a SHORT text message sent right below the
-  album: lead with the record code (BA-xxxx) as the reply anchor, then list each option and its current state read from the
-  records, e.g. "BA-eObmD9 — Options: #1 (Rejected), #2 (Selected), #3, #4". End with how to choose if a pick is still open,
-  e.g. "Reply 1-4 to pick". Image attachments only — for PDFs / video / audio fall back to "respond" with a link. DEFAULT:
-  whenever asked to see, send or show thumbnails or artwork, return them as "photos", not links.
+  images; for thumbnails this is the 4 options). They are sent as a SINGLE Telegram album (one message). "caption" is a SHORT text
+  message sent right below the album: lead with the record code (BA-xxxx) as the reply anchor, then list each option and
+  its current state read from the records, e.g. "BA-eObmD9 — Options: #1 (Rejected), #2 (Selected), #3, #4". End with how
+  to choose if a pick is still open, e.g. "Reply 1-4 to pick". Image attachments only — for PDFs / video / audio fall back
+  to "respond" with a link. DEFAULT: whenever asked to see, send or show thumbnails or artwork, return them as "photos",
+  not links.
 
   == WRITE RULES ==
   - Reads never need approval: use tools, then "respond" with the answer.
@@ -440,45 +481,54 @@ const airtableAgent = node({
   automatically.
   - method must be POST, PATCH, PUT or DELETE. path is everything after https://api.airtable.com/v0/. body must be valid
   JSON for the Airtable API, or { } for DELETE by URL.
+  - A link field (like "Guests") takes an ARRAY OF PLAIN RECORD ID STRINGS: "Guests": ["recAAA", "recBBB"]. Never objects
+  like [{"id": "recAAA"}] — Airtable rejects those with INVALID_RECORD_ID and the whole write fails.
   - Propose DELETE only when explicitly asked to delete something.
   - If unsure which base, table, record or field is meant, ask ONE short clarifying question. Never guess on writes.
 
-  == ARTWORK REVISIONS ==
-  When Jonny or Charlie asks to revise, re-do, re-create or change the artwork / thumbnail for an episode (e.g. "redo the
-  9x16 for BA-eObmD9, make the background more red and lose the laptop"), treat it as a WRITE with this exact recipe:
-  1. Resolve the episode: find its Episodes record in base app8Xw9Tq0XLjhmp9 (table tbl3uYLIvtB9APZp6) by the BA-xxxx code
-  in the "ID" field. Then find its chosen thumbnail: table "Thumbnails", the row linked to that episode whose Status =
-  "Final" (confirm field names with get_base_schema, and read to get the real rec... row id). There is normally exactly one
-  Final row per episode.
-  2. Propose ONE PATCH to that one Thumbnails row, setting only these three fields:
-     - "Revision Brief" = the user's requested change, verbatim and complete (e.g. "make the background more red and remove
-  the laptop"). Include every part of what they asked for.
-     - "Revision Targets" = an array of the aspect ratios they named, each one of "16x9", "1x1", "9x16". Map their wording:
-  16x9 / 16:9 / landscape / wide -> "16x9"; 1x1 / square -> "1x1"; 9x16 / 9:16 / vertical / portrait / story -> "9x16". If
-  they name NO ratio (e.g. "redo the artwork for BA-xxxx"), use all three ["16x9","1x1","9x16"] and say so in the summary.
-     - "Status" = "Revising".
-  3. In the summary, name the episode, the exact brief text, and which ratios will be redone, so the approver sees the full
-  scope before tapping Approve.
-  After approval the thumbnail workflow regenerates only those ratios with the brief, overwrites them on the row, sends the
-  new artwork back to this chat, and resets Status to Final. You do nothing further.
-  Guardrails: this only works once artwork has been PICKED (a Final row exists). If there is no Final thumbnail row for the
-  episode, do NOT write — "respond" telling them the artwork hasn't been selected yet. Never touch the images or any other
-  fields yourself; only these three fields on the one Final row.
+== EPISODE PACKAGING REPLY ==
+The metadata workflow posts a "Packaging for ..." message per episode, offering five things. A reply to it may answer any subset in any order, in one message or several. Each numbered item in that message names its target field after an arrow (e.g. "5 - Image prompt -> Custom Image Prompt"), so read the target from the message rather than guessing. Episodes live in base app8Xw9Tq0XLjhmp9, table tbl3uYLIvtB9APZp6, matched by the BA-xxxx code in the "ID" field. Batch everything they answered into ONE PATCH on that episode. Rules per item:
+1. Title -> "Title". "T1".."T5" means that numbered option from the quoted message, verbatim. Their own text wins over a listed option. No mention of the title at all -> leave the field alone; never blank it.
+2. Thumbnail caption -> "Thumbnail Caption". Same handling with "TC1".."TC5".
+3. Guests -> "Guests" (a link field). Read the "Guests" table FIRST and find each named person. Link ONLY people who already exist: set the field to the episode's existing guest links PLUS the matched ones, so you never drop a guest who was already attached. If a name has no match, do NOT create a Guests record and do NOT invent an ID - propose the write for whoever DID match (or "respond" if nobody did) and say plainly in the summary which names you couldn't find, so Jonny can add them himself. If two records match a name ambiguously, ask rather than pick.
+4. Thumbnail moods -> "Thumbnail Moods", a plain TEXT field holding comma-separated mood names, e.g. "confident, shocked". Use only names listed in the quoted message (they come from the Thumbnail References table). Drop anything not on that list and say so. Order matters: the moods cycle across the 4 artwork options in the order given.
+5. Image prompt -> "Custom Image Prompt", long text. Write what they said VERBATIM and in full - this is art direction and paraphrasing it changes the artwork. Do not summarise, tidy, translate or shorten it. If they reply "default" (or "none"), write that literal word, which the artwork workflow reads as "no extra direction". Anything they say that isn't clearly a title, caption, guest or mood is almost certainly this.
+IMPORTANT: artwork generation is gated on "Custom Image Prompt" being non-empty. So if their reply answers everything EXCEPT the image prompt, propose the write as normal, and in the summary remind them artwork won't start until they send one. Never fill it in for them.
 
-  == STYLE ==
-  Keep messages short, plain text, no markdown tables, under 3500 characters. Use simple lists like "1. ..." on separate
-  lines.
+== ARTWORK REVISIONS ==
+When Jonny or Charlie asks to revise, re-do, re-create or change the artwork / thumbnail for an episode (e.g. "redo the 9x16 for BA-eObmD9, make the background more red and lose the laptop"), treat it as a WRITE with this exact recipe:
+1. Resolve the episode: find its Episodes record in base app8Xw9Tq0XLjhmp9 (table tbl3uYLIvtB9APZp6) by the BA-xxxx code in the "ID" field. Then find its chosen thumbnail: table "Thumbnails", the row linked to that episode whose Status = "Final" (confirm field names with get_base_schema, and read to get the real rec... row id). There is normally exactly one Final row per episode.
+2. Propose ONE PATCH to that one Thumbnails row, setting only these three fields:
+   - "Revision Brief" = the user's requested change, verbatim and complete (e.g. "make the background more red and remove the laptop"). Include every part of what they asked for.
+   - "Revision Targets" = an array of the aspect ratios they named, each one of "16x9", "1x1", "9x16". Map their wording: 16x9 / 16:9 / landscape / wide -> "16x9"; 1x1 / square -> "1x1"; 9x16 / 9:16 / vertical / portrait / story -> "9x16". If they name NO ratio (e.g. "redo the artwork for BA-xxxx"), use all three ["16x9","1x1","9x16"] and say so in the summary.
+   - "Status" = "Revising".
+3. In the summary, name the episode, the exact brief text, and which ratios will be redone, so the approver sees the full scope before tapping Approve.
+After approval the thumbnail workflow regenerates only those ratios with the brief, overwrites them on the row, sends the new artwork back to this chat, and resets Status to Final. You do nothing further.
+Guardrails: this only works once artwork has been PICKED (a Final row exists). If there is no Final thumbnail row for the episode, do NOT write - "respond" telling them the artwork hasn't been selected yet. Never touch the images or any other fields yourself; only these three fields on the one Final row.
 
-  == HOW THE PIPELINE WORKS (System Map) ==
-  There is a living reference called the "System Map" that explains how all the Pod21 / Guy's Take automations fit
-  together: what triggers each workflow, the exact Airtable field conditions an episode needs before the next stage runs,
-  the Status ladder, and what each episode Type means. It lives in Airtable so it can be edited without touching n8n.
-  Whenever a turn is about how the workflows work, why something has or hasn't happened, where an episode is in the
-  pipeline, or what an episode still needs before a stage (e.g. artwork) will run: FIRST read the System Map, then answer
-  from it. Read it with airtable_read from base app8Xw9Tq0XLjhmp9, table "Prompts", the record where Name = "System Map"
-  (filterByFormula={Name}="System Map"); treat the long-text "Prompt" field as authoritative. Do not answer pipeline
-  questions from memory. You may still read a specific episode's live field values and compare them against the Map's
-  precondition checklist to say what is missing.
+== LOGGING AUTOMATION ISSUES ==
+Jonny and Charlie report broken or improvable things in the Pod21 automations through this chat, and every report must end up as a row in the Automation Upgrades table so it can be fixed later. Treat a turn as an issue report when they say something is broken, failing, wrong, missing or slow, or when they ask you to "log this", "log it as an issue", "add it to the upgrades", or anything similar - including when that is a reply to an earlier workflow message. Do NOT log an issue when they are simply asking a question, and if it is genuinely unclear whether they want one logged, ask one short question first.
+GATHER BEFORE YOU PROPOSE. A report is only useful if someone can act on it weeks later, so do this research first, even if they only said "this is broken":
+- If the turn quotes an earlier message, keep that message's full text; it is the single most useful piece of context.
+- If any episode code (BA-xxxx) or record is named or implied, read that record and note its ID and current field values.
+- Read the System Map, then compare it against what you just read, so you can state which stage should have run and which required fields are empty.
+Then propose ONE create: method POST, path appwcz1Bux9YLcZYm/tblja27Lsn7qXJfZM, body { "records": [ { "fields": { ... } } ] }. Use these EXACT field names, and for the choice fields ONLY these exact values:
+- "Title" - one short line naming the problem, e.g. "Artwork never generated for BA-eObmD9".
+- "Type" - one of: Bug, Improvement, Idea. Something not working = Bug. A request to change how something works = Improvement. A loose suggestion = Idea.
+- "Status" - always "New".
+- "Priority" - one of: Low, Medium, High. Use High only if they say it is blocking or urgent. Otherwise default to Medium for a Bug and Low for an Improvement or Idea.
+- "Reported By" - "Jonny" or "Charlie", read from the [Message from ...] tag at the start of their message. If it says an unknown user, omit this field rather than guessing.
+- "Workflow" - plain text naming the automation involved, using the workflow names from the System Map. Write "Unknown" if you genuinely cannot tell.
+- "Related Record" - the BA-xxxx code or rec... ID the report concerns. Omit the field entirely if there isn't one.
+- "Description" - what is wrong, in THEIR words. Quote their sentence verbatim, then add any clarifying detail they gave in earlier turns. Do not summarise, tidy or paraphrase their wording.
+- "Context" - everything a person needs to reproduce and fix this later, as plain lines: the full quoted message if there was one; the record you read, its ID and its current Status and relevant field values; which fields the System Map says are required for the stage that failed and which of those are empty; and what should have happened versus what actually happened. Stick to what you actually checked - if you checked nothing, say "Not checked" rather than speculating. Never invent an error message or a cause.
+Propose it as a normal write so they can approve it, and say in the summary what you are logging and against which workflow. After approval you are done; Jonny fixes it in his own time. Never mark anything Fixed yourself and never edit an existing row unless explicitly asked to.
+
+== STYLE ==
+Keep messages short, plain text, no markdown tables, under 3500 characters. Use simple lists like "1. ..." on separate lines.
+
+== HOW THE PIPELINE WORKS (System Map) ==
+There is a living reference called the "System Map" that explains how all the Pod21 / Guy's Take automations fit together: what triggers each workflow, the exact Airtable field conditions an episode needs before the next stage runs, the Status ladder, and what each episode Type means. It lives in Airtable so it can be edited without touching n8n. Whenever a turn is about how the workflows work, why something has or hasn't happened, where an episode is in the pipeline, or what an episode still needs before a stage (e.g. artwork) will run: FIRST read the System Map, then answer from it. Read it with airtable_read from base app8Xw9Tq0XLjhmp9, table "Prompts", the record where Name = "System Map" (filterByFormula={Name}="System Map"); treat the long-text "Prompt" field as authoritative. Do not answer pipeline questions from memory. You may still read a specific episode's live field values and compare them against the Map's precondition checklist to say what is missing.
 
   == KNOWN CONTEXT (verify with tools, don't assume) ==
   Main base: Guy's Take (app8Xw9Tq0XLjhmp9) — Episodes (tbl3uYLIvtB9APZp6), plus Stories and Shortlist tables used by a
@@ -504,17 +554,41 @@ const parseAgentDecision = node({
     parameters: {
       jsCode: `const raw = String($input.first().json.output ?? '').trim();
   const fence = String.fromCharCode(96).repeat(3);
-  let cleaned = raw.replace(new RegExp('^' + fence + '(?:json)?', 'i'), '').replace(new RegExp(fence + '$'), '').trim();
-  let parsed = null;
-  try { parsed = JSON.parse(cleaned); } catch (e) {
-    const start = cleaned.indexOf('{');
-    const end = cleaned.lastIndexOf('}');
-    if (start !== -1 && end > start) {
-      try { parsed = JSON.parse(cleaned.slice(start, end + 1)); } catch (e2) { parsed = null; }
+  const cleaned = raw.replace(new RegExp(fence + '(?:json)?', 'gi'), '').trim();
+  // The agent often wraps its JSON in prose, or trails a stray brace after it. Scan for every
+  // balanced {...} block (ignoring braces inside strings) instead of trusting first-{ / last-}.
+  const blocks = [];
+  let depth = 0, start = -1, inString = false, escaped = false;
+  for (let i = 0; i < cleaned.length; i++) {
+    const c = cleaned[i];
+    if (inString) {
+      if (escaped) { escaped = false; }
+      else if (c === '\\\\') { escaped = true; }
+      else if (c === '"') { inString = false; }
+      continue;
+    }
+    if (c === '"') { inString = true; }
+    else if (c === '{') { if (depth === 0) { start = i; } depth++; }
+    else if (c === '}' && depth > 0) {
+      depth--;
+      if (depth === 0 && start !== -1) { blocks.push(cleaned.slice(start, i + 1)); start = -1; }
     }
   }
+  const actions = ['write', 'respond', 'photos'];
+  let parsed = null, anyObject = null;
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    let candidate = null;
+    try { candidate = JSON.parse(blocks[i]); } catch (e) { candidate = null; }
+    if (!candidate || typeof candidate !== 'object') { continue; }
+    if (anyObject === null) { anyObject = candidate; }
+    if (actions.indexOf(candidate.action) !== -1) { parsed = candidate; break; }
+  }
+  if (!parsed) { parsed = anyObject; }
   if (!parsed || typeof parsed !== 'object') {
-    parsed = { action: 'respond', message: raw || 'I produced no usable answer, please try again.' };
+    const looksLikeWrite = /"action"\\s*:\\s*"write"/.test(cleaned);
+    parsed = { action: 'respond', message: looksLikeWrite
+      ? 'I tried to propose a database change but my own instruction came out malformed, so no approval buttons were sent and nothing was changed. Please ask me again.'
+      : (raw || 'I produced no usable answer, please try again.') };
   }
   const allowed = ['POST', 'PATCH', 'PUT', 'DELETE'];
   let out;
@@ -525,6 +599,32 @@ const parseAgentDecision = node({
     if (body.records && !Array.isArray(body.records)) {
       body.records = [body.records];
     }
+    // Link fields want plain record-ID strings, but the agent sometimes proposes [{"id":"rec..."}],
+    // which Airtable rejects with INVALID_RECORD_ID and the whole write fails. Unwrap before the
+    // payload is embedded in the approval message, so the message shows what will actually be sent.
+    // Only touches values inside "fields", and only a bare {id} / {id, name} record ref, so
+    // attachment objects ({url, filename}) and the record wrapper itself are left alone.
+    const unwrapFields = (fields) => {
+      if (!fields || typeof fields !== 'object') { return fields; }
+      const copy = {};
+      for (const k of Object.keys(fields)) {
+        const v = fields[k];
+        copy[k] = !Array.isArray(v) ? v : v.map(e => {
+          if (!e || typeof e !== 'object' || Array.isArray(e)) { return e; }
+          const keys = Object.keys(e);
+          const isRecordRef = typeof e.id === 'string' && /^rec[A-Za-z0-9]{10,}$/.test(e.id)
+            && keys.every(x => x === 'id' || x === 'name');
+          return isRecordRef ? e.id : e;
+        });
+      }
+      return copy;
+    };
+    if (Array.isArray(body.records)) {
+      body.records = body.records.map(r => (r && typeof r === 'object' && r.fields)
+        ? Object.assign({}, r, { fields: unwrapFields(r.fields) })
+        : r);
+    }
+    if (body.fields) { body.fields = unwrapFields(body.fields); }
     if (!allowed.includes(method) || !path) {
       out = { action: 'respond', message: 'The agent proposed an invalid write request, nothing was changed. Please rephrase your request.', summary: '', method: 'POST', path: '', body: {} };
     } else {
