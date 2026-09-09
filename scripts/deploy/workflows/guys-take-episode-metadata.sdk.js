@@ -1,7 +1,7 @@
 import { workflow, node, trigger, merge, ifElse, languageModel, outputParser, newCredential, expr, sticky } from '@n8n/workflow-sdk';
 
 const frameioOAuthCred = newCredential('Adobe OAuth');
-const geminiCred = newCredential('Gemini API Key [n8n]');
+const geminiCred = newCredential('google-ai-studio_[pod21-n8n-temp]');
 const airtableCred = newCredential('Airtable [n8n] (PAT)');
 
 // ---- Code: Parse the Frame.io file.ready webhook payload -------------------
@@ -67,10 +67,18 @@ function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').repla
 // What's already on the episode (so Jonny can see it before deciding whether to
 // change it) plus the mood library, so the message can list the moods he picks from.
 let currentTitle = '';
+let currentCaption = '';
+let currentMoods = '';
+let currentImagePrompt = '';
 let guestNames = [];
+let guestLinks = [];
 try {
   const ep = $('Find Episode').first().json;
   currentTitle = ep.Title || '';
+  currentCaption = ep['Thumbnail Caption'] || '';
+  currentMoods = ep['Thumbnail Moods'] || '';
+  currentImagePrompt = ep['Custom Image Prompt'] || '';
+  guestLinks = Array.isArray(ep.Guests) ? ep.Guests.filter(Boolean) : [];
   const gn = ep['Guest Name'];   // lookup on the Guests link -> always an array
   guestNames = Array.isArray(gn) ? gn.filter(Boolean) : (gn ? [gn] : []);
 } catch (e) {}
@@ -81,9 +89,26 @@ try {
 } catch (e) {}
 const moodsText = moodList.length
   ? moodList.map(function (m, i) { return (i + 1) + '. ' + esc(m); }).join(NL)
-  : '(none — the Thumbnail References table is empty)';
+  : '(none - the Thumbnail References table is empty)';
 const guestsText = guestNames.length ? esc(guestNames.join(', ')) : 'none linked yet';
 const currentTitleText = currentTitle ? esc(currentTitle) : 'not set yet';
+function preview(value) {
+  const clean = String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+  return esc(clean.length > 120 ? clean.slice(0, 117) + '...' : clean);
+}
+const existingPackagingFields = [
+  ['Title', currentTitle],
+  ['Thumbnail Caption', currentCaption],
+  ['Guests', guestNames.length ? guestNames.join(', ') : (guestLinks.length ? guestLinks.length + ' linked guest' + (guestLinks.length === 1 ? '' : 's') : '')],
+  ['Thumbnail Moods', currentMoods],
+  ['Custom Image Prompt', currentImagePrompt]
+].filter(function (entry) { return String(entry[1] == null ? '' : entry[1]).trim(); });
+const overwriteWarningText = existingPackagingFields.length
+  ? '🚨 <b>Existing data warning</b>' + NL +
+    'This episode already has packaging data:' + NL +
+    existingPackagingFields.map(function (entry) { return '<b>' + entry[0] + ':</b> ' + preview(entry[1]); }).join(NL) + NL +
+    'Your approved reply will overwrite only the fields you include.' + NL + NL
+  : '';
 
 for (const it of items) {
   const o = (it.json && it.json.output) ? it.json.output : (it.json || {});
@@ -113,7 +138,7 @@ for (const it of items) {
   const capsTextHtml = caps.slice(0, 5).map(function (c, i) { return 'TC' + (i + 1) + '. ' + esc(c); }).join(NL);
   const b64 = Buffer.from(md, 'utf8').toString('base64');
   const safe = String(title).split('').filter(function (c) { return /[a-zA-Z0-9 _-]/.test(c); }).join('').trim().slice(0, 50) || 'episode';
-  out.push({ json: { md: md, mdBase64: b64, fileName: 'Metadata - ' + safe + '.md', titlesText: titlesText, capsText: capsText, titlesTextHtml: titlesTextHtml, capsTextHtml: capsTextHtml, episodeTitle: title, episodeTitleHtml: esc(title), episodeId: episodeId, moodsText: moodsText, guestsText: guestsText, currentTitleText: currentTitleText, summary: summary, chaptersJson: chaptersJson, chaptersText: chaptersText, chaptersJsonBase64: chaptersJsonBase64, chaptersFileName: chaptersFileName, frameioUrl: frameioUrl, transcriptText: transcriptText } });
+  out.push({ json: { md: md, mdBase64: b64, fileName: 'Metadata - ' + safe + '.md', titlesText: titlesText, capsText: capsText, titlesTextHtml: titlesTextHtml, capsTextHtml: capsTextHtml, episodeTitle: title, episodeTitleHtml: esc(title), episodeId: episodeId, moodsText: moodsText, guestsText: guestsText, currentTitleText: currentTitleText, overwriteWarningText: overwriteWarningText, summary: summary, chaptersJson: chaptersJson, chaptersText: chaptersText, chaptersJsonBase64: chaptersJsonBase64, chaptersFileName: chaptersFileName, frameioUrl: frameioUrl, transcriptText: transcriptText } });
 }
 return out;`;
 
@@ -394,6 +419,75 @@ const extractTranscript = node({
   output: [{ transcript: '[00:00] Speaker 1: Welcome back to Guys Take...' }]
 });
 
+// Gemini can return a technically successful response that is incomplete or stuck
+// in a repetition loop. Stop before any Airtable fields are replaced when the
+// transcript is clearly unusable.
+const validateTranscript = node({
+  type: 'n8n-nodes-base.code',
+  version: 2,
+  config: {
+    name: 'Validate Transcript Quality',
+    parameters: {
+      mode: 'runOnceForAllItems',
+      language: 'javaScript',
+      jsCode: `const items = $input.all();
+const transcript = String($input.first().json.transcript || '');
+const duration = Number($('Parse Duration').first().json.durationSeconds || 0);
+const mimeType = String($('Extract Episode Info').first().json.mimeType || '');
+const episodeId = String($('Extract Episode Info').first().json.episodeId || 'no-id');
+const failures = [];
+
+if (transcript.trim().length < 200) {
+  failures.push('transcript is empty or under 200 characters');
+}
+if (duration > 300 && transcript.length < duration * 2) {
+  failures.push('transcript is too short for ' + Math.round(duration / 60) + ' minutes of media');
+}
+
+if (mimeType.startsWith('video/') && duration > 300) {
+  const timestampPattern = /\\[(\\d{1,3}):(\\d{2})(?::(\\d{2}))?\\]/g;
+  let match;
+  let lastTimestamp = -1;
+  while ((match = timestampPattern.exec(transcript)) !== null) {
+    const seconds = match[3]
+      ? Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3])
+      : Number(match[1]) * 60 + Number(match[2]);
+    if (seconds > lastTimestamp) lastTimestamp = seconds;
+  }
+  const coverage = lastTimestamp < 0 ? 0 : lastTimestamp / duration;
+  if (coverage < 0.8) {
+    failures.push('final timestamp covers only ' + Math.round(coverage * 100) + '% of the media');
+  }
+}
+
+const words = transcript.toLowerCase().match(/[a-z0-9']+/g) || [];
+let longestRun = 0;
+let repeatedWord = '';
+let run = 0;
+let previous = '';
+for (const word of words) {
+  run = word === previous ? run + 1 : 1;
+  if (run > longestRun) {
+    longestRun = run;
+    repeatedWord = word;
+  }
+  previous = word;
+}
+if (longestRun >= 20) {
+  failures.push('word "' + repeatedWord + '" repeats ' + longestRun + ' times in a row');
+}
+
+if (failures.length) {
+  throw new Error('Transcript quality check failed for ' + episodeId + ': ' + failures.join('; ') + '. Airtable was not changed.');
+}
+
+return items;`
+    },
+    position: [3155, 320]
+  },
+  output: [{ transcript: '[00:00] Speaker 1: Welcome back to Guys Take...' }]
+});
+
 // The mood library ("Thumbnail References") is read here purely so the Telegram
 // message can LIST the moods for Jonny to pick from. Picking used to be done by
 // Gemini inside the artwork workflow; that node is gone and the choice is his.
@@ -439,7 +533,7 @@ const metadataParser = outputParser({
   version: 1.3,
   config: {
     name: 'Metadata Output Parser',
-    parameters: { jsonSchemaExample: '{"titles":["High-CTR title option"],"thumbnail_captions":["BANK RUN"],"description":"Hook paragraph.\\n\\nChapters:\\n00:00 Intro\\n02:14 The real story","summary":"Guy breaks down why...","chapters":[{"startTime":0,"title":"Intro"},{"startTime":134,"title":"The real story"}]}' },
+    parameters: { jsonSchemaExample: '{"titles":["High-CTR title option"],"thumbnail_captions":["BANK RUN"],"description":"Hook paragraph. Chapters: 00:00 Intro","summary":"Guy breaks down why...","chapters":[{"startTime":0,"title":"Intro"},{"startTime":134,"title":"The real story"}]}' },
     position: [3480, 420]
   }
 });
@@ -540,7 +634,7 @@ const updateStatus = node({
   output: [{ id: 'recEPISODEXXXXXXX', Status: 'AI Analysis Complete' }]
 });
 
-const airtablePATCred = newCredential('Airtable PAT (Bearer)');
+const airtablePATCred = newCredential('Airtable PAT');
 
 // Airtable Content API — Upload attachment.
 // Correct contract (https://airtable.com/developers/web/api/upload-attachment):
@@ -651,10 +745,11 @@ const sendPackagingRequest = node({
       chatId: '-5254203539',
       text: expr(
         "🎬 <b>Packaging for {{ $('Build Outputs').first().json.episodeTitleHtml }}</b> · <code>{{ $('Build Outputs').first().json.episodeId }}</code>\n\n" +
+        "{{ $('Build Outputs').first().json.overwriteWarningText }}" +
         "<b>Already set</b>\nTitle: {{ $('Build Outputs').first().json.currentTitleText }}\nGuests: {{ $('Build Outputs').first().json.guestsText }}\n\n" +
-        "<b>1 · Title</b> → <i>Title</i>\n{{ $('Build Outputs').first().json.titlesTextHtml }}\nReply <b>T1</b>–<b>T5</b>, or write your own. Skip this to keep the title above.\n\n" +
-        "<b>2 · Thumbnail caption</b> → <i>Thumbnail Caption</i>\n{{ $('Build Outputs').first().json.capsTextHtml }}\nReply <b>TC1</b>–<b>TC5</b>, or write your own.\n\n" +
-        "<b>3 · Guests</b> → <i>Guests</i>\nName anyone to add, e.g. \"add Bitcoin Mechanic\". They must already exist in the Guests table — I'll tell you if there's no match rather than creating a half-empty record.\n\n" +
+        "<b>1 · Title</b> → <i>Title</i>\n{{ $('Build Outputs').first().json.titlesTextHtml }}\nReply <b>T1</b>-<b>T5</b>, or write your own. Skip this to keep the title above.\n\n" +
+        "<b>2 · Thumbnail caption</b> → <i>Thumbnail Caption</i>\n{{ $('Build Outputs').first().json.capsTextHtml }}\nReply <b>TC1</b>-<b>TC5</b>, or write your own.\n\n" +
+        "<b>3 · Guests</b> → <i>Guests</i>\nName anyone to add, e.g. \"add Bitcoin Mechanic\". They must already exist in the Guests table - I'll tell you if there's no match rather than creating a half-empty record.\n\n" +
         "<b>4 · Thumbnail moods</b> → <i>Thumbnail Moods</i>\n{{ $('Build Outputs').first().json.moodsText }}\nReply with the names you want, e.g. \"moods: confident, shocked\". They cycle across the 4 artwork options. Skip this to use the whole library.\n\n" +
         "<b>5 · Image prompt</b> → <i>Custom Image Prompt</i> <b>(required)</b>\nDescribe the artwork you want and it's added to the standard prompt. Reply <b>default</b> for no extra direction.\n\n" +
         "⚠️ Artwork does not start until the image prompt is filled in."
@@ -857,7 +952,7 @@ const notifySkipped = node({
 });
 
 const setupNote = sticky(
-  "## Frame.io -> AI metadata -> Telegram\n\nVideo and audio uploads are both transcribed via Gemini. Non-media uploads (images, PDFs, etc.) are skipped via 'Is Video or Audio?'. A file name ending '_Bypass' skips the whole AI pipeline and just refreshes 'Frame.io URL'. Duration comes from Gemini (videoMetadata.videoDuration), not Frame.io. Same-length re-upload just refreshes 'Frame.io URL'. Summary geared to Episodes 'Type' + 'Guest Name'. Delivery is TWO Telegram messages: the description file (short caption), then 'Send Packaging Request' — the message Jonny replies to, carrying title/caption options, the guests + title already set, the mood library, and the required Custom Image Prompt. Artwork will not start until 'Custom Image Prompt' is filled. Telegram sends and the idempotent Frame.io/Gemini calls (Show File, Download Proxy, Start Gemini Upload, Get File State, Transcribe with Gemini) retry 5x/5s on transient failures (DNS, Gemini 503).",
+  "## Frame.io -> AI metadata -> Telegram\n\nVideo and audio uploads are both transcribed via Gemini. Non-media uploads (images, PDFs, etc.) are skipped via 'Is Video or Audio?'. A file name ending '_Bypass' skips the whole AI pipeline and just refreshes 'Frame.io URL'. Duration comes from Gemini (videoMetadata.videoDuration), not Frame.io. Same-length re-upload just refreshes 'Frame.io URL'. Summary geared to Episodes 'Type' + 'Guest Name'. Telegram sends retry on transient (e.g. DNS) failures.",
   [frameioTrigger, parseEvent, showFile],
   { color: 4 }
 );
@@ -894,6 +989,7 @@ export default workflow('jroXHciDvy0sWlRM', 'BA - Frame.io Uploaded > AI Metadat
           .onFalse(
             transcribe
               .to(extractTranscript)
+              .to(validateTranscript)
               .to(fetchMoodLibrary)
               .to(generateMetadata)
               .to(buildOutputs)
