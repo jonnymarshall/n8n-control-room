@@ -2,7 +2,26 @@
 
 > **Find this workflow in n8n by name.** Workflow IDs change whenever a workflow is rebuilt from code, so the name is the stable identifier. (Current ID: `mLAn4ya2AmZoHDUk`. The previous hand-built copy `YyXiJ0lusoW7ynu9` is **archived**.)
 
-> **SDK source of truth (2026-07-26).** This workflow is now **code-first**: the authoritative definition lives at `scripts/deploy/workflows/guys-take-thumbnail-artwork.sdk.js`. It was rebuilt from the live JSON (params copied verbatim), a **third trigger for briefed artwork revisions (Path 3)** was added, and it was pushed as a new workflow + cut over (old archived). See `CONVENTIONS.md` → "SDK code in the repo is the source of truth". Behaviour tweaks can still be hand-edited on the canvas, then reconciled back into the `.sdk.js`; a full SDK push re-skips credentials on every HTTP node (rebind by hand).
+> **Live workflow is authoritative.** The reviewable local copy lives at `scripts/deploy/workflows/guys-take-thumbnail-artwork.sdk.js`. Pull and compare the live workflow before editing or pushing the SDK because canvas edits can make the local copy stale. A full SDK push can also skip credentials on HTTP nodes, so verify every binding by hand afterward.
+
+> **2026-09-17 - caption-safe area placement tightened (LIVE).** The 16:9 layout prompts now require exactly one text-safe area at the top or bottom, not left or right. It must be wide enough for one short headline line and can be natural dark low-detail background or a smooth fade to black. The 1:1, 9:16, and Artwork Revision prompts now use the same top-or-bottom rule. The 9:16 prompt specifically requires the text-safe area to take about one third of the vertical canvas so Instagram cropping still leaves usable caption room. All prompts forbid letterbox bars, hard-edged black bands, solid colour strips, banners, boxes, panels, empty rectangles, and split caption areas. No n8n change was required because these prompts are read live from Airtable.
+
+> **2026-09-17 - natural cinematic colour grading strengthened again (LIVE).** The three 16:9 layout prompts no longer use warm amber / burnt orange as the default house palette. They now ask for a polished cinematic editorial image with natural, believable colour. Red, amber, and orange are allowed only as small warning lights, UI alerts, or local accents, never as an overall red, orange, yellow, or sepia cast. No n8n change was required because these prompts are read live from Airtable.
+
+> **2026-09-11 - Airtable polling DNS noise reduced (LIVE).** All three one-minute Airtable poll triggers (`Ready for 16X9 Thumbnail`, `Thumbnail Selected`, and `Revision Requested`) now retry up to five times with five seconds between attempts. This addresses repeated background `getaddrinfo EAI_AGAIN api.airtable.com` failures that produced Telegram alerts even while no artwork job was running. The trigger runs have no work item or execution ID because the failure happens while checking Airtable. Persistent outages still alert after the retry window. Published version `a263b33e-8848-4cb6-bf92-d469d45777f9` is active and validation passed with zero errors.
+
+> **2026-09-09 - native 9:16 composition confirmed (`recfxCsVULUoWjmEI`, Fixed).** This was already corrected in the live `Reversion 9x16` Airtable prompt later on 2026-08-12, but its Automation Upgrades row was never closed. The prompt requires an edge-to-edge vertical canvas and forbids letterboxing, borders, bars and padding; `Build Reversion Requests` also requests `imageConfig.aspectRatio: '9:16'`. The current 9x16 on thumbnail row `rec2hABKRPvNpmzw2`, generated after that prompt change, was inspected on 2026-09-09: its headline and four subjects are rearranged across the full height, with no landscape panel or filler bands. No n8n change was needed because the workflow reads this prompt live from Airtable.
+
+> **2026-09-09 - duplicate person in a revision guarded (`recLknzqirW7VdeuR`, Fixed, model compliance unverified).** A 1:1 revision for `BA-PgJMzX` asked to place the existing three people side-by-side, but Nano Banana introduced a fourth person by duplicating a guest. The live `Artwork Revision` Airtable prompt now tells the model to count the people in the source first, preserve exactly that count, include each original person exactly once, and never clone, duplicate, mirror, repeat, merge or replace a face or body. Rearrangements must move the existing people only. The final instruction now asks for the requested output aspect ratio instead of the input image's ratio, removing a contradiction with `imageConfig.aspectRatio`. The updated Airtable row was read back successfully; the next real multi-person revision still needs to confirm model compliance. No n8n change was needed.
+
+> **2026-09-09 - duplicate initial options guarded (`rechGwMZ5vHyQFMdx`, Fixed, real generation pending).** `BA-epafwr` used one mood after the four old framing variations had been removed, so its four Gemini calls could receive identical image inputs and effectively identical prompts; options 3 and 4 were identical. `Build Image Requests` now appends one restrained, option-specific composition direction to every rendered prompt: tight crop, medium eye-level crop, wider environmental framing, or asymmetric crop. These directions explicitly remain secondary to the producer's `Custom Image Prompt`, preserve the subject count, and do not set colours or text position. They are appended after template rendering, so they work even though `{{VARIATION}}` remains retired in Airtable. Published version `f9e55f13-cf71-4c67-928f-848e27355a8b` is active; validation passed with zero errors or warnings and all HTTP credentials were verified. A real one-mood generation is still needed to confirm image-model compliance.
+
+> **2026-09-13 - manual headline workflow (LIVE).** Gemini no longer renders headline text. All six artwork prompt rows now forbid text, logos, watermarks, letters, numbers and symbols, and reserve a clear, low-detail, high-contrast band for Jonny to add the headline manually in Photoshop. This applies to initial 16:9 options, 1:1 and 9:16 adaptations, and revision requests. The current `Thumbnail Caption` remains stored on the Airtable thumbnail row and is still supplied to the workflow for compatibility, but it is not sent as text to render.
+
+> **🛡️ 2026-09-04 — re-selecting a row whose 16:9 was deleted no longer crashes (LIVE, verified published: `versionId` = `activeVersionId` `5464da21`).** Root cause of the 2026-07-31 `Thumbnail-uGMKKG` failure: Jonny deleted all three images off a `Final` row and re-selected it, and `Download Selected 16x9` died on the empty URL (the episode still got marked `Artwork Ready` on the other branch, so it claimed artwork it didn't have). Two changes landed together, pushed as a **surgical PUT of the live JSON** (credentials carried through verbatim — **no rebinding was needed**; confirmed by a before/after diff of every node's credentials), then reconciled into the `.sdk.js`:
+>
+> 1. **The 2026-08-20 type-exclusion finally went live.** Until today it existed only in the `.sdk.js` — the live `Resolve Selected` had no `reversionOk` and the live `Needs Reversion?` still had the single old condition, so Clips were silently getting reversions the SDK said they shouldn't. Live and SDK are now in sync.
+> 2. **New `16x9 Exists?` gate** between `Needs Reversion?` and `Download Selected 16x9`: if the row's 16:9 attachment is gone, the branch skips the download and sends a Telegram message (`Warn No 16x9 Source`, record ID in a `<code>` block) explaining the fix (delete the Thumbnails row, set the episode back to `Approved`) instead of crashing. `Confirm Thumbnail Set` also now says the rebuild was skipped rather than promising versions that can't generate. **NOT yet live-fired** — a real test needs a Selected row with no 16:9, and faking one would trash a real episode's artwork state. Wiring and expressions verified by pull-back diff.
 
 This is **stage #8 "Artwork"** in the Guy's Take build. **Phase A** generates + selects the 16:9. **Phase B** (built 2026-06-21) runs on selection: it unlinks the rejected options from the episode and re-runs Nano Banana on the chosen 16:9 to write a **1:1** and a **9:16** adaptation back onto the same Thumbnail row.
 
@@ -25,7 +44,7 @@ Uses a **normalized data model**: a `Thumbnails` table where each generated opti
 >
 > **Getting that re-run to happen exposed a third gotcha**, documented under [Generate-trigger view gate](#1-generate-trigger-view-gate-take-or-has-a-guest): deleting the four `Thumbnails` rows was **not** enough to re-arm the trigger, because the view also excludes `Status = Awaiting Thumbnail Pick`. The episode sat out of the view doing nothing, with no error raised. Jonny set `Status = Approved` and it fired within the minute.
 
-> **✅ 2026-08-04 — moods and art direction are now Jonny's, not the AI's (TESTED 2026-08-11 on a `Chat`, exec #1752).** The `Pick Moods (Gemini)` step and its `Build Mood Prompt` companion are **deleted**. The metadata workflow now lists the mood library in its Telegram packaging message and Jonny picks; his answer lands on the episode as **`Thumbnail Moods`** (comma-separated names) and `Resolve Vibes` cycles them across the 4 slots. He also supplies a **`Custom Image Prompt`**, which fills a new **`{{CUSTOM}}`** token in the Airtable prompt templates, and the four hardcoded `{{VARIATION}}` framing lines are **gone**. Generation is **gated on `Custom Image Prompt` being non-empty** via the trigger view. Also fixed in the same pass: **Roundtable episodes were fetching no guest photos at all** (`Plan Downloads` only handled `duo`), so every Roundtable silently fell back to the solo prompt. See [Mood + prompt handover](#mood--prompt-handover-2026-08-04).
+> **✅ 2026-08-04 — moods and art direction are now Jonny's, not the AI's (TESTED 2026-08-11 on a `Chat`, exec #1752).** The `Pick Moods (Gemini)` step and its `Build Mood Prompt` companion are **deleted**. The metadata workflow now lists the mood library in its Telegram packaging message and Jonny picks; his answer lands on the episode as **`Thumbnail Moods`** (comma-separated names) and `Resolve Vibes` cycles them across the 4 slots. He also supplies a **`Custom Image Prompt`**, which fills a new **`{{CUSTOM}}`** token in the Airtable prompt templates. The old prescriptive `{{VARIATION}}` token remains retired; four neutral composition directions were restored in code on 2026-09-09 to prevent one-mood runs from sending identical requests. Generation is **gated on `Custom Image Prompt` being non-empty** via the trigger view. Also fixed in the same pass: **Roundtable episodes were fetching no guest photos at all** (`Plan Downloads` only handled `duo`), so every Roundtable silently fell back to the solo prompt. See [Mood + prompt handover](#mood--prompt-handover-2026-08-04).
 
 **Path 1 - Generate** (fires when an episode enters the Episodes **`Ready for 16X9 Thumbnail`** view, `viwqgtrry8n6yNgqW` — **not** an `Approved` view; `Status = Approved` is *not* one of the view's conditions, confirmed with Jonny 2026-08-11) is **content-type aware** (Episodes `Type` field):
 
@@ -34,7 +53,7 @@ Uses a **normalized data model**: a `Thumbnails` table where each generated opti
 2. Reads the whole `Thumbnail References` library (mood + reference photo per row), the **`Thumbnail Prompts` table** (the layout prompt templates), and the `Guests` table
 3. **`Resolve Vibes`** reads the moods **Jonny picked** (episode field `Thumbnail Moods`) and cycles them across the **4 thumbnail slots** — 1 mood means all four use it, 2 means ABAB. Empty or all-mistyped falls back to the whole library. *(Until 2026-08-04 this was two nodes asking Gemini to choose; both are gone.)*
 4. **Plan Downloads** builds one download task per image: 4 host reference photos (the picked vibe per slot), plus — for `Chat`/`Clip`/`Roundtable` — every linked guest's `Headshot`. One download fan-out covers both.
-5. For each slot, calls **Nano Banana** (`gemini-3-pro-image`) to generate one 16:9. **Build Image Requests** picks the prompt template by layout — **solo** (Take, host close-up), **duo** (Chat/Clip, host + guest), or **roundtable** (Roundtable, host + all guests lined up like a film poster) — **fetched from the `Prompts` Airtable table** (matched by row `Name`: `Solo Thumbnail` / `Duo Thumbnail` / `Roundtable Thumbnail`), then fills the `{{HOOK}}` / `{{CONTEXT}}` / `{{VIBE}}` / **`{{CUSTOM}}`** tokens. `{{CUSTOM}}` is Jonny's per-episode art direction from `Custom Image Prompt`. The four hardcoded `{{VARIATION}}` framing lines were removed 2026-08-04; the token still renders (as empty) if an old template contains it.
+5. For each slot, calls **Nano Banana** (`gemini-3-pro-image`) to generate one 16:9. **Build Image Requests** picks the prompt template by layout — **solo** (Take, host close-up), **duo** (Chat/Clip, host + guest), or **roundtable** (Roundtable, host + all guests lined up like a film poster) — **fetched from the `Prompts` Airtable table** (matched by row `Name`: `Solo Thumbnail` / `Duo Thumbnail` / `Roundtable Thumbnail`), then fills the `{{HOOK}}` / `{{CONTEXT}}` / `{{VIBE}}` / **`{{CUSTOM}}`** tokens. `{{CUSTOM}}` is Jonny's per-episode art direction from `Custom Image Prompt`. The retired `{{VARIATION}}` token renders empty, then the code appends one neutral option-specific composition direction so even a one-mood run sends four distinct requests. Producer instructions remain higher priority.
 6. Creates 4 `Thumbnails` rows (`Status = Proposed`, linked to the Episode, with the mood, option number, caption) and uploads each image into the row's `16x9` attachment
 7. Posts the 4 as a **Telegram album** to the group, captioned by mood, plus a short "set a row to Selected" instruction
 8. Sets the Episode `Status = Awaiting Thumbnail Pick`
@@ -43,7 +62,7 @@ Uses a **normalized data model**: a `Thumbnails` table where each generated opti
 
 8. Sets the episode's other thumbnail rows to `Status = Rejected`
 9. **Unlinks the rejected rows from the Episode** — sets the Episode `Thumbnails` link to **only** the selected row (so the other options drop out of the episode's Thumbnails column), sets Episode `Status = Artwork Ready`, **moves the chosen row to `Status = Final`** (so it leaves the select view and keeps the poll trigger clean), and sends a Telegram confirmation
-10. **Reversioning branch (Phase B), runs in parallel off the same trigger:** an IF gate (`Needs Reversion?`) checks two things: (a) the episode's `Type` is **not** `Clip` / `Read` / `Audionauts` (added 2026-08-20 — see the type-exclusion note below), and (b) at least one of the row's `1x1` / `9x16` attachments is **missing**. Both must hold or the branch dead-ends. It downloads the selected row's `16x9` and re-runs **Nano Banana** for **only the missing aspect ratios** (so a re-select that already has both does nothing; one missing regenerates just that one), using prompt templates pulled from the **`Thumbnail Prompts` Airtable table** (rows `Reversion 1x1` / `Reversion 9x16`). Results upload into the row's `1x1` / `9x16` fields, then **Telegram sends back only the newly-generated artwork** (one `sendPhoto` message per new image, no duplicates). Reworked 2026-07-08.
+10. **Reversioning branch (Phase B), runs in parallel off the same trigger:** an IF gate (`Needs Reversion?`) checks two things: (a) the episode's `Type` is **not** `Clip` / `Read` / `Audionauts` (added 2026-08-20 — see the type-exclusion note below; **only actually live since 2026-09-04**), and (b) at least one of the row's `1x1` / `9x16` attachments is **missing**. Both must hold or the branch dead-ends. A second gate (`16x9 Exists?`, added 2026-09-04) then checks the row's `16x9` attachment is present before the download runs; if it's gone (hand-deleted), the branch sends a Telegram explanation (`Warn No 16x9 Source`) and ends cleanly instead of crashing at `Download Selected 16x9`. It downloads the selected row's `16x9` and re-runs **Nano Banana** for **only the missing aspect ratios** (so a re-select that already has both does nothing; one missing regenerates just that one), using prompt templates pulled from the **`Thumbnail Prompts` Airtable table** (rows `Reversion 1x1` / `Reversion 9x16`). Results upload into the row's `1x1` / `9x16` fields, then **Telegram sends back only the newly-generated artwork** (one `sendPhoto` message per new image, no duplicates). Reworked 2026-07-08.
 
 **Path 3 - Revision (added 2026-07-26)** (fires when a `Thumbnails` row enters the `Revision Requested` view, i.e. `Status = Revising`): a **briefed, in-place, targeted** redo of an already-chosen thumbnail. You write a free-text `Revision Brief` + tick which `Revision Targets` (`16x9`/`1x1`/`9x16`) on the row and set `Status = Revising`. The chain re-runs Nano Banana on **only the ticked ratios**, **self-editing each ratio's current image** (falling back to the `16x9` if that ratio has none) with the brief as steering text, **overwrites** them on the row, Telegrams the new artwork back, and resets the row to `Final` (clearing the brief/targets). **No forced cascade** — it redoes only what you name; if you revise the `16x9` alone it adds an informational note that the 1:1/9:16 now derive from the old 16:9. Driven either by editing the row directly or by asking the **Telegram Assistant** ("redo the 9x16 for BA-xxxx, more red"), which proposes the row write for one-tap approval.
 
@@ -56,17 +75,17 @@ Selection is by setting a **`Thumbnails` row's `Status` to `Selected`**, not Tel
 | Item | Value |
 |---|---|
 | **Workflow ID** | `mLAn4ya2AmZoHDUk` (SDK-sourced; old `YyXiJ0lusoW7ynu9` archived) |
-| **SDK source** | `scripts/deploy/workflows/guys-take-thumbnail-artwork.sdk.js` (authoritative; 58 nodes — `Build Mood Prompt` and `Pick Moods (Gemini)` removed 2026-08-04) |
+| **SDK copy** | `scripts/deploy/workflows/guys-take-thumbnail-artwork.sdk.js` (reviewable local copy; live must be pulled and compared before editing; 60 nodes) |
 | **Trigger 1** | Airtable poll on `Episodes` (`tbl3uYLIvtB9APZp6`), every minute, view `Ready for 16X9 Thumbnail` (`viwqgtrry8n6yNgqW`) — Path 1 Generate |
 | **Trigger 2** | Airtable poll on **`Thumbnails`** (`tblkcASzE4DXlxokO`), every minute, view **`Ready for 1X1 & 9X16 Thumbnails *J*`** (`viw7AHjnX9ZkvIrKo` — same view, **renamed 2026-08-20** from `Selected`) — Path 2 Select + Phase B. Filters `Status = Selected` **only**; it deliberately carries **no episode-type filter**, because it drives the reject/status branch too (which must run for every type). The type exclusion lives in `Needs Reversion?` instead. |
 | **Trigger 3 (revisions)** | Airtable poll on **`Thumbnails`** (`tblkcASzE4DXlxokO`), every minute, view **`Revision Requested`** (`viwGVYiheuTD2pPlx`, filters `Status = Revising`) — Path 3 Revision |
 | **Revision inputs** | on the `Thumbnails` row: `Revision Brief` (long text) + `Revision Targets` (multi-select `16x9`/`1x1`/`9x16`) + set `Status = Revising`. Prompt row `Artwork Revision` in `Prompts` (tokens `{{REVISION}}` = brief, `{{HOOK}}` = caption). |
 | **Content types** | `Take` → solo host. `Chat` / `Clip` → host + all linked guests (duo). `Roundtable` → host + all linked guests, film-poster lineup (roundtable). Any other/unknown → skipped to manual artwork. Read from the Episodes `Type` single-select. |
-| **Prompt source** | ALL image-gen prompt templates live in the **`Prompts` Airtable table** (`tblhG1nw2P1k3CBVU`, renamed 2026-07-15 from `Thumbnail Prompts`; ID unchanged), `Type = Artwork`, **`Name` + `Prompt` fields** (template text is in the field literally named `Prompt`). **Phase A** rows: `Solo Thumbnail` / `Duo Thumbnail` / `Roundtable Thumbnail` (`Fetch Prompts` node → `Build Image Requests`, fills `{{HOOK}}`/`{{CONTEXT}}`/`{{VIBE}}`/**`{{CUSTOM}}`**; `{{VARIATION}}` retired 2026-08-04 and now renders empty). **Phase B** rows (added 2026-07-08): `Reversion 1x1` / `Reversion 9x16` (`Fetch Reversion Prompts` node → `Build Reversion Requests`, fills `{{HOOK}}` = caption only). Edit any prompt in Airtable, not n8n. |
+| **Prompt source** | ALL image-gen prompt templates live in the **`Prompts` Airtable table** (`tblhG1nw2P1k3CBVU`, renamed 2026-07-15 from `Thumbnail Prompts`; ID unchanged), `Type = Artwork`, **`Name` + `Prompt` fields** (template text is in the field literally named `Prompt`). **Phase A** rows: `Solo Thumbnail` / `Duo Thumbnail` / `Roundtable Thumbnail` (`Fetch Prompts` node → `Build Image Requests`, fills `{{HOOK}}`/`{{CONTEXT}}`/`{{VIBE}}`/**`{{CUSTOM}}`**; `{{VARIATION}}` remains retired and renders empty; code appends a neutral per-option composition direction). **Phase B** rows (added 2026-07-08): `Reversion 1x1` / `Reversion 9x16` (`Fetch Reversion Prompts` node → `Build Reversion Requests`, fills `{{HOOK}}` = caption only). Edit layout and style prompt text in Airtable; the duplicate-prevention composition directions live in `Build Image Requests`. |
 | **Mood picker** | **Jonny**, via the metadata workflow's Telegram packaging message. Stored on the episode as `Thumbnail Moods` (comma-separated names), matched case-insensitively against `Thumbnail References` and cycled across the 4 slots by `Resolve Vibes`. *(Was `gemini-2.5-flash` until 2026-08-04.)* |
 | **Art direction** | **Jonny**, same message. Stored as `Custom Image Prompt` on the episode, fills the `{{CUSTOM}}` token in the layout template. `default` / `none` normalises to empty. **Generation is gated on this being non-empty.** |
 | **Image model** | `gemini-3-pro-image` (Nano Banana), `v1beta`, `responseModalities: ["TEXT","IMAGE"]`, `imageConfig.aspectRatio` + `imageSize` (**`1K` everywhere** for reliability — 2K caused `IMAGE_OTHER`), one call per slot (Phase A) + 2 calls on select (Phase B 1:1 + 9:16) |
-| **Options generated** | always 4 (moods assigned across the 4 slots by the LLM; each slot gets a different colour variation) |
+| **Options generated** | always 4 (Jonny's moods cycle across the slots; each slot also gets a distinct neutral composition direction) |
 | **Output** | 4 `Thumbnails` rows (`Proposed`) with `16x9` attached; on pick, one → `Selected`, rest → `Rejected` **and unlinked from the episode**; selected row gets `1x1` + `9x16` attached; Episode → `Artwork Ready` |
 | **Telegram** | album + messages to Jonny's DM (chat ID `1512868522`, hardcoded) |
 | **Airtable base** | `app8Xw9Tq0XLjhmp9` (Guy's Take) |
@@ -85,6 +104,8 @@ Selection is by setting a **`Thumbnails` row's `Status` to `Selected`**, not Tel
 The Gemini credential is a generic **Header Auth** credential (when creating it in n8n, search "Header Auth" - NOT "Google Gemini (PaLM) Api"): header **Name** = `x-goog-api-key`, **Value** = your key from https://aistudio.google.com/apikey on a **billing-enabled** Google Cloud project (image gen is paid; the text call is free-tier). It powers both the mood-pick text call and the image calls.
 
 > **AgentMail gotcha:** because `Gemini API Key [n8n]` did not exist when the workflow was built, n8n auto-filled the Header Auth slot on the Gemini nodes with the only existing Header Auth credential (**AgentMail**). That is wrong and must be replaced - open every `Generate ... (Nano Banana)` node and set the credential to `Gemini API Key [n8n]`.
+
+> **Live credential drift (noted 2026-09-04):** the three `Generate ... (Nano Banana)` nodes currently use a Header Auth credential named **`google-ai-studio_[pod21-n8n-temp]`**, not `Gemini API Key [n8n]`. It works (image gen has been running on it), so don't "fix" it blindly — but if you ever rebuild from the SDK, either rebind to whichever Gemini credential exists at that point or rename to match.
 
 All HTTP Request nodes are **skipped by credential auto-assignment** at build time (the rebuild references credentials by name in the SDK, but verify after any push). Open each and confirm: the Airtable ones (`Mark Generating`, `Mark Manual Artwork`, `Delete Old Thumbnails`, `Fetch Mood References`, `Fetch Prompts`, `Fetch Guests`, `Create Thumbnail Row`, `Upload 16x9`, `Mark Awaiting Pick`, `Get Episode Thumbnails`, `Reject Siblings`, `Mark Episode Artwork Ready`, `Upload Reversion`) use **`Airtable [n8n] (PAT)`**; the image-download nodes (`Download Image`, `Download Selected 16x9`) use **no auth** (signed URLs); the Gemini ones (`Generate Thumbnail`, `Generate Reversions`, `Generate Revisions`) use **Header Auth** with the credential above.
 
@@ -144,17 +165,17 @@ Token contract, **Phase A** (`Build Image Requests`), as of 2026-08-04:
 
 | Token | Value | Source |
 |---|---|---|
-| `{{HOOK}}` | the headline rendered in the image | episode `Thumbnail Caption` (falls back to `Title`) |
+| `{{HOOK}}` | currently retained for compatibility but not rendered by the artwork prompts | episode `Thumbnail Caption` (falls back to `Title`) |
 | `{{CONTEXT}}` | tone context, not rendered as text | episode `Summary` |
 | `{{VIBE}}` | the facial expression for this slot | one of the moods **Jonny picked**, cycled across the 4 slots |
 | `{{CUSTOM}}` | **his free-text art direction for this episode** | episode `Custom Image Prompt`; `default`/`none` → empty |
-| `{{VARIATION}}` | **retired** — always renders empty | was 1 of 4 hardcoded framing lines in the Code node |
+| `{{VARIATION}}` | **retired** — always renders empty | kept only so an old template containing the token does not leak it into the prompt |
 
-Put `{{CUSTOM}}` wherever you want his direction to land in the template — that's the point of it being a token rather than something appended. Layout→row mapping: `solo → Solo Thumbnail`, `duo → Duo Thumbnail`, `roundtable → Roundtable Thumbnail`; a duo/roundtable episode with **zero** usable guest images falls back to `Solo Thumbnail`.
+Put `{{CUSTOM}}` wherever you want his direction to land in the template — that's the point of it being a token rather than something appended. After rendering, `Build Image Requests` appends one restrained composition direction per option: tight crop, medium eye-level crop, wider environmental framing, or asymmetric crop. These are secondary to `{{CUSTOM}}`, preserve subject count, and deliberately say nothing about colour or text position. Layout→row mapping: `solo → Solo Thumbnail`, `duo → Duo Thumbnail`, `roundtable → Roundtable Thumbnail`; a duo/roundtable episode with **zero** usable guest images falls back to `Solo Thumbnail`.
 
-Token contract, **Phase B** (`Build Reversion Requests`): only `{{HOOK}}` = the selected row's `Caption`. Field→row mapping: `1x1 → Reversion 1x1`, `9x16 → Reversion 9x16`. These prompts carry an explicit **legibility contract** (reserve a clear band for the headline, keep the subject out of it, render text in the foreground with a contrast treatment) added 2026-07-08 after a run put the caption behind the subject. Every `{{TOKEN}}` occurrence is replaced globally.
+Token contract, **Phase B** (`Build Reversion Requests`): `{{HOOK}}` is still supplied from the selected row's `Caption`, but the live prompts do not render it. Field→row mapping: `1x1 → Reversion 1x1`, `9x16 → Reversion 9x16`. The prompts remove any text inherited from the source and reserve one clear top-or-bottom text-safe area for manual Photoshop typography. The 9:16 prompt requires that area to be about one third of the vertical canvas to allow for Instagram cropping. Every `{{TOKEN}}` occurrence is replaced globally.
 
-Token contract, **Path 3** (`Build Revision Requests`): row `Artwork Revision`, `{{REVISION}}` = the `Revision Brief`, `{{HOOK}}` = the row `Caption`. The current image of each targeted ratio is passed inline and the prompt asks Nano Banana to apply *only* the briefed change while preserving everything else (a self-edit), carrying the same legibility contract. All three ratios use this one row (the aspect ratio is set per-request via `imageConfig`, not a separate prompt).
+Token contract, **Path 3** (`Build Revision Requests`): row `Artwork Revision`, `{{REVISION}}` = the `Revision Brief`; `{{HOOK}}` remains supplied but is not rendered. The current image of each targeted ratio is passed inline and the prompt asks Nano Banana to apply *only* the briefed change while preserving everything else, removing any existing text and keeping one clean top-or-bottom text-safe area for manual Photoshop typography. If the requested output ratio is 9:16, the prompt asks for the text-safe area to be about one third of the vertical image height. Since 2026-09-09 it also locks the source's person count and requires every original person exactly once, specifically preventing rearrangement briefs from creating a duplicate face or body. All three ratios use this one row (the aspect ratio is set per-request via `imageConfig`, not a separate prompt).
 
 ### `Guests` table (for Chat/Clip/Roundtable)
 
@@ -189,21 +210,25 @@ Two decisions that used to be made by code are now made by Jonny, in his reply t
 | Was | Is now | Lands in |
 |---|---|---|
 | `Build Mood Prompt` → `Pick Moods (Gemini)` chose 1–4 moods | Jonny picks from the list Telegram showed him | `Thumbnail Moods` (long text, comma-separated) |
-| 4 hardcoded `variations[]` framing lines in the Code node | Jonny writes free-text art direction | `Custom Image Prompt` (long text) → `{{CUSTOM}}` |
+| 4 prescriptive `{{VARIATION}}` framing lines in the Code node | Jonny writes free-text art direction; code adds only a neutral per-option composition difference | `Custom Image Prompt` (long text) → `{{CUSTOM}}`, followed by the lower-priority composition directive |
 
 **Why the moods moved out of Gemini.** The old node asked Gemini to read the episode and assign a vibe per slot. It worked, but it was a second opinion Jonny then had to live with, and it cost a call per run. Since he's now being asked about the artwork anyway, asking for the moods in the same message is free.
 
-**Why variety survives losing the framing lines.** The four framing lines existed to stop four renders of one prompt coming back near-identical. Now the moods do that job: pick two and you get ABAB across the slots. **The trade-off is real — pick a single mood and the 4 options will be much more alike than they used to be.** If that turns out to be too samey in practice, the cheapest fix is to put the variation back inside the Airtable template rather than in code.
+**Why neutral composition differences returned.** The 2026-08-04 handover removed the old framing lines so they could not fight Jonny's art direction. `BA-epafwr` later proved that moods alone are not enough: with one mood, all four requests could be identical and options 3 and 4 came back identical. The replacement is intentionally narrower. It changes only crop/camera composition, is explicitly secondary to `Custom Image Prompt`, preserves subject count, and gives no palette or text-position instruction.
 
 **Failure behaviour is deliberately soft.** A mistyped mood is dropped; if *every* mood is unmatched (or the field is blank) `Resolve Vibes` uses the whole library, exactly as it did when Gemini returned something unusable. The only hard failure left is a `Thumbnail References` table with no usable `Reference Photo` on any row.
 
 ### Stripped-back prompt templates (paste into the `Prompts` table)
 
-The old templates carried prescriptive art direction that conflicts with `{{CUSTOM}}` — if the template already says "warm orange key light" and Jonny asks for a cold blue night scene, Nano Banana gets contradictory instructions and is more likely to return `IMAGE_OTHER`. These replacements keep only the parts worth keeping: likeness, the **colour floor**, the headline legibility contract, and the output constraints.
+> **Current live prompt contract, updated 2026-09-17.** The full prompt text lives in Airtable (`Prompts` table, `Prompt` field) and is read at runtime. The key rule now is: natural cinematic colour first, with red / amber / orange only as small accents, and one top-or-bottom `text-safe area` instead of a solid headline band. For 16:9, that area must fit one short headline line. For 9:16, it must take about one third of the vertical canvas to allow for Instagram cropping. Do not reintroduce `warm amber and burnt orange` as the default whole-image palette, and do not ask for a `horizontal band` for headline text.
+
+> **Logo exception.** The layout prompts no longer ban every logo. They ban random text, captions, watermarks, letters, numbers, and symbols, but allow brand logos when `ART DIRECTION` explicitly asks for them. This matters for episodes that deliberately reference projects such as Coldcard, Blockstream, Ledger, or Trezor.
+
+The old templates carried prescriptive art direction that conflicts with `{{CUSTOM}}` — if the template already says "warm orange key light" and Jonny asks for a cold blue night scene, Nano Banana gets contradictory instructions and is more likely to return `IMAGE_OTHER`. These replacements keep only the parts worth keeping: likeness, the **colour floor**, a clean manual-text area, and the output constraints.
 
 > ⚠️ **Strip *prescriptive* direction, not *protective* direction — they are not the same thing.** The first pass of this rewrite (2026-08-04) removed the palette and put **nothing** in its place, which is what caused the greyscale bug: with no colour instruction at all, the model desaturated the subjects to make them read against a busy background. The `COLOUR — NON-NEGOTIABLE` block below is deliberately **not** a palette. It dictates no hue and fights nothing Jonny might write in `{{CUSTOM}}`; it only sets a floor ("people are never grey") while leaving backgrounds free to be monochrome. **Keep that block in any future rewrite.** Before deleting a line from a prompt, ask what it was silently guaranteeing.
 
-> 🎨 **Palette restored as an overridable default (2026-08-18).** Removing the house style also removed the *brand*, not just the conflict risk. Jonny compared recent output against the back catalogue: the older thumbnails were warm orange on near-black, the newer ones came back cool blue circuitry, because nothing in the template named a palette and Nano Banana defaults to blue for AI/tech topics. His `Custom Image Prompt` entries in practice ("Thumbnail caption in white", "Luís Novo should appear without his backpack") are composition notes, not art direction, so the strongest slot in the prompt was steering nothing. Fix: a `HOUSE STYLE (the show's default look)` block in all three layout templates, sitting **above** `COLOUR — NON-NEGOTIABLE` and ending with an explicit "if the ART DIRECTION section below asks for a different look or different colours, follow the ART DIRECTION and ignore this block". That is what keeps the 2026-08-04 contradiction problem from coming back: the palette is a default, not a competing instruction. The closing `Output a single 16:9 image.` line also now re-states the palette, so it survives the distance between the top of the prompt and the render.
+> 🎨 **Warm default palette removed again (2026-09-17).** The 2026-08-18 warm house-style default helped avoid cold-blue AI slop, but later real runs showed the model was over-reading it as an orange / sepia wash across the full frame. The live prompts now use a neutral cinematic editorial style instead: dark, realistic backgrounds, natural skin tones, neutral whites and greys, and red / amber / orange only as small warning details or local accents.
 
 **`Solo Thumbnail`**
 
@@ -213,14 +238,11 @@ Create a 16:9 YouTube thumbnail for a punchy Bitcoin and sovereign-tech commenta
 SUBJECT
 Image 1 is the host. Reproduce his likeness faithfully. His facial expression should read as: {{VIBE}}.
 
-HOUSE STYLE (the show's default look)
-Palette: a deep near-black background, warm amber and burnt orange as the accent and key light, and
-clean white for the headline text. Light the host with a warm key from one side. Keep the background
-dark and uncluttered so his face and the headline carry the frame, and use orange as an accent rather
-than flooding the image. Do NOT use cool blue, teal or cyan colour schemes. If the topic suggests a
-technical or data-heavy backdrop, render it in this warm palette, never in blue.
-This is the default only. If the ART DIRECTION section below asks for a different look or different
-colours, follow the ART DIRECTION and ignore this block.
+HOUSE STYLE
+Create a polished cinematic editorial image with natural, professionally graded colour. Use a dark,
+realistic background, but keep the overall palette neutral and believable. Red, amber, and orange may
+appear only as small warning lights, UI alerts, or local accents. Do not let them tint the whole image.
+Avoid sepia, orange wash, heavy warmth, or posterized colour.
 
 COLOUR — NON-NEGOTIABLE
 Render the host in full, natural colour: lifelike skin tones, and the true colour of his hair, beard,
@@ -231,10 +253,19 @@ muted or monochrome where the design calls for it — the person must not be. If
 contrast or drama, take it from the background, lighting or the headline, never by desaturating the
 subject.
 
-HEADLINE
-Render this text large and clearly legible in the image: "{{HOOK}}"
-Reserve a clear band for it, keep the subject's face out of that band, and render the text in the
-foreground with enough contrast against whatever sits behind it to stay readable at small sizes.
+MANUAL HEADLINE AREA
+Do not render any headline text. Reserve one clear text-safe area for a headline to be added later in
+Photoshop. Put this area at the top or bottom of the image, not on the left or right. Keep all faces,
+bodies, logos, devices, and important visual details out of this area.
+
+The text-safe area must be wide enough for one short headline line. It can be either:
+1. natural dark background with low detail, suitable for light text, or
+2. a smooth fade into black at the top or bottom.
+
+Do not create letterbox bars, hard-edged black bands, solid colour strips, banners, boxes, panels,
+empty rectangles, or split caption areas. The transition into the text-safe area must feel natural and
+cinematic, not like a graphic overlay. Do not add random text, captions, watermarks, letters, numbers,
+or symbols. Only use brand logos if the ART DIRECTION explicitly asks for them.
 
 EPISODE CONTEXT (for tone only — do not render any of this as text)
 {{CONTEXT}}
@@ -243,7 +274,7 @@ ART DIRECTION
 {{CUSTOM}}
 
 Output a single 16:9 image. Unless the ART DIRECTION above overrode it, follow the HOUSE STYLE
-palette. No watermarks, no logos, no text other than the headline.
+palette. No text of any kind.
 ```
 
 **`Duo Thumbnail`**
@@ -256,14 +287,11 @@ Image 1 is the host. Reproduce his likeness faithfully. His facial expression sh
 Every image after the first is a guest. Reproduce each guest's likeness faithfully and place them in
 the frame alongside the host, balanced so no face is cropped or hidden.
 
-HOUSE STYLE (the show's default look)
-Palette: a deep near-black background, warm amber and burnt orange as the accent and key light, and
-clean white for the headline text. Light the subjects with a warm key from one side. Keep the
-background dark and uncluttered so the faces and the headline carry the frame, and use orange as an
-accent rather than flooding the image. Do NOT use cool blue, teal or cyan colour schemes. If the topic
-suggests a technical or data-heavy backdrop, render it in this warm palette, never in blue.
-This is the default only. If the ART DIRECTION section below asks for a different look or different
-colours, follow the ART DIRECTION and ignore this block.
+HOUSE STYLE
+Create a polished cinematic editorial image with natural, professionally graded colour. Use a dark,
+realistic background, but keep the overall palette neutral and believable. Red, amber, and orange may
+appear only as small warning lights, UI alerts, or local accents. Do not let them tint the whole image.
+Avoid sepia, orange wash, heavy warmth, or posterized colour.
 
 COLOUR — NON-NEGOTIABLE
 Render EVERY person in full, natural colour: lifelike skin tones, and the true colour of their hair,
@@ -274,10 +302,19 @@ guest equally. Background and graphic elements MAY be stylised, muted or monochr
 calls for it — the people must not be. If the composition needs contrast or drama, take it from the
 background, lighting or the headline, never by desaturating the subjects.
 
-HEADLINE
-Render this text large and clearly legible in the image: "{{HOOK}}"
-Reserve a clear band for it, keep every face out of that band, and render the text in the foreground
-with enough contrast against whatever sits behind it to stay readable at small sizes.
+MANUAL HEADLINE AREA
+Do not render any headline text. Reserve one clear text-safe area for a headline to be added later in
+Photoshop. Put this area at the top or bottom of the image, not on the left or right. Keep all faces,
+bodies, logos, devices, and important visual details out of this area.
+
+The text-safe area must be wide enough for one short headline line. It can be either:
+1. natural dark background with low detail, suitable for light text, or
+2. a smooth fade into black at the top or bottom.
+
+Do not create letterbox bars, hard-edged black bands, solid colour strips, banners, boxes, panels,
+empty rectangles, or split caption areas. The transition into the text-safe area must feel natural and
+cinematic, not like a graphic overlay. Do not add random text, captions, watermarks, letters, numbers,
+or symbols. Only use brand logos if the ART DIRECTION explicitly asks for them.
 
 EPISODE CONTEXT (for tone only — do not render any of this as text)
 {{CONTEXT}}
@@ -286,7 +323,7 @@ ART DIRECTION
 {{CUSTOM}}
 
 Output a single 16:9 image. Unless the ART DIRECTION above overrode it, follow the HOUSE STYLE
-palette. No watermarks, no logos, no text other than the headline.
+palette. No text of any kind.
 ```
 
 **`Roundtable Thumbnail`**
@@ -300,14 +337,11 @@ Every image after the first is a guest. Reproduce each guest's likeness faithful
 and all guests across the frame as an ensemble lineup, like a film poster — every face clearly visible,
 similar scale, none cropped or hidden behind another.
 
-HOUSE STYLE (the show's default look)
-Palette: a deep near-black background, warm amber and burnt orange as the accent and key light, and
-clean white for the headline text. Light the subjects with a warm key from one side. Keep the
-background dark and uncluttered so the faces and the headline carry the frame, and use orange as an
-accent rather than flooding the image. Do NOT use cool blue, teal or cyan colour schemes. If the topic
-suggests a technical or data-heavy backdrop, render it in this warm palette, never in blue.
-This is the default only. If the ART DIRECTION section below asks for a different look or different
-colours, follow the ART DIRECTION and ignore this block.
+HOUSE STYLE
+Create a polished cinematic editorial image with natural, professionally graded colour. Use a dark,
+realistic background, but keep the overall palette neutral and believable. Red, amber, and orange may
+appear only as small warning lights, UI alerts, or local accents. Do not let them tint the whole image.
+Avoid sepia, orange wash, heavy warmth, or posterized colour.
 
 COLOUR — NON-NEGOTIABLE
 Render EVERY person in full, natural colour: lifelike skin tones, and the true colour of their hair,
@@ -319,10 +353,19 @@ elements MAY be stylised, muted or monochrome where the design calls for it — 
 If the composition needs contrast or drama, take it from the background, lighting or the headline,
 never by desaturating the subjects.
 
-HEADLINE
-Render this text large and clearly legible in the image: "{{HOOK}}"
-Reserve a clear band for it, keep every face out of that band, and render the text in the foreground
-with enough contrast against whatever sits behind it to stay readable at small sizes.
+MANUAL HEADLINE AREA
+Do not render any headline text. Reserve one clear text-safe area for a headline to be added later in
+Photoshop. Put this area at the top or bottom of the image, not on the left or right. Keep all faces,
+bodies, logos, devices, and important visual details out of this area.
+
+The text-safe area must be wide enough for one short headline line. It can be either:
+1. natural dark background with low detail, suitable for light text, or
+2. a smooth fade into black at the top or bottom.
+
+Do not create letterbox bars, hard-edged black bands, solid colour strips, banners, boxes, panels,
+empty rectangles, or split caption areas. The transition into the text-safe area must feel natural and
+cinematic, not like a graphic overlay. Do not add random text, captions, watermarks, letters, numbers,
+or symbols. Only use brand logos if the ART DIRECTION explicitly asks for them.
 
 EPISODE CONTEXT (for tone only — do not render any of this as text)
 {{CONTEXT}}
@@ -331,7 +374,7 @@ ART DIRECTION
 {{CUSTOM}}
 
 Output a single 16:9 image. Unless the ART DIRECTION above overrode it, follow the HOUSE STYLE
-palette. No watermarks, no logos, no text other than the headline.
+palette. No text of any kind.
 ```
 
 Move `{{CUSTOM}}` wherever you like — it's a token precisely so its position is yours to change without touching n8n. Leaving it near the end works well because later instructions tend to win when they conflict with earlier ones. When Jonny replies `default`, `{{CUSTOM}}` renders empty and the `ART DIRECTION` heading is left dangling with nothing under it; harmless, and Nano Banana ignores it.
@@ -342,11 +385,11 @@ Move `{{CUSTOM}}` wherever you like — it's a token precisely so its position i
 
 > **These run inside Airtable, not n8n.** There is no SDK file or n8n node for them — if the thumbnail behaviour changes and nothing in n8n explains it, look here. Maintained in the Airtable base UI (`app8Xw9Tq0XLjhmp9`), not this repo. Added 2026-06-30 to gate *when* an episode is ready for artwork and kill the "forgot the guest" foot-gun.
 
-### 1. Generate-trigger view gate (`Take` OR has a guest)
+### 1. Generate-trigger view gate (certain types, OR anything with a guest)
 
 > **Transcribed from the Airtable UI 2026-08-11 (Jonny's screenshot). Treat this block as the source of truth.** The Airtable API exposes view **names and IDs but not their filter conditions**, so nothing here can be verified programmatically — not by me, not by the assistant. Every earlier version of this list was reconstructed from memory and **was wrong in a way that cost a debugging session** (see the `Status is none of` line). If the filter changes, re-screenshot it and update this block; do not infer it from behaviour.
 
-The trigger view (`Ready for 16X9 Thumbnail *J*`, `viwqgtrry8n6yNgqW`) requires a guest for `Chat`/`Roundtable` but **not** for the solo-ish types, via a nested OR group:
+The trigger view (`Ready for 16X9 Thumbnail *J*`, `viwqgtrry8n6yNgqW`) lets through the four listed `Type`s on their own, **plus any episode of any other type that has a guest linked**, via a nested OR group:
 
 ```
 Transcript is not empty
@@ -354,21 +397,26 @@ Summary is not empty
 Thumbnail Caption is not empty
 Thumbnails is empty
 Status is none of  "Awaiting Thumbnail Pick", "Generating Artwork"
+Type is none of  "Audionauts", "Read"     ← added by Jonny 2026-09-04, top level
 AND (any of the following):
-    Type is any of  "Take", "2 Sats", "Read", "Clip"
+    Type is any of  "Take", "2 Sats", "Clip"
     Guests is not empty        ← how Chat / Roundtable qualify
 Custom Image Prompt is not empty   ← added 2026-08-04: wait for Jonny's art direction
 ```
+
+> The `Type is none of` line above is Jonny's edit of 2026-09-04 and is **transcribed from his description, not a screenshot** (I still can't read view filters via the API). It supersedes the 2026-08-11 transcription on this one point: `Read` is no longer in the inner Type list, and the whole view now hard-excludes `Audionauts` and `Read`. If he actually left `Read` in the inner list as well, that's harmless (the top-level rule wins) but tidier to remove.
 
 ⚠️ **`Status is none of "Awaiting Thumbnail Pick", "Generating Artwork"` — the half that keeps getting forgotten.** Older versions of this doc said only "not `Generating Artwork`". The `Awaiting Thumbnail Pick` exclusion is what stops an episode re-entering the view while its options are waiting to be judged, and it has a consequence that is easy to trip over:
 
 > **To re-generate artwork you must move `Status` as well as clearing `Thumbnails`.** Deleting the four `Thumbnails` rows satisfies `Thumbnails is empty` but the episode is still `Awaiting Thumbnail Pick`, so it stays out of the view and nothing happens, silently and with no error anywhere. Set `Status` back to `Approved` (or any state outside the two excluded ones) as well. This is exactly what stalled the 2026-08-11 re-run.
 
-⚠️ **The `Type` list and the code's list disagree.** The view admits `2 Sats` and `Read`, but `Plan Generate` computes `autoArt = ['Take','Chat','Clip','Roundtable'].indexOf(type) !== -1`, so a `2 Sats` or `Read` episode passes the view, starts the workflow, and is immediately routed to `Awaiting Manual Artwork`. `Audionauts` is in neither list. Not necessarily a bug — it may be the intended "let it in, then tell me to do it by hand" path — but know that entering the view is **not** the same as being auto-artable. The full `Type` option set is `Chat`, `Take`, `2 Sats`, `Read`, `Clip`, `Audionauts`, `Roundtable`.
+⚠️ **The `Type` list and the code's list disagree, by design.** The view's Type clause (`Take`, `2 Sats`, `Clip`) is *not* the same as the code's auto-art list. `Plan Generate` computes `autoArt = ['Take','Chat','Clip','Roundtable'].indexOf(type) !== -1`, so a `2 Sats` episode passes the view, starts the workflow, and is immediately routed to `Awaiting Manual Artwork`. `Chat` and `Roundtable` aren't in the view's Type list at all — they get in through the guest clause. So entering the view is **not** the same as being auto-artable. The full `Type` option set is `Chat`, `Take`, `2 Sats`, `Read`, `Clip`, `Audionauts`, `Roundtable`; of those, `Read` and `Audionauts` are now blocked at the view (see below), and `2 Sats` / any guest-less unknown type that still gets in falls to manual.
+
+⚠️ **`Audionauts` and `Read` are now blocked at the view (2026-09-04).** Previously an `Audionauts` episode (they always have guests) qualified through `Guests is not empty` and fired a pointless run to `Awaiting Manual Artwork` (confirmed live on `BA-OSm4rv`). Jonny added a top-level `Type is none of "Audionauts", "Read"` rule to the **generate** view to stop both at the door. This is safe here specifically because the generate view has no other type-driven job — contrast with the **select** view, where a type filter silently broke Clips on 2026-08-20 (see that gotcha; it does not apply here). Note: a `Read`/`Audionauts` episode that somehow still had a guest and got *past* the Type rule would fail the new top-level rule anyway, and one that's arted manually never needed the workflow. No n8n change was needed for this.
 
 ⚠️ **`Custom Image Prompt is not empty` is load-bearing, not cosmetic.** Without it, an episode enters the view the moment `Thumbnail Caption` lands, so a reply that sets the caption first and the art direction second generates artwork off the old prompt and ignores the direction entirely. Jonny replies `default` when he has nothing specific to say, which fills the field (and `Plan Generate` normalises `default`/`none` back to an empty `{{CUSTOM}}`). Note this gate does **not** cover `Thumbnail Moods` — an empty moods field falls back to the whole library rather than stalling, so there's nothing to wait for.
 
-`Type is "Take"` is an unconditional pass; everything else must **earn** entry by having a guest. A guest-less `Chat`/`Clip`/`Roundtable` stays out of the view instead of generating a wrong solo thumbnail. This gate needs no change to support Roundtable — a Roundtable with guests linked already passes via `Guests is not empty`, and `Plan Generate` maps it to the `roundtable` layout (2026-07-06). **Trade-off:** a guest-less `Chat`/`Clip`/`Roundtable` then waits out of the view indefinitely with no automated nudge — there was a `Pod21: Daily Reminders` digest that chased these, but it was deleted 2026-07-21 (one niche job, not worth a standalone workflow). Catch these by hand for now.
+`Type is any of "Take", "2 Sats", "Clip"` passes those three unconditionally; **`Chat` and `Roundtable` must earn entry by having a guest.** A guest-less `Chat`/`Clip`/`Roundtable` stays out of the view instead of generating a wrong solo thumbnail. (Note `Clip` is in both clauses — a Clip with no guest passes on Type, a Clip with one passes on either. `Read` and `Audionauts` never pass, per the top-level rule above.) This gate needs no change to support Roundtable — a Roundtable with guests linked already passes via `Guests is not empty`, and `Plan Generate` maps it to the `roundtable` layout (2026-07-06). **Trade-off:** a guest-less `Chat`/`Clip`/`Roundtable` then waits out of the view indefinitely with no automated nudge — there was a `Pod21: Daily Reminders` digest that chased these, but it was deleted 2026-07-21 (one niche job, not worth a standalone workflow). Catch these by hand for now.
 
 ### 2. `Associated Episode` is a linked-record field
 
@@ -419,7 +467,7 @@ A `Chat`/`Clip`/`Roundtable` that's ready except for a guest silently sits out o
 7. **Resolve Vibes** (Code) - maps the moods **Jonny picked** (`Plan Generate.moods`, from the episode's `Thumbnail Moods`) onto the `Thumbnail References` library by name, case-insensitively, and cycles them across the 4 slots, attaching one host reference photo per slot. Unknown names are dropped; if nothing matches (or the field is empty) it falls back to the whole library, so a typo costs variety and not the run. It emits `moodSource` (`picked` / `fallback-all-moods`) so an execution shows which happened. **Throws only if no library row has a usable `Reference Photo` at all.** *(2026-08-04: replaced `Build Mood Prompt` → `Pick Moods (Gemini)` → `Resolve Vibes`; the first two nodes are deleted, saving one Gemini call per run.)*
 8. **Plan Downloads** (Code, `executeOnce`) - emits one task per image: 4 `host` tasks (slot + photo url) then, for `duo`/`roundtable`, one `guest` task per `Fetch Guests` record that has a `Headshot` (already filtered to this episode). Host tasks always come first so indices stay aligned downstream. ⚠️ **Fixed 2026-08-04:** this branch previously read `if (plan.layout === 'duo')` only, so **Roundtable episodes fetched zero guest photos** and `Build Image Requests` fell through its no-guest-images guard to the `Solo Thumbnail` prompt — a Roundtable rendered as a solo host shot with no error anywhere. Now `duo || roundtable`.
 9. **Download Image** (HTTP GET file, runs N times) → **Image To Base64** (Extract From File → `dataB64`) - downloads + base64s every task in order (in-Code HTTP is unavailable on this runner).
-10. **Build Image Requests** (Code) - **fetches the prompt templates from the `Prompts` Airtable table** (via `$('Fetch Prompts')`), maps `layout` → row `Name` (`solo → Solo Thumbnail`, `duo → Duo Thumbnail`, `roundtable → Roundtable Thumbnail`), and renders the chosen template by substituting `{{HOOK}}`/`{{CONTEXT}}`/`{{VIBE}}`/**`{{CUSTOM}}`** (`{{VARIATION}}` now always renders empty). Zips `Plan Downloads` tasks with the base64 items by index, groups host-by-slot + collects guest parts, then for each of the 4 slots builds a request (host image first, then all guest images for duo/roundtable). Falls back to the `Solo Thumbnail` row if a duo/roundtable episode has no guest images. The `variations[]` framing lines (per-option, solo/duo only) remain hardcoded in this node; a missing prompt row throws `Missing prompt row "..."`.
+10. **Build Image Requests** (Code) - **fetches the prompt templates from the `Prompts` Airtable table** (via `$('Fetch Prompts')`), maps `layout` → row `Name` (`solo → Solo Thumbnail`, `duo → Duo Thumbnail`, `roundtable → Roundtable Thumbnail`), and renders the chosen template by substituting `{{HOOK}}`/`{{CONTEXT}}`/`{{VIBE}}`/**`{{CUSTOM}}`** (`{{VARIATION}}` always renders empty). It then appends one neutral option-specific composition direction: tight crop, medium eye-level crop, wider environmental framing, or asymmetric crop. The direction remains secondary to `{{CUSTOM}}`, preserves subject count, and says nothing about colour or text position. The node zips `Plan Downloads` tasks with the base64 items by index, groups host-by-slot + collects guest parts, then for each of the 4 slots builds a request (host image first, then all guest images for duo/roundtable). It falls back to the `Solo Thumbnail` row if a duo/roundtable episode has no guest images; a missing prompt row throws `Missing prompt row "..."`.
 11. **Generate Thumbnail (Nano Banana)** (HTTP POST `gemini-3-pro-image`) - runs 4x, 120s timeout.
 12. **Extract Images** (Code) - pulls base64 from `candidates[0].content.parts[].inline_data.data`, carries mood/option/episode through.
 13. **Create Thumbnail Row** (HTTP POST Thumbnails, 4x) → **Upload 16x9** (HTTP POST content endpoint, 4x) - row then `16x9` upload, aligned by index.
@@ -444,9 +492,10 @@ A `Chat`/`Clip`/`Roundtable` that's ready except for a guest silently sits out o
 8. **Confirm Thumbnail Set** - Telegram confirmation.
 
 **Reversioning branch (Phase B), reworked 2026-07-08 to be idempotent + notify:**
-**Resolve Selected → Needs Reversion? → Download Selected 16x9 → Selected To Base64 → Fetch Reversion Prompts → Build Reversion Requests → Generate Reversions (Nano Banana) → Extract Reversions → Upload Reversion → Collect Reversions → Send Reversions**
+**Resolve Selected → Needs Reversion? → 16x9 Exists? → Download Selected 16x9 → Selected To Base64 → Fetch Reversion Prompts → Build Reversion Requests → Generate Reversions (Nano Banana) → Extract Reversions → Upload Reversion → Collect Reversions → Send Reversions** (plus **Warn No 16x9 Source** on the `16x9 Exists?` false branch)
 
 8. **Needs Reversion?** (IF) - two AND-ed conditions, both must pass: (a) `need1x1 || need9x16` (at least one ratio missing) and (b) **`reversionOk`** (added 2026-08-20 — the episode's `Type` is not `Read` / `Clip` / `Audionauts`). False on either (both ratios already present, or an excluded type) dead-ends, so nothing downloads or regenerates. Only the true output continues.
+8b. **16x9 Exists?** (IF, added 2026-09-04) - single condition: `sixteenUrl` from `Resolve Selected` is non-empty. True continues to the download. False runs **Warn No 16x9 Source** (Telegram, HTML): tells Jonny the selected row has no 16:9 to build from (usually hand-deleted images) and how to regenerate from scratch (delete the Thumbnails row, set the episode back to `Approved`). Pre-2026-09-04 this situation crashed `Download Selected 16x9` with an empty-URL error (the 2026-07-31 `Thumbnail-uGMKKG` failure).
 9. **Download Selected 16x9** (HTTP GET, file) - fetches the chosen 16:9 from its Airtable attachment URL (no auth; signed URL).
 10. **Selected To Base64** (Extract From File, `binaryToPropery → dataB64`) - in-Code HTTP is unavailable on this task runner, so the image is base64'd via a node.
 11. **Fetch Reversion Prompts** (HTTP GET) - reads the `Thumbnail Prompts` table (same table ID as `Fetch Prompts`). Wired inline here so `Build Reversion Requests` can read it via `$('Fetch Reversion Prompts')`; because this node sits between `Selected To Base64` and `Build Reversion Requests`, the Code node reads the base64 via `$('Selected To Base64')` (not `$json`).
@@ -457,7 +506,7 @@ A `Chat`/`Clip`/`Roundtable` that's ready except for a guest silently sits out o
 16. **Collect Reversions** (Code) - emits **one item per newly-generated image**. Resolves each new image's URL from the `Upload Reversion` response by **matching the uploaded `filename`** (NOT by field name — the `uploadAttachment` response keys `fields` by field ID, and can also contain pre-existing attachments; see gotcha). No pre-existing versions, no padding.
 17. **Send Reversions** (Telegram `sendPhoto`, runs once per item) - posts each new reversion to the group as its own message (`{{ $json.photoUrl }}` + caption, HTML). So a re-select that regenerated only the 1:1 sends exactly one message with the new 1:1; a first-time pick that made both sends two messages.
 
-**Confirm Thumbnail Set** (on the reject branch) uses a conditional expression on `Resolve Selected` so its closing line matches what the reversioning branch is actually doing. **`reversionOk` is checked first** (2026-08-20): when it is false the line reads "No 1:1 or 9:16 versions are generated for `<Type>` episodes" — otherwise it falls through to the existing `need1x1`/`need9x16` wording ("Generating 1:1 and 9:16 versions now" / "Generating the 1:1 version now" / "...the 9:16 version now" / "Both 1:1 and 9:16 versions are already in place"). Without that first check the message promised versions for a Clip that were never going to arrive.
+**Confirm Thumbnail Set** (on the reject branch) uses a conditional expression on `Resolve Selected` so its closing line matches what the reversioning branch is actually doing. **`reversionOk` is checked first** (2026-08-20): when it is false the line reads "No 1:1 or 9:16 versions are generated for `<Type>` episodes" — otherwise it falls through to the existing `need1x1`/`need9x16` wording ("Generating 1:1 and 9:16 versions now" / "Generating the 1:1 version now" / "...the 9:16 version now" / "Both 1:1 and 9:16 versions are already in place"). Without that first check the message promised versions for a Clip that were never going to arrive. **A missing-16:9 check sits between the two** (2026-09-04): when a reversion is needed but `sixteenUrl` is empty, the line instead reads "However, the 16:9 source image is missing from the thumbnail row, so the 1:1 and 9:16 versions could not be generated...", matching what `16x9 Exists?` actually did.
 
 ### Path 3 - Revision (added 2026-07-26)
 
@@ -495,7 +544,7 @@ Briefed, in-place, targeted redo of an already-picked thumbnail. Trigger fires w
 - **Gemini credential is "Header Auth", and the Gemini nodes default to AgentMail** until you point them at `Gemini API Key [n8n]` - see Required credentials above.
 - **Artwork silently never starts if `Custom Image Prompt` is empty (by design).** The trigger view requires it. So an episode that has a transcript, summary, caption and guest but no art direction just sits out of the view with **no error and no nudge** — the same failure mode as the guest-less episode above. If Jonny says "the thumbnails never came", check that field first. There is no automated chaser.
 - **Mood names are matched against `Thumbnail References`, so renaming a mood row orphans past picks.** Matching is by name (case-insensitive), not by record ID, because `Thumbnail Moods` is plain text. Rename a mood in the library and any episode whose `Thumbnail Moods` still says the old name silently falls back to the whole library. The execution shows which happened: `Resolve Vibes` emits `moodSource` = `picked` or `fallback-all-moods`.
-- **One mood = four similar options.** Losing the four hardcoded `{{VARIATION}}` framing lines means variety now comes only from the moods picked plus whatever `{{CUSTOM}}` says. Picking a single mood is legitimate but will return four closely-related images. Pick two or more, or put the variation back into the Airtable template, if the set feels too samey.
+- **One mood still needs four distinct requests.** `BA-epafwr` proved that mood and `{{CUSTOM}}` alone can leave every request effectively identical. Since 2026-09-09, `Build Image Requests` appends a different neutral composition direction to each slot even when all four share one mood. Keep these directions lower priority than `{{CUSTOM}}`, and do not add palette, text-position, or subject-count changes to them.
 - **Strip prescriptive art direction out of the templates or it fights `{{CUSTOM}}` — but make the house style an explicit *default*, not an absence.** A template that flatly hardcodes lighting or palette will contradict Jonny's prompt, and contradictory prompts are the known cause of `IMAGE_OTHER` (see above). Deleting the palette outright is the opposite mistake: it cost the show its brand look (see the next bullet). The 2026-08-18 shape solves both at once — state the palette, then end the block with "if the ART DIRECTION section below asks for a different look or different colours, follow the ART DIRECTION and ignore this block". The model gets one instruction with a stated precedence order instead of two competing ones. Paste-ready templates are in [Mood + prompt handover](#mood--prompt-handover-2026-08-04).
 - **A prompt that says nothing about colour is not neutral — the model picks its own default, and its default is blue.** Between 2026-08-04 and 2026-08-18 the layout templates named no palette at all. Nano Banana filled the gap with cool blue/cyan circuitry backdrops on AI and tech topics, and the back catalogue's warm orange-on-near-black identity quietly disappeared. Jonny spotted it by eye, comparing new thumbnails against old ones, not from any error. **Nothing failed and nothing logged** — an unstated preference degrades silently, which makes prompt deletions far riskier than they look. Related trap: `Custom Image Prompt` renders into the strongest position in the whole prompt (`ART DIRECTION`, last before the output constraints), but in practice Jonny writes composition notes there ("Thumbnail caption in white"), not colour direction. Do not assume a free-text field is carrying the art direction just because it *could*.
 - **Album = static 4 slots, padded.** The Telegram node builds `sendMediaGroup` from its **static per-slot config** (`urls[0..3]`), not from an array expression — binding the whole `media` collection to `{{ ...mediaGroup }}` does NOT work (Telegram throws "can't parse InputMedia: media not found"). So `Collect Thumbnails` pads short sets to 4 by repeating the last image; on the rare `<4` run the album shows a duplicate (cosmetic — the real Thumbnails rows in Airtable still have the correct count, and picking is by row Status). Throws if `<2`.
@@ -512,11 +561,12 @@ Briefed, in-place, targeted redo of an already-picked thumbnail. Trigger fires w
 - **Phase B is idempotent (2026-07-08).** On (re-)select, `Resolve Selected` detects which of `1x1`/`9x16` are missing; the `Needs Reversion?` IF skips the whole branch if both exist, and `Build Reversion Requests` regenerates only the missing ones. So re-selecting a fully-arted row costs nothing, and deleting one attachment + re-selecting regenerates just that one. `Send Reversions` posts only what was regenerated.
 - **Unlink is permanent for rejects.** On select, the rejected rows are dropped from the Episode `Thumbnails` link, so a later Path 1 re-run won't find/clear them via `fields.Thumbnails` — they linger as orphaned `Rejected` rows in the Thumbnails table. Delete by hand if you care about hygiene.
 - **Airtable Trigger `Fields`** left empty on purpose; if you ever restrict it, include `Last Modified Time` and use commas with no spaces (a hook lints this).
-- **Content type + guests.** `Type` must be `Take`/`Chat`/`Clip`/`Roundtable` to auto-generate; anything else/blank-unknown is sent to manual with `Status = Awaiting Manual Artwork`. For `Chat`/`Clip`/`Roundtable`, link the people via the Episodes `Guests` field and give each `Guests` row a `Headshot` — a guest with no headshot is silently skipped, and a duo/roundtable episode with **zero** usable guest images falls back to the `Solo Thumbnail` prompt.
+- **Content type + guests.** `Type` must be `Take`/`Chat`/`Clip`/`Roundtable` to auto-generate; anything else/blank-unknown is sent to manual with `Status = Awaiting Manual Artwork`. (`Read` and `Audionauts` are also blocked earlier, at the generate view — see the view-gate section.) For `Chat`/`Clip`/`Roundtable`, link the people via the Episodes `Guests` field and give each `Guests` row a `Headshot` — a guest with no headshot is silently skipped, and a duo/roundtable episode with **zero** usable guest images falls back to the `Solo Thumbnail` prompt.
 - **Prompts live in Airtable now (2026-07-06).** To change any image-gen prompt, edit the `Thumbnail Prompts` table, NOT the workflow. Row `Name` must match exactly (`Solo Thumbnail` / `Duo Thumbnail` / `Roundtable Thumbnail`) or the run throws `Missing prompt row "..."`. The `Fetch Prompts` node must stay wired upstream of `Build Image Requests`. **This whole Airtable-prompt + Roundtable path is UNTESTED as of 2026-07-06 — run a real Roundtable episode (Type=Roundtable, guests linked with headshots, caption/summary/transcript filled) and confirm before relying on it.**
 - **Host must not appear in `Guests` (host-rendered-twice bug, fixed 2026-07-25, UNTESTED).** The host's face is always composited from `Thumbnail References` (image 1). If Guy is **also** linked in the episode's `Guests` field, the duo/roundtable path adds his headshot a **second** time and Nano Banana draws him twice. This bit exec #1318 (episode `rec3YKGUCKqRBtgqP`, a `Clip`): its `Guests` held both Bitcoin Mechanic **and** Guy (`recs8srWCoJwDuzLn`, guy@bitcoinaudible.com), so the thumbnails came back as Guy + Guy + Bitcoin Mechanic. Root cause is data: `Guests` is meant for non-host participants only, and `Clip → inherit guest from parent` copies the parent's `Guests` wholesale — so a host sitting in the parent's `Guests` propagates to every clip. **Two-layer fix:** (1) **data** — keep the host out of every episode's `Guests` (remove Guy from the parent episode and any clips); (2) **code guard** — `Plan Generate` now strips `HOST_GUEST_REC_ID` (`recs8srWCoJwDuzLn`, "Guy") from `guestIds` so he can never be double-rendered regardless of the data. The id is hardcoded, matching this instance's convention (the Telegram chat id is hardcoded too, since `$env` is blocked). If the host's `Guests` record id ever changes, update `HOST_GUEST_REC_ID`. Not yet run end-to-end.
 - **Index alignment.** `Build Image Requests` zips `Plan Downloads` tasks with the downloaded base64 items **by position**, relying on the HTTP node preserving item order (host slots 0-3 first, guests after). If you reorder `Plan Downloads`, keep hosts first.
 - **Path 3 revisions clear-then-upload; revise one row at a time.** On a `Final` row the attachment fields are populated, so Path 3 blanks the targeted field(s) (`Clear Target Fields`) before uploading — sources are downloaded first so the self-edit isn't lost. Like the select path, the chain is built around a **single row's** targets; flipping several rows to `Revising` in one 60s poll is untested. Also: scope the `Revision Requested` view to `Status = Revising` so a row leaves it once the run sets `Status = Final` (else it can re-fire on the next edit). A malformed row (no brief / no valid target) **throws** and stays `Revising` until corrected.
+- **Path 3 subject count is prompt-enforced, not programmatically verified.** The `Artwork Revision` prompt requires the output to contain exactly the source image's number of people, each exactly once, after a side-by-side request for `BA-PgJMzX` duplicated one guest. Nano Banana can still disobey an image instruction, so inspect the next real multi-person revision. A hard guarantee would require a separate image-analysis check and retry loop, which is not built.
 - Workflow is **active** (`mLAn4ya2AmZoHDUk`, SDK-sourced). Schema/credential setup must be in place before the next `Approved`/`Selected`/`Revising` fires. After any SDK push, **all HTTP-node credentials are skipped and must be rebound by hand** (triggers + Telegram bind fine); reconcile canvas hand-edits back into the `.sdk.js`.
 
 ---
