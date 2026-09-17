@@ -28,11 +28,11 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-08-20. Artwork Path 2 now skips the 1:1 / 9:16 versions for `Clip`,
-`Read` and `Audionauts` episodes; the reject/status half of Path 2 still runs for every
-type. Previously: 2026-08-11, when the thumbnail view's filter was transcribed from the
-real Airtable UI rather than from memory and the Jonny-picked-moods path was confirmed
-working (exec #1752).*
+*Last updated 2026-09-14. `_skip` now makes a Frame.io upload fully invisible to the
+pipeline. Artwork options also get restrained, per-slot composition directions so a
+one-mood run does not send identical requests. Previously: 2026-08-20, Artwork Path 2
+skipped the 1:1 / 9:16 versions for `Clip`, `Read` and `Audionauts` episodes while the
+reject/status half continued for every type.*
 
 > **How the agent should use it:** the pipeline is a state machine keyed on the
 > Episode `Status` field. To answer "what does this episode need before X runs?",
@@ -183,10 +183,12 @@ Episodes table `tbl3uYLIvtB9APZp6`.
 ### 3. Frame.io Uploaded > AI Metadata
 - **Fires:** a file becomes ready in the Frame.io project (any upload).
 - **Preconditions checklist (for the full AI run):**
-  - [ ] The uploaded file is **video or audio** (images / PDFs are skipped with a heads-up).
-  - [ ] The filename starts with the episode ID, `BA-{id}_...` (this is how the
-        upload is matched to the episode). No prefix = no episode match.
-  - [ ] The filename does **not** end in `_bypass` (that forces a URL-only refresh).
+- [ ] The uploaded file is **video or audio** (images / PDFs are skipped with a heads-up).
+- [ ] The filename starts with the episode ID, `BA-{id}_...` (this is how the
+      upload is matched to the episode). No prefix = no episode match.
+- [ ] The filename does **not** end in `_skip` (case-insensitive, extension ignored).
+      `_skip` stops the workflow completely: no Airtable write, URL refresh, or Telegram message.
+- [ ] The filename does **not** end in `_bypass` (that forces a URL-only refresh).
   - [ ] The upload is **not** a same-length re-export of an existing cut (that also
         forces a URL-only refresh; audio always runs the full pipeline).
 - **Does (full run):** transcribes the media, generates 5 title options, 5
@@ -251,10 +253,12 @@ Three paths in one workflow.
   `Awaiting Manual Artwork`. `Audionauts` is in neither list. Entering the view is not
   the same as being auto-artable.
 - **What makes the 4 options differ:** the moods in `Thumbnail Moods`, cycled across the
-  slots, plus whatever `Custom Image Prompt` says. **Jonny picks the moods** — an AI step
-  used to choose them and was removed on 2026-08-11, along with four hardcoded framing
-  variations. Consequence worth stating if he asks why the options look alike: picking a
-  **single** mood now gives four closely-related images.
+  slots, whatever `Custom Image Prompt` says, and one restrained composition direction
+  per slot (tight, medium eye-level, wider environmental, or asymmetric crop). **Jonny
+  picks the moods**; the old AI mood-picker and prescriptive framing variations are gone.
+  The new composition directions are secondary to Jonny's prompt, preserve subject count,
+  and deliberately do not control colour or text position. They were added 2026-09-09
+  after a one-mood run sent effectively identical requests and returned duplicate options.
 - **Diagnosing "it ignored my moods":** the `Resolve Vibes` node emits a `moodSource`
   field on every run. `picked` means his chosen moods were used; `fallback-all-moods`
   means none of them matched the `Thumbnail References` library by name and the whole

@@ -15,7 +15,10 @@ const revisionRequested = trigger({
       triggerField: 'Last Modified Time',
       additionalFields: { viewId: 'viwGVYiheuTD2pPlx' }
     },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') }
+    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') },
+    retryOnFail: true,
+    maxTries: 5,
+    waitBetweenTries: 5000
   },
   output: [{}]
 });
@@ -158,7 +161,7 @@ const generateRevisionsNanoBanana = node({
       jsonBody: '={{ $json.requestBody }}',
       options: { response: { response: { neverError: true } }, timeout: 120000 }
     },
-    credentials: { httpHeaderAuth: newCredential('Gemini API Key [n8n]') },
+    credentials: { httpHeaderAuth: newCredential('google-ai-studio_[pod21-n8n-temp]') },
     retryOnFail: true
   },
   output: [{}]
@@ -427,7 +430,7 @@ const buildImageRequests = node({
   config: {
     name: "Build Image Requests",
     position: [3136,-128],
-    parameters: {"jsCode":"const IMAGE_SIZE = '1K';\nconst tasks  = $('Plan Downloads').all();\nconst files  = $('Image To Base64').all();\nconst vibes  = $('Resolve Vibes').all();\nconst plan   = $('Plan Generate').first().json;\nconst layout = plan.layout || 'solo';   // 'solo' | 'duo' | 'roundtable'\n\n// ---- prompt templates pulled from Airtable (Thumbnail Prompts table) ----\nconst promptRecs = (($('Fetch Prompts').first() || {}).json || {}).records || [];\nconst P = {};\nfor (const r of promptRecs) {\n  const rf = r.fields || {};\n  if (rf.Name) P[rf.Name] = rf.Prompt || '';\n}\nconst ROW_BY_LAYOUT = { solo: 'Solo Thumbnail', duo: 'Duo Thumbnail', roundtable: 'Roundtable Thumbnail' };\nfunction tpl(lay) {\n  const rowName = ROW_BY_LAYOUT[lay];\n  const t = P[rowName];\n  if (!t) throw new Error('Missing prompt row \"' + rowName + '\" in Thumbnail Prompts (layout: ' + lay + ')');\n  return t;\n}\nconst render = (t, v) => t.replace(/\\{\\{(\\w+)\\}\\}/g, (_, k) => (v[k] != null ? v[k] : ''));\n\n// Jonny's per-episode art direction, from the \"Custom Image Prompt\" he gave in\n// reply to the metadata workflow's packaging message. It fills the {{CUSTOM}}\n// token wherever he's positioned it in the Airtable template. \"default\" was\n// already normalised to '' in Plan Generate, so the token just disappears.\nconst customPrompt = plan.customPrompt || '';\n\n// NOTE: the four hardcoded per-option framing lines ({{VARIATION}}) were removed\n// on 2026-08-04. Variety across the 4 options now comes from the moods Jonny\n// picks; his custom prompt is the only other steer. {{VARIATION}} still renders\n// as empty if an old template still contains it.\n\n// zip download tasks with their base64 by position (hosts first, then guests)\nconst hostBySlot = {};\nconst guestParts = [];\nfor (let i = 0; i < tasks.length; i++) {\n  const t = (tasks[i] || {}).json || {};\n  const b64 = ((files[i] || {}).json || {}).dataB64;\n  if (!b64) continue;\n  if (t.kind === 'host') hostBySlot[t.slot] = { mime: t.mime || 'image/jpeg', data: b64 };\n  else if (t.kind === 'guest') guestParts.push({ inline_data: { mime_type: t.mime || 'image/jpeg', data: b64 } });\n}\n\nconst useGuests = layout !== 'solo' && guestParts.length > 0;\nconst key = useGuests ? layout : 'solo';   // duo/roundtable with no guest images fall back to solo\n\nconst out = [];\nfor (let i = 0; i < vibes.length; i++) {\n  const m = (vibes[i] || {}).json || {};\n  const host = hostBySlot[i];\n  if (!host) throw new Error('No host image for option ' + (i + 1));\n  const prompt = render(tpl(key), {\n    HOOK: m.caption,\n    CONTEXT: m.summary || m.caption,\n    VIBE: m.vibe,\n    CUSTOM: customPrompt,\n    VARIATION: ''\n  });\n  const parts = [{ text: prompt }, { inline_data: { mime_type: host.mime, data: host.data } }];\n  if (useGuests) for (let g = 0; g < guestParts.length; g++) parts.push(guestParts[g]);\n  out.push({\n    json: {\n      episodeId: m.episodeId, title: m.title, caption: m.caption, mood: m.vibe,\n      optionIndex: m.optionIndex || (i + 1), layout: key, imageCount: parts.length - 1,\n      requestBody: { contents: [{ parts: parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9', imageSize: IMAGE_SIZE } } }\n    },\n    pairedItem: { item: 0 }\n  });\n}\nreturn out;"}
+    parameters: {"jsCode":"const IMAGE_SIZE = '1K';\nconst tasks  = $('Plan Downloads').all();\nconst files  = $('Image To Base64').all();\nconst vibes  = $('Resolve Vibes').all();\nconst plan   = $('Plan Generate').first().json;\nconst layout = plan.layout || 'solo';   // 'solo' | 'duo' | 'roundtable'\n\n// ---- prompt templates pulled from Airtable (Thumbnail Prompts table) ----\nconst promptRecs = (($('Fetch Prompts').first() || {}).json || {}).records || [];\nconst P = {};\nfor (const r of promptRecs) {\n  const rf = r.fields || {};\n  if (rf.Name) P[rf.Name] = rf.Prompt || '';\n}\nconst ROW_BY_LAYOUT = { solo: 'Solo Thumbnail', duo: 'Duo Thumbnail', roundtable: 'Roundtable Thumbnail' };\nfunction tpl(lay) {\n  const rowName = ROW_BY_LAYOUT[lay];\n  const t = P[rowName];\n  if (!t) throw new Error('Missing prompt row \"' + rowName + '\" in Thumbnail Prompts (layout: ' + lay + ')');\n  return t;\n}\nconst render = (t, v) => t.replace(/\\{\\{(\\w+)\\}\\}/g, (_, k) => (v[k] != null ? v[k] : ''));\n\n// Jonny's per-episode art direction, from the \"Custom Image Prompt\" he gave in\n// reply to the metadata workflow's packaging message. It fills the {{CUSTOM}}\n// token wherever he's positioned it in the Airtable template. \"default\" was\n// already normalised to '' in Plan Generate, so the token just disappears.\nconst customPrompt = plan.customPrompt || '';\n\n// Without per-option framing, one-mood runs otherwise send four identical requests.\nconst optionVariants = [\n  'Secondary to explicit producer instructions: create a visibly different composition with a restrained tight crop and close camera framing, without changing the subject count.',\n  'Secondary to explicit producer instructions: create a visibly different composition with a restrained medium crop from an eye-level camera, without changing the subject count.',\n  'Secondary to explicit producer instructions: create a visibly different composition with restrained wider environmental framing, without changing the subject count.',\n  'Secondary to explicit producer instructions: create a visibly different composition with a restrained asymmetric crop, without changing the subject count.'\n];\n\n// zip download tasks with their base64 by position (hosts first, then guests)\nconst hostBySlot = {};\nconst guestParts = [];\nfor (let i = 0; i < tasks.length; i++) {\n  const t = (tasks[i] || {}).json || {};\n  const b64 = ((files[i] || {}).json || {}).dataB64;\n  if (!b64) continue;\n  if (t.kind === 'host') hostBySlot[t.slot] = { mime: t.mime || 'image/jpeg', data: b64 };\n  else if (t.kind === 'guest') guestParts.push({ inline_data: { mime_type: t.mime || 'image/jpeg', data: b64 } });\n}\n\nconst useGuests = layout !== 'solo' && guestParts.length > 0;\nconst key = useGuests ? layout : 'solo';   // duo/roundtable with no guest images fall back to solo\n\nconst out = [];\nfor (let i = 0; i < vibes.length; i++) {\n  const m = (vibes[i] || {}).json || {};\n  const host = hostBySlot[i];\n  if (!host) throw new Error('No host image for option ' + (i + 1));\n  const prompt = render(tpl(key), {\n    HOOK: m.caption,\n    CONTEXT: m.summary || m.caption,\n    VIBE: m.vibe,\n    CUSTOM: customPrompt,\n    VARIATION: ''\n  }) + '\\n\\nOPTION-SPECIFIC COMPOSITION DIRECTIVE:\\n' + optionVariants[i];\n  const parts = [{ text: prompt }, { inline_data: { mime_type: host.mime, data: host.data } }];\n  if (useGuests) for (let g = 0; g < guestParts.length; g++) parts.push(guestParts[g]);\n  out.push({\n    json: {\n      episodeId: m.episodeId, title: m.title, caption: m.caption, mood: m.vibe,\n      optionIndex: m.optionIndex || (i + 1), layout: key, imageCount: parts.length - 1,\n      requestBody: { contents: [{ parts: parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9', imageSize: IMAGE_SIZE } } }\n    },\n    pairedItem: { item: 0 }\n  });\n}\nreturn out;"}
   },
   output: [{}]
 });
@@ -439,7 +442,7 @@ const generateThumbnailNanoBanana = node({
     name: "Generate Thumbnail (Nano Banana)",
     position: [3360,-128],
     parameters: {"method":"POST","url":"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ $json.requestBody }}","options":{"response":{"response":{"neverError":true}},"timeout":120000}},
-    credentials: { httpHeaderAuth: newCredential("Gemini API Key [n8n]") }
+    credentials: { httpHeaderAuth: newCredential("google-ai-studio_[pod21-n8n-temp]") }
   },
   output: [{}]
 });
@@ -561,7 +564,10 @@ const thumbnailSelected = trigger({
     name: "Thumbnail Selected",
     position: [0,384],
     parameters: {"pollTimes":{"item":[{"mode":"everyMinute"}]},"authentication":"airtableTokenApi","baseId":{"__rl":true,"mode":"id","value":"app8Xw9Tq0XLjhmp9"},"tableId":{"__rl":true,"value":"tblkcASzE4DXlxokO","mode":"id"},"triggerField":"Last Modified Time","additionalFields":{"viewId":"viw7AHjnX9ZkvIrKo"}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
+    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") },
+    retryOnFail: true,
+    maxTries: 5,
+    waitBetweenTries: 5000
   },
   output: [{}]
 });
@@ -642,7 +648,7 @@ const confirmThumbnailSet = node({
   config: {
     name: "Confirm Thumbnail Set",
     position: [1776,288],
-    parameters: {"chatId":"-5254203539","text":"=Thumbnail selected for \"{{ $(\"Compute Rejects\").item.json.titleHtml }}\" ({{ $(\"Compute Rejects\").item.json.episodeDisplayId || \"no-id\" }}). Episode is now Artwork Ready. {{ !$(\"Resolve Selected\").first().json.reversionOk ? (\"No 1:1 or 9:16 versions are generated for \" + ($(\"Resolve Selected\").first().json.episodeType || \"this\") + \" episodes.\") : ( ($(\"Resolve Selected\").first().json.need1x1 && $(\"Resolve Selected\").first().json.need9x16) ? \"Generating 1:1 and 9:16 versions now.\" : ($(\"Resolve Selected\").first().json.need1x1 ? \"Generating the 1:1 version now.\" : ($(\"Resolve Selected\").first().json.need9x16 ? \"Generating the 9:16 version now.\" : \"Both 1:1 and 9:16 versions are already in place.\")) ) }}","additionalFields":{"appendAttribution":false,"parse_mode":"HTML"}},
+    parameters: {"chatId":"-5254203539","text":"=Thumbnail selected for \"{{ $(\"Compute Rejects\").item.json.titleHtml }}\" ({{ $(\"Compute Rejects\").item.json.episodeDisplayId || \"no-id\" }}). Episode is now Artwork Ready. {{ !$(\"Resolve Selected\").first().json.reversionOk ? (\"No 1:1 or 9:16 versions are generated for \" + ($(\"Resolve Selected\").first().json.episodeType || \"this\") + \" episodes.\") : ( (($(\"Resolve Selected\").first().json.need1x1 || $(\"Resolve Selected\").first().json.need9x16) && !$(\"Resolve Selected\").first().json.sixteenUrl) ? \"However, the 16:9 source image is missing from the thumbnail row, so the 1:1 and 9:16 versions could not be generated. See the follow-up message for how to regenerate.\" : ( ($(\"Resolve Selected\").first().json.need1x1 && $(\"Resolve Selected\").first().json.need9x16) ? \"Generating 1:1 and 9:16 versions now.\" : ($(\"Resolve Selected\").first().json.need1x1 ? \"Generating the 1:1 version now.\" : ($(\"Resolve Selected\").first().json.need9x16 ? \"Generating the 9:16 version now.\" : \"Both 1:1 and 9:16 versions are already in place.\")) ) ) }}","additionalFields":{"appendAttribution":false,"parse_mode":"HTML"}},
     credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
     webhookId: "9ea34dee-3ad3-4f8a-b294-2cd7a853dabd"
   },
@@ -690,7 +696,7 @@ const generateReversionsNanoBanana = node({
     name: "Generate Reversions (Nano Banana)",
     position: [1776,480],
     parameters: {"method":"POST","url":"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ $json.requestBody }}","options":{"response":{"response":{"neverError":true}},"timeout":120000}},
-    credentials: { httpHeaderAuth: newCredential("Gemini API Key [n8n]") },
+    credentials: { httpHeaderAuth: newCredential("google-ai-studio_[pod21-n8n-temp]") },
     retryOnFail: true
   },
   output: [{}]
@@ -727,7 +733,10 @@ const readyFor16x9Thumbnail = trigger({
     name: "Ready for 16X9 Thumbnail",
     position: [0,-32],
     parameters: {"pollTimes":{"item":[{"mode":"everyMinute"}]},"authentication":"airtableTokenApi","baseId":{"__rl":true,"mode":"id","value":"app8Xw9Tq0XLjhmp9"},"tableId":{"__rl":true,"mode":"id","value":"tbl3uYLIvtB9APZp6"},"triggerField":"Last Modified Time","additionalFields":{"viewId":"viwqgtrry8n6yNgqW"}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
+    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") },
+    retryOnFail: true,
+    maxTries: 5,
+    waitBetweenTries: 5000
   },
   output: [{}]
 });
@@ -791,6 +800,30 @@ const needsReversion = ifElse({
   output: [{}]
 });
 
+const sixteenExists = ifElse({
+  type: "n8n-nodes-base.if",
+  version: 2.2,
+  config: {
+    name: "16x9 Exists?",
+    position: [768,480],
+    parameters: {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"cond-sixteen","leftValue":"={{ $json.sixteenUrl }}","rightValue":"","operator":{"type":"string","operation":"notEmpty","singleValue":true}}],"combinator":"and"},"options":{}}
+  },
+  output: [{}]
+});
+
+const warnNo16x9Source = node({
+  type: "n8n-nodes-base.telegram",
+  version: 1.2,
+  config: {
+    name: "Warn No 16x9 Source",
+    position: [768,656],
+    parameters: {"chatId":"-5254203539","text":"=⚠️ <b>Artwork rebuild skipped.</b> The thumbnail row that was selected (<code>{{ $json.selectedRowId }}</code>) has no 16:9 image on it, so there is nothing to build the 1:1 and 9:16 versions from. This usually means the images were deleted from the row by hand.\n\n<b>To regenerate from scratch:</b> delete that row from the Thumbnails table, then set the episode Status back to Approved. Four fresh options will be generated within a minute.","additionalFields":{"appendAttribution":false,"parse_mode":"HTML"}},
+    credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
+    webhookId: "d9262810-d45b-4fbd-b85f-b65bf30e389b"
+  },
+  output: [{}]
+});
+
 const checkExtraPicks = node({
   type: "n8n-nodes-base.code",
   version: 2,
@@ -835,9 +868,11 @@ export default workflow('guys-take-thumbnail-artwork', "BA: Guy's Take Thumbnail
     .to(markEpisodeArtworkReady).to(markSelectedFinal).to(confirmThumbnailSet))
   .add(resolveSelected)
   .to(needsReversion
-    .onTrue(downloadSelected16x9.to(selectedToBase64).to(fetchReversionPrompts)
-      .to(buildReversionRequests).to(generateReversionsNanoBanana).to(extractReversions)
-      .to(uploadReversion).to(collectReversions).to(sendReversions)))
+    .onTrue(sixteenExists
+      .onTrue(downloadSelected16x9.to(selectedToBase64).to(fetchReversionPrompts)
+        .to(buildReversionRequests).to(generateReversionsNanoBanana).to(extractReversions)
+        .to(uploadReversion).to(collectReversions).to(sendReversions))
+      .onFalse(warnNo16x9Source)))
   .add(thumbnailSelected)
   .to(checkExtraPicks.to(sendATextMessage))
   // ---- Path 3: Revision (Thumbnails row enters "Revision Requested") ----

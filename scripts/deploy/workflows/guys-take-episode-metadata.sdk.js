@@ -89,7 +89,7 @@ try {
 } catch (e) {}
 const moodsText = moodList.length
   ? moodList.map(function (m, i) { return (i + 1) + '. ' + esc(m); }).join(NL)
-  : '(none - the Thumbnail References table is empty)';
+  : '(none — the Thumbnail References table is empty)';
 const guestsText = guestNames.length ? esc(guestNames.join(', ')) : 'none linked yet';
 const currentTitleText = currentTitle ? esc(currentTitle) : 'not set yet';
 function preview(value) {
@@ -114,6 +114,7 @@ for (const it of items) {
   const o = (it.json && it.json.output) ? it.json.output : (it.json || {});
   const titles = Array.isArray(o.titles) ? o.titles : [];
   const caps = Array.isArray(o.thumbnail_captions) ? o.thumbnail_captions : [];
+  const iconographyIdeas = Array.isArray(o.iconography_ideas) ? o.iconography_ideas : [];
   const desc = o.description || '';
   const summary = o.summary || '';
   const chaptersRaw = Array.isArray(o.chapters) ? o.chapters : [];
@@ -127,6 +128,8 @@ for (const it of items) {
   for (let i = 0; i < titles.length; i++) md += (i + 1) + '. ' + titles[i] + NL;
   md += NL + '## Thumbnail caption options' + NL;
   for (let i = 0; i < caps.length; i++) md += (i + 1) + '. ' + caps[i] + NL;
+  md += NL + '## Visual iconography ideas' + NL;
+  for (let i = 0; i < iconographyIdeas.length; i++) md += (i + 1) + '. ' + iconographyIdeas[i] + NL;
   md += NL + '## Description (with timecodes)' + NL + NL + desc + NL;
   if (summary) md += NL + '## Summary' + NL + NL + summary + NL;
   const titlesText = titles.slice(0, 5).map(function (t, i) { return (i + 1) + '. ' + t; }).join(NL);
@@ -136,15 +139,18 @@ for (const it of items) {
   // back to an option without inferring the numbering.
   const titlesTextHtml = titles.slice(0, 5).map(function (t, i) { return 'T' + (i + 1) + '. ' + esc(t); }).join(NL);
   const capsTextHtml = caps.slice(0, 5).map(function (c, i) { return 'TC' + (i + 1) + '. ' + esc(c); }).join(NL);
+  const iconographyTextHtml = iconographyIdeas.length
+    ? iconographyIdeas.slice(0, 10).map(function (idea, i) { return (i + 1) + '. ' + esc(idea); }).join(NL)
+    : 'No visual ideas returned. Use your own art direction.';
   const b64 = Buffer.from(md, 'utf8').toString('base64');
   const safe = String(title).split('').filter(function (c) { return /[a-zA-Z0-9 _-]/.test(c); }).join('').trim().slice(0, 50) || 'episode';
-  out.push({ json: { md: md, mdBase64: b64, fileName: 'Metadata - ' + safe + '.md', titlesText: titlesText, capsText: capsText, titlesTextHtml: titlesTextHtml, capsTextHtml: capsTextHtml, episodeTitle: title, episodeTitleHtml: esc(title), episodeId: episodeId, moodsText: moodsText, guestsText: guestsText, currentTitleText: currentTitleText, overwriteWarningText: overwriteWarningText, summary: summary, chaptersJson: chaptersJson, chaptersText: chaptersText, chaptersJsonBase64: chaptersJsonBase64, chaptersFileName: chaptersFileName, frameioUrl: frameioUrl, transcriptText: transcriptText } });
+  out.push({ json: { md: md, mdBase64: b64, fileName: 'Metadata - ' + safe + '.md', titlesText: titlesText, capsText: capsText, titlesTextHtml: titlesTextHtml, capsTextHtml: capsTextHtml, iconographyTextHtml: iconographyTextHtml, episodeTitle: title, episodeTitleHtml: esc(title), episodeId: episodeId, moodsText: moodsText, guestsText: guestsText, currentTitleText: currentTitleText, overwriteWarningText: overwriteWarningText, summary: summary, chaptersJson: chaptersJson, chaptersText: chaptersText, chaptersJsonBase64: chaptersJsonBase64, chaptersFileName: chaptersFileName, frameioUrl: frameioUrl, transcriptText: transcriptText } });
 }
 return out;`;
 
 const transcribePrompt = "You are a precise transcription engine. Transcribe the ENTIRE audio of the supplied video or audio file verbatim. Do not summarise, paraphrase, or omit anything. At the start of each new topic or roughly every 30-60 seconds, insert a timecode marker in the form [MM:SS] on its own. Where two or more distinct speakers are present, label turns as 'Speaker 1:', 'Speaker 2:' etc. Output plain text only.";
 
-const metadataSystemPrompt = "You are the YouTube growth editor for Guy's Take, a punchy Bitcoin and sovereign-tech commentary show hosted by Guy. From the supplied transcript produce packaging options. Return a JSON object with EXACTLY these five keys: (1) titles: array of exactly 5 high-CTR YouTube title strings, punchy, max 70 chars, no emojis; (2) thumbnail_captions: array of exactly 5 ultra-short viral thumbnail captions, 2-5 words each; (3) description: a single string opening with a 2-3 sentence hook paragraph, then a line 'Chapters:' followed by timecoded chapter markers each on its own line formatted as 'MM:SS Chapter title', first chapter at 00:00, 5-10 chapters total; (4) summary: a single concise 2-3 sentence podcast-listing summary — voice depends on EPISODE TYPE: Take/Chat/Roundtable = first person as host Guy; Clip = THIRD PERSON about the GUEST (e.g. 'In this clip, {GUEST} explains...'); Unknown = general first person; (5) chapters: array of chapter objects, each with startTime as an INTEGER number of seconds converted from the [MM:SS] timecode in the transcript (e.g. [02:14] becomes the integer 134, NOT the string '02:14') and title as a 2-5 word string — 5-10 chapters, first at startTime 0. Base everything strictly on the transcript. Never invent facts or timecodes not present in the transcript.";
+const metadataSystemPrompt = "You are the YouTube growth editor for Guy's Take, a punchy Bitcoin and sovereign-tech commentary show hosted by Guy. From the supplied transcript produce packaging options. Return a JSON object with EXACTLY these six keys: (1) titles: array of exactly 5 high-CTR YouTube title strings, punchy, max 70 chars, no emojis; (2) thumbnail_captions: array of exactly 5 ultra-short viral thumbnail captions, 2-5 words each; (3) iconography_ideas: array of exactly 8 concise visual concepts for thumbnail art, grounded in the episode's subject. Use physical objects, scenes, metaphors, or symbols that make the topic instantly recognisable. Do not suggest text, words, logos, watermarks, literal currency symbols, or generic "Bitcoin" imagery; (4) description: a single string opening with a 2-3 sentence hook paragraph, then a line 'Chapters:' followed by timecoded chapter markers each on its own line formatted as 'MM:SS Chapter title', first chapter at 00:00, 5-10 chapters total; (5) summary: a single concise 2-3 sentence podcast-listing summary — voice depends on EPISODE TYPE: Take/Chat/Roundtable = first person as host Guy; Clip = THIRD PERSON about the GUEST (e.g. 'In this clip, {GUEST} explains...'); Unknown = general first person; (6) chapters: array of chapter objects, each with startTime as an INTEGER number of seconds converted from the [MM:SS] timecode in the transcript (e.g. [02:14] becomes the integer 134, NOT the string '02:14') and title as a 2-5 word string — 5-10 chapters, first at startTime 0. Base everything strictly on the transcript. Never invent facts or timecodes not present in the transcript.";
 
 const metadataPromptText = "Generate the packaging options for this Guy's Take episode.\n\nEPISODE TYPE: {{ $('Find Episode').all().length ? ($('Find Episode').first().json.Type || $('Find Episode').first().json.Category || 'Unknown') : 'Unknown' }}\n\nGUEST: {{ $('Find Episode').all().length && $('Find Episode').first().json['Guest Name'] ? (Array.isArray($('Find Episode').first().json['Guest Name']) ? $('Find Episode').first().json['Guest Name'].join(', ') : $('Find Episode').first().json['Guest Name']) : 'Unknown' }}\n\nWORKING TITLE: {{ $('Extract Episode Info').first().json.fileName }}\n\nTRANSCRIPT (with timecodes):\n{{ $('Extract Transcript').first().json.transcript }}";
 
@@ -488,6 +494,92 @@ return items;`
   output: [{ transcript: '[00:00] Speaker 1: Welcome back to Guys Take...' }]
 });
 
+// Audionauts are published as raw video and do not need titles, chapters,
+// thumbnails, or an artwork-packaging request. Preserve the shared transcript
+// path, then finish early before the OpenRouter metadata call.
+const isAudionauts = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Is Audionauts?',
+    parameters: {
+      conditions: {
+        options: { caseSensitive: false, leftValue: '', typeValidation: 'strict', version: 3 },
+        conditions: [
+          {
+            id: 'cond-audionauts',
+            leftValue: expr("{{ $('Find Episode').first().json.Type || '' }}"),
+            operator: { type: 'string', operation: 'equals' },
+            rightValue: 'Audionauts'
+          }
+        ],
+        combinator: 'and'
+      },
+      options: {}
+    },
+    position: [3210, 320]
+  }
+});
+
+const saveAudionautsTranscript = node({
+  type: 'n8n-nodes-base.airtable',
+  version: 2.2,
+  config: {
+    name: 'Save Audionauts Transcript',
+    parameters: {
+      resource: 'record',
+      operation: 'update',
+      authentication: 'airtableTokenApi',
+      base: { __rl: true, mode: 'id', value: 'app8Xw9Tq0XLjhmp9', cachedResultName: "Guy's Take" },
+      table: { __rl: true, mode: 'id', value: 'tbl3uYLIvtB9APZp6', cachedResultName: 'Episodes' },
+      columns: {
+        mappingMode: 'defineBelow',
+        value: {
+          id: expr("{{ $('Find Episode').first().json.id }}"),
+          Status: 'AI Analysis Complete',
+          Transcript: expr("{{ $('Extract Transcript').first().json.transcript }}"),
+          'Frame.io URL': expr("{{ $('Extract Episode Info').first().json.webUrl || (($('Create Review Link').first().json.data || {}).short_url) || $('Extract Episode Info').first().json.downloadUrl }}"),
+          'Duration (s)': expr("{{ $('Parse Duration').first().json.durationSeconds }}")
+        },
+        matchingColumns: ['id'],
+        schema: [
+          { id: 'id', displayName: 'id', required: false, defaultMatch: true, display: true, type: 'string', readOnly: true },
+          { id: 'Status', displayName: 'Status', required: false, defaultMatch: false, canBeUsedToMatch: true, display: true, type: 'options', options: [{ name: 'Scheduled', value: 'Scheduled' }, { name: 'Research Ready', value: 'Research Ready' }, { name: 'Stories Picked', value: 'Stories Picked' }, { name: 'Script Ready', value: 'Script Ready' }, { name: 'Recorded', value: 'Recorded' }, { name: 'Transcript Ready', value: 'Transcript Ready' }, { name: 'Edited', value: 'Edited' }, { name: 'AI Analysis Complete', value: 'AI Analysis Complete' }, { name: 'Approved', value: 'Approved' }, { name: 'Artwork Ready', value: 'Artwork Ready' }, { name: 'Published', value: 'Published' }], readOnly: false, removed: false },
+          { id: 'Transcript', displayName: 'Transcript', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'string', readOnly: false, removed: false },
+          { id: 'Frame.io URL', displayName: 'Frame.io URL', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'string', readOnly: false, removed: false },
+          { id: 'Duration (s)', displayName: 'Duration (s)', required: false, defaultMatch: false, canBeUsedToMatch: false, display: true, type: 'number', readOnly: false, removed: false }
+        ],
+        attemptToConvertTypes: false,
+        convertFieldsToString: false
+      },
+      options: {}
+    },
+    credentials: { airtableTokenApi: airtableCred },
+    position: [3430, 320]
+  },
+  output: [{ id: 'recEPISODEXXXXXXX', Status: 'AI Analysis Complete' }]
+});
+
+const notifyAudionautsComplete = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'Notify Audionauts Complete',
+    parameters: {
+      resource: 'message',
+      operation: 'sendMessage',
+      chatId: '-5254203539',
+      text: expr("<b>Audionauts transcription complete</b>\n\nEpisode <code>{{ $('Extract Episode Info').first().json.episodeId || 'no-id' }}</code>\nThe transcript and Frame.io link were saved to Airtable. Packaging and artwork prompts were skipped."),
+      additionalFields: { appendAttribution: false, parse_mode: 'HTML' }
+    },
+    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
+    retryOnFail: true,
+    maxTries: 4,
+    waitBetweenTries: 5000,
+    position: [3650, 320]
+  },
+  output: [{ ok: true, result: { message_id: 1 } }]
+});
+
 // The mood library ("Thumbnail References") is read here purely so the Telegram
 // message can LIST the moods for Jonny to pick from. Picking used to be done by
 // Gemini inside the artwork workflow; that node is gone and the choice is his.
@@ -533,7 +625,7 @@ const metadataParser = outputParser({
   version: 1.3,
   config: {
     name: 'Metadata Output Parser',
-    parameters: { jsonSchemaExample: '{"titles":["High-CTR title option"],"thumbnail_captions":["BANK RUN"],"description":"Hook paragraph. Chapters: 00:00 Intro","summary":"Guy breaks down why...","chapters":[{"startTime":0,"title":"Intro"},{"startTime":134,"title":"The real story"}]}' },
+    parameters: { jsonSchemaExample: '{"titles":["High-CTR title option"],"thumbnail_captions":["BANK RUN"],"iconography_ideas":["Cracked marble bank facade","Storm clouds over a parliament building"],"description":"Hook paragraph. Chapters: 00:00 Intro","summary":"Guy breaks down why...","chapters":[{"startTime":0,"title":"Intro"},{"startTime":134,"title":"The real story"}]}' },
     position: [3480, 420]
   }
 });
@@ -751,7 +843,8 @@ const sendPackagingRequest = node({
         "<b>2 · Thumbnail caption</b> → <i>Thumbnail Caption</i>\n{{ $('Build Outputs').first().json.capsTextHtml }}\nReply <b>TC1</b>-<b>TC5</b>, or write your own.\n\n" +
         "<b>3 · Guests</b> → <i>Guests</i>\nName anyone to add, e.g. \"add Bitcoin Mechanic\". They must already exist in the Guests table - I'll tell you if there's no match rather than creating a half-empty record.\n\n" +
         "<b>4 · Thumbnail moods</b> → <i>Thumbnail Moods</i>\n{{ $('Build Outputs').first().json.moodsText }}\nReply with the names you want, e.g. \"moods: confident, shocked\". They cycle across the 4 artwork options. Skip this to use the whole library.\n\n" +
-        "<b>5 · Image prompt</b> → <i>Custom Image Prompt</i> <b>(required)</b>\nDescribe the artwork you want and it's added to the standard prompt. Reply <b>default</b> for no extra direction.\n\n" +
+        "<b>5 · Visual ideas</b> → <i>optional inspiration</i>\n{{ $('Build Outputs').first().json.iconographyTextHtml }}\nUse one or combine a few in your image prompt. These are suggestions only and do not change Airtable.\n\n" +
+        "<b>6 · Image prompt</b> → <i>Custom Image Prompt</i> <b>(required)</b>\nDescribe the artwork you want and it's added to the standard prompt. Reply <b>default</b> for no extra direction.\n\n" +
         "⚠️ Artwork does not start until the image prompt is filled in."
       ),
       additionalFields: { appendAttribution: false, parse_mode: 'HTML' }
@@ -906,6 +999,28 @@ const bypassIf = ifElse({
   }
 });
 
+// ---- _Skip short-circuit --------------------------------------------------
+// If the Frame.io file name ends with "_Skip" (case-insensitive, extension
+// ignored), stop before every pipeline action. Unlike _Bypass, this does not
+// create a review link, update Airtable, or send a Telegram message.
+const skipIf = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Name Ends _Skip?',
+    parameters: {
+      conditions: {
+        options: { caseSensitive: false, leftValue: '', typeValidation: 'loose', version: 3 },
+        conditions: [
+          { id: 'cond-skip', leftValue: expr("{{ /_skip$/i.test(String($('Extract Episode Info').first().json.fileName || '').replace(/\\.[a-zA-Z0-9]+$/, '').trim()) }}"), operator: { type: 'boolean', operation: 'true', singleValue: true }, rightValue: '' }
+        ],
+        combinator: 'and'
+      },
+      options: {}
+    },
+    position: [1120, 140]
+  }
+});
+
 // ---- Media type guard -------------------------------------------------------
 // The webhook fires on EVERY file.ready in the Frame.io project, including
 // non-media files. Gate the pipeline on a real video/audio + a download URL.
@@ -952,7 +1067,7 @@ const notifySkipped = node({
 });
 
 const setupNote = sticky(
-  "## Frame.io -> AI metadata -> Telegram\n\nVideo and audio uploads are both transcribed via Gemini. Non-media uploads (images, PDFs, etc.) are skipped via 'Is Video or Audio?'. A file name ending '_Bypass' skips the whole AI pipeline and just refreshes 'Frame.io URL'. Duration comes from Gemini (videoMetadata.videoDuration), not Frame.io. Same-length re-upload just refreshes 'Frame.io URL'. Summary geared to Episodes 'Type' + 'Guest Name'. Telegram sends retry on transient (e.g. DNS) failures.",
+  "## Frame.io -> AI metadata -> Telegram\n\nA file name ending '_Skip' stops without changing Airtable or Telegram. Video and audio uploads are both transcribed via Gemini. Non-media uploads (images, PDFs, etc.) are skipped via 'Is Video or Audio?'. A file name ending '_Bypass' skips the whole AI pipeline and just refreshes 'Frame.io URL'. Duration comes from Gemini (videoMetadata.videoDuration), not Frame.io. Same-length re-upload just refreshes 'Frame.io URL'. Summary geared to Episodes 'Type' + 'Guest Name'. Telegram sends retry on transient (e.g. DNS) failures.",
   [frameioTrigger, parseEvent, showFile],
   { color: 4 }
 );
@@ -963,9 +1078,10 @@ export default workflow('jroXHciDvy0sWlRM', 'BA - Frame.io Uploaded > AI Metadat
   .to(parseEvent)
   .to(showFile)
   .to(extractInfo)
-  .to(isVideoIf
+  .to(skipIf
+    .onFalse(isVideoIf
     .onTrue(createReviewLink)
-    .onFalse(notifySkipped))
+    .onFalse(notifySkipped)))
   .add(createReviewLink)
   .to(findEpisode)
   .to(bypassIf
@@ -990,16 +1106,23 @@ export default workflow('jroXHciDvy0sWlRM', 'BA - Frame.io Uploaded > AI Metadat
             transcribe
               .to(extractTranscript)
               .to(validateTranscript)
-              .to(fetchMoodLibrary)
-              .to(generateMetadata)
-              .to(buildOutputs)
-              .to(updateStatus)
-              .to(storeDuration)
-              .to(uploadChaptersAttachment)
-              .to(injectMdData)
-              .to(convertToFile)
-              .to(sendToTelegram)
-              .to(sendPackagingRequest)
+              .to(isAudionauts
+                .onTrue(
+                  saveAudionautsTranscript
+                    .to(notifyAudionautsComplete)
+                )
+                .onFalse(
+                  fetchMoodLibrary
+                    .to(generateMetadata)
+                    .to(buildOutputs)
+                    .to(updateStatus)
+                    .to(storeDuration)
+                    .to(uploadChaptersAttachment)
+                    .to(injectMdData)
+                    .to(convertToFile)
+                    .to(sendToTelegram)
+                    .to(sendPackagingRequest)
+                ))
           ))
     )
     .onFalse(waitProcessing));

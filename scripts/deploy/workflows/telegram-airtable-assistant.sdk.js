@@ -454,11 +454,12 @@ const airtableAgent = node({
   2. Propose a write:
      { "action": "write", "summary": "plain-English description of exactly what changes and where", "method": "PATCH",
   "path": "appXXX/tblYYY", "body": { "records": [ { "id": "recZZZ", "fields": { "Status": "Recorded" } } ] } }
-  3. Show real images as ONE album with a separate details message below — use this INSTEAD of pasting attachment links:
-     { "action": "photos", "urls": ["https://...", "https://..."], "caption": "details text for the message below the album" }
-     Read the attachment record(s) with your tools and put each full-size attachment URL in "urls", in option order (2-10
-  images; for thumbnails this is the 4 options). They are sent as a SINGLE Telegram album (one message). "caption" is a SHORT text
-  message sent right below the album: lead with the record code (BA-xxxx) as the reply anchor, then list each option and
+  3. Show real images with a separate details message below - use this INSTEAD of pasting attachment links:
+     { "action": "photos", "urls": ["https://...", "https://..."], "caption": "details text sent below the photos" }
+     Read the attachment record(s) with your tools and put each requested full-size attachment URL in "urls", in order
+  (1-4 images; for all thumbnail options this is 4). Four images are sent as one Telegram album; one to three are sent
+  individually so the workflow never pads the request with duplicates. "caption" is a SHORT text message sent below the images:
+  lead with the record code (BA-xxxx) as the reply anchor, then list each option and
   its current state read from the records, e.g. "BA-eObmD9 — Options: #1 (Rejected), #2 (Selected), #3, #4". End with how
   to choose if a pick is still open, e.g. "Reply 1-4 to pick". Image attachments only — for PDFs / video / audio fall back
   to "respond" with a link. DEFAULT: whenever asked to see, send or show thumbnails or artwork, return them as "photos",
@@ -529,6 +530,9 @@ Keep messages short, plain text, no markdown tables, under 3500 characters. Use 
 
 == HOW THE PIPELINE WORKS (System Map) ==
 There is a living reference called the "System Map" that explains how all the Pod21 / Guy's Take automations fit together: what triggers each workflow, the exact Airtable field conditions an episode needs before the next stage runs, the Status ladder, and what each episode Type means. It lives in Airtable so it can be edited without touching n8n. Whenever a turn is about how the workflows work, why something has or hasn't happened, where an episode is in the pipeline, or what an episode still needs before a stage (e.g. artwork) will run: FIRST read the System Map, then answer from it. Read it with airtable_read from base app8Xw9Tq0XLjhmp9, table "Prompts", the record where Name = "System Map" (filterByFormula={Name}="System Map"); treat the long-text "Prompt" field as authoritative. Do not answer pipeline questions from memory. You may still read a specific episode's live field values and compare them against the Map's precondition checklist to say what is missing.
+
+== ARTWORK STATUS RULE ==
+For whether initial thumbnail artwork will generate, the Path 1 preconditions checklist is the rule. The normal lifecycle diagram shows Approved as the usual human handoff, but Approved is NOT a requirement of the artwork trigger. Never say an episode must reach Approved for artwork to run. Report the actual Status rule exactly: Status must not be Awaiting Thumbnail Pick or Generating Artwork. Then check and name the other Path 1 fields that are actually missing.
 
   == KNOWN CONTEXT (verify with tools, don't assume) ==
   Main base: Guy's Take (app8Xw9Tq0XLjhmp9) — Episodes (tbl3uYLIvtB9APZp6), plus Stories and Shortlist tables used by a
@@ -739,18 +743,36 @@ const buildPhotoAlbum = node({
     parameters: {
       jsCode: `const item = $input.first().json;
   const chatId = $('Telegram Message Received').first().json.message.chat.id;
-  let urls = (Array.isArray(item.urls) ? item.urls : []).filter(u => typeof u === 'string' && u).slice(0, 4);
-  // The native sendMediaGroup uses 4 STATIC slots (array-expressions don't work). Every slot must
-  // resolve, and a Telegram album is 2-10 items with no empties. Thumbnails are always 4; pad short
-  // sets by repeating the last URL as a crash-safety net for the rare <4 case.
-  while (urls.length > 0 && urls.length < 4) { urls.push(urls[urls.length - 1]); }
+  const urls = (Array.isArray(item.urls) ? item.urls : []).filter(u => typeof u === 'string' && u).slice(0, 4);
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const caption = esc(String(item.caption || 'Reply with the option number to pick.'));
-  return [{ json: { chatId: chatId, caption: caption, urls: urls } }];`
+  const idMatch = String(item.caption || '').match(/\\bBA-[A-Za-z0-9]+\\b/);
+  const idTag = '<code>' + esc(idMatch ? idMatch[0] : 'no-id') + '</code>';
+  return urls.map((photoUrl) => ({
+    json: { chatId: chatId, caption: caption, idTag: idTag, urls: urls, count: urls.length, photoUrl: photoUrl },
+    pairedItem: { item: 0 }
+  }));`
     },
     position: [2352, 840]
   },
-  output: [{ chatId: 1512868522, caption: 'BA-xxxx — Options: #1, #2', urls: ['https://x/1', 'https://x/2', 'https://x/3', 'https://x/4'] }]
+  output: [{ chatId: 1512868522, caption: 'BA-xxxx - Options: #1', idTag: '<code>BA-xxxx</code>', urls: ['https://x/1'], count: 1, photoUrl: 'https://x/1' }]
+});
+
+const isFourPhotos = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Four Photos?',
+    parameters: {
+      conditions: {
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 },
+        combinator: 'and',
+        conditions: [{ id: 'is-four-photos', leftValue: expr('{{ $json.count }}'), rightValue: 4, operator: { type: 'number', operation: 'equals' } }]
+      },
+      looseTypeValidation: true,
+      options: {}
+    },
+    position: [2576, 840]
+  }
 });
 
 const sendAlbum = node({
@@ -770,9 +792,28 @@ const sendAlbum = node({
       ] }
     },
     credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
-    position: [2576, 840]
+    executeOnce: true,
+    position: [2800, 776]
   },
   output: [{ ok: true, result: [{ message_id: 1 }] }]
+});
+
+const sendRequestedPhoto = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'Send Requested Photo',
+    parameters: {
+      resource: 'message',
+      operation: 'sendPhoto',
+      chatId: expr('{{ $json.chatId }}'),
+      file: expr('{{ $json.photoUrl }}'),
+      additionalFields: { caption: expr('{{ $json.idTag }}'), parse_mode: 'HTML' }
+    },
+    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
+    position: [2800, 904]
+  },
+  output: [{ ok: true, result: { message_id: 1 } }]
 });
 
 const sendAlbumDetails = node({
@@ -787,7 +828,7 @@ const sendAlbumDetails = node({
     },
     credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
     executeOnce: true,
-    position: [2800, 840]
+    position: [3024, 840]
   },
   output: [{ ok: true }]
 });
@@ -795,4 +836,4 @@ const sendAlbumDetails = node({
 // ── Compose ──────────────────────────────────────────────────────────────
 // NOTE: kept on a single line on purpose — the SDK parser mis-handles deeply
 // nested multi-line .onTrue()/.onFalse() chains when both branches are complex.
-export default workflow('telegram-airtable-assistant', 'BA: Telegram Airtable Assistant').add(telegramTrigger).to(isButtonPress.onTrue(handleButtonPress.to(answerButtonTap).to(runApprovedWrite.onTrue(executeAirtableWrite.to(recordExecutedWrite).to(confirmWriteDone)).onFalse(sendOutcomeNotice))).onFalse(addressedToBot.onTrue(fromJonnyOrCharlie.onTrue(prepAgentInput.to(airtableAgent).to(parseAgentDecision).to(isWriteRequest.onTrue(stashPendingWrite.to(sendApprovalButtons)).onFalse(isPhotoReply.onTrue(buildPhotoAlbum.to(sendAlbum).to(sendAlbumDetails)).onFalse(sendAnswer)))))));
+export default workflow('telegram-airtable-assistant', 'BA: Telegram Airtable Assistant').add(telegramTrigger).to(isButtonPress.onTrue(handleButtonPress.to(answerButtonTap).to(runApprovedWrite.onTrue(executeAirtableWrite.to(recordExecutedWrite).to(confirmWriteDone)).onFalse(sendOutcomeNotice))).onFalse(addressedToBot.onTrue(fromJonnyOrCharlie.onTrue(prepAgentInput.to(airtableAgent).to(parseAgentDecision).to(isWriteRequest.onTrue(stashPendingWrite.to(sendApprovalButtons)).onFalse(isPhotoReply.onTrue(buildPhotoAlbum.to(isFourPhotos.onTrue(sendAlbum.to(sendAlbumDetails)).onFalse(sendRequestedPhoto.to(sendAlbumDetails)))).onFalse(sendAnswer)))))));

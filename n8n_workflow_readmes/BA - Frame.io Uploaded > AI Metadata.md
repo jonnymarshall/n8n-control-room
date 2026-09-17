@@ -12,11 +12,15 @@ SDK source: `scripts/deploy/workflows/guys-take-episode-metadata.sdk.js`.
 
 When an editor uploads the final cut to Frame.io and it finishes processing, Frame.io fires a `file.ready` webhook into n8n. The workflow grabs a lightweight proxy of that file, transcribes it with **Gemini** (with timecodes), then asks **OpenRouter** to write **5 viral thumbnail captions + 5 high-impact titles + a timecoded YouTube description**, and posts them to **Telegram** as a Markdown document followed by a **packaging request message**. It also flips the matched Episode to `AI Analysis Complete` in Airtable.
 
-**Packaging request (added 2026-08-04).** Delivery is now **two Telegram messages**, not one. The description file goes out with a deliberately short caption, then **`Send Packaging Request`** posts the message Jonny actually replies to. It carries the title options, the caption options, **the guests and title already set on the episode**, **the mood library to pick from**, and **an ask for a custom image prompt** — free-text art direction that now drives thumbnail generation. See [Packaging request message](#packaging-request-message).
+**Audionauts exception (added 2026-09-09, live but awaiting its first real upload).** After transcript validation, `Is Audionauts?` checks the episode `Type`. Audionauts take an early exit: `Save Audionauts Transcript` writes only `Status = AI Analysis Complete`, `Transcript`, `Frame.io URL`, and `Duration (s)`, then `Notify Audionauts Complete` sends one short Telegram message with the episode ID. They do not call OpenRouter, create titles, captions, summaries or chapters, upload a metadata document, or send the artwork-packaging request. Isolated routing tests passed for `Audionauts`, lowercase `audionauts`, and `Chat`; the next real Audionauts Frame.io upload must confirm the full path.
+
+**Packaging request (updated 2026-09-14).** Delivery is now **two Telegram messages**, not one. The description file goes out with a deliberately short caption, then **`Send Packaging Request`** posts the message Jonny actually replies to. It carries the title options, caption options, **eight AI-suggested visual ideas**, the packaging values already set on the episode, the mood library to pick from, and an ask for a custom image prompt. Visual ideas are optional inspiration only. Free-text art direction still drives thumbnail generation. See [Packaging request message](#packaging-request-message).
 
 ⚠️ **Artwork will not start until `Custom Image Prompt` is filled in.** The thumbnail workflow's trigger view gates on it. That's deliberate: it stops artwork generating off a caption reply before the art direction has arrived.
 
 **`_Bypass` short-circuit (added 2026-06-23).** If the Frame.io file **name ends with `_Bypass`** (case-insensitive, extension ignored), the workflow skips the entire AI pipeline up front — no download, no transcription, no metadata, no Telegram — and only refreshes the episode's `Frame.io URL`, then stops. This is the manual override: drop `_Bypass` on the end of a re-upload's name (e.g. `BA-hPtPmN_Title_Bypass.mp4`) to just point Airtable at the new file. The check (`Name Ends _Bypass?`) sits right after `Find Episode`, before the proxy download, so a bypass costs nothing. See [Bypass detection](#bypass-detection) below.
+
+**`_Skip` short-circuit (added 2026-09-14).** If the Frame.io file **name ends with `_Skip`** (case-insensitive, extension ignored), the workflow stops after reading the file name. It creates no review link, does not write Airtable, does not refresh `Frame.io URL`, and sends no Telegram message. Use it for uploads that must be completely invisible to the content pipeline, for example `BA-hPtPmN_EditorReference_SKIP.mp4`.
 
 **Same-length short-circuit (added 2026-06-21).** Right after the episode is matched in Airtable, a `Same Length?` IF compares the new upload's duration against the duration stored on the last full run. If they're **exactly equal**, the upload is assumed to be a bug-fix re-export (same cut, new file) — so the workflow **skips all the AI work** and only refreshes the `Frame.io URL` field, then stops. Any difference (or no stored baseline yet) falls through to the full transcript + metadata pipeline. See [Same-length detection](#same-length-detection) below.
 
@@ -33,13 +37,13 @@ When an editor uploads the final cut to Frame.io and it finishes processing, Fra
 | **Media source** | Frame.io V4 Show File (`GET /v4/accounts/{account_id}/files/{file_id}?include=media_links.efficient`) → 720p proxy `download_url` |
 | **Transcriber** | Gemini `gemini-2.5-flash` via the **Files API** (resumable upload → poll ACTIVE → `generateContent` with `fileData`) |
 | **Metadata model** | `openai/gpt-5.1` via OpenRouter, `json_object`, `temperature 0.8`, structured output parser |
-| **Outputs** | 5 titles + 5 thumbnail captions + 1 timecoded description + 1 first-person podcast summary (geared to the episode **Type** — Take/Chat/Roundtable/Clip) + Podcasting 2.0 chapters JSON, delivered as a Markdown document |
-| **Delivery** | **Two** Telegram messages to the Guy's Take group (chat ID `-5254203539`, hardcoded). (1) `sendDocument` with the Markdown file and a short caption (title + episode ID). (2) **`Send Packaging Request`** (`sendMessage`) — the reply target, carrying T1–T5, TC1–TC5, current title + guests, the mood library, and the custom image prompt ask. |
+| **Outputs** | Standard types: 5 titles + 5 thumbnail captions + 8 visual iconography ideas + 1 timecoded description + 1 first-person podcast summary (geared to the episode **Type** — Take/Chat/Roundtable/Clip) + Podcasting 2.0 chapters JSON, delivered as a Markdown document. Audionauts: transcript, Frame.io URL and duration only. |
+| **Delivery** | Standard types: **two** Telegram messages to the Guy's Take group (chat ID `-5254203539`, hardcoded), the Markdown file then **`Send Packaging Request`**. Audionauts: one short transcription-complete message; no metadata file or packaging request. |
 | **Episode match** | Filename prefix `BA-{id}_...` (e.g. `BA-hPtPmN_Title.mp4`) → string match → Airtable `Episodes.{ID}` (string field) |
 | **Airtable base** | `app8Xw9Tq0XLjhmp9` (Guy's Take), `Episodes` `tbl3uYLIvtB9APZp6` |
-| **Status transition** | full run → matched Episode `AI Analysis Complete` + writes `Summary`, `Chapters`, `Transcript`, `Frame.io URL`, `Duration (s)`, and attaches `<episodeId>_Chapters.json`. Same-length re-upload **or** a name ending `_Bypass` → only `Frame.io URL` is refreshed; **no** status/AI change. |
+| **Status transition** | standard full run → matched Episode `AI Analysis Complete` + writes `Summary`, `Chapters`, `Transcript`, `Frame.io URL`, `Duration (s)`, and attaches `<episodeId>_Chapters.json`. Audionauts → `AI Analysis Complete` + writes only `Transcript`, `Frame.io URL`, and `Duration (s)`. A name ending `_Skip` → no pipeline action. Same-length re-upload **or** a name ending `_Bypass` → only `Frame.io URL` is refreshed; **no** status/AI change. |
 | **Active?** | **Yes** — live; Frame.io OAuth2 credential configured |
-| **Transient-failure cover** | `Show File`, `Download Proxy`, `Start Gemini Upload`, `Get File State`, `Transcribe with Gemini` retry 5× / 5s (~20s of cover) against Gemini 503s + DNS blips. `Fetch Mood Library` retries 3× / 5s. Telegram nodes retry (see the known-drift note in gotchas). See [gotchas](#gotchas--things-to-verify-on-first-run). |
+| **Transient-failure cover** | `Show File`, `Download Proxy`, `Start Gemini Upload`, `Get File State`, `Transcribe with Gemini` retry 5× / 5s (~20s of cover) against Gemini 503s + DNS blips. `Fetch Mood Library` retries 3× / 5s. Telegram nodes retry. See [gotchas](#gotchas--things-to-verify-on-first-run). |
 
 ---
 
@@ -48,17 +52,17 @@ When an editor uploads the final cut to Frame.io and it finishes processing, Fra
 | n8n credential name | Type | Used by | Status |
 |---|---|---|---|
 | `Adobe OAuth` | `oAuth2Api` (Generic Credential Type → OAuth2 API → Adobe OAuth) | `Show File`, `Create Review Link` | created 2026-06-16; auto-assigns on push |
-| `Gemini API Key [n8n]` | `httpHeaderAuth` (`x-goog-api-key`) | `Start Gemini Upload`, `Get File State`, `Transcribe with Gemini` | exists (created for Thumbnail Artwork) |
+| `google-ai-studio_[pod21-n8n-temp]` | `httpHeaderAuth` (`x-goog-api-key`) | `Start Gemini Upload`, `Get File State`, `Transcribe with Gemini` | live credential |
 | `OpenRouter [n8n]` | `openRouterApi` | `Metadata Model (OpenRouter)` | exists (auto-assigned) |
-| `Telegram [pod21_n8n_agent_bot]` | `telegramApi` | `Send Metadata to Telegram`, **`Send Packaging Request`**, `Notify Skipped (Non-Media)` | exists (auto-assigned) |
-| `Airtable [n8n] (PAT)` | `airtableTokenApi` | `Find Episode`, `Set Status AI Analysis Complete`, `Swap Frame.io URL`, `Store Duration` (Airtable **nodes**, auto-assign) + **`Fetch Mood Library`** (HTTP node — **rebind by hand after every push**) | exists |
-| `Airtable PAT (Bearer)` | `httpBearerAuth` | `Upload Chapters Attachment` | **create once** — same PAT value as `Airtable [n8n] (PAT)` but as an HTTP Bearer credential type |
+| `Telegram [pod21_n8n_agent_bot]` | `telegramApi` | `Send Metadata to Telegram`, **`Send Packaging Request`**, `Notify Skipped (Non-Media)`, `Notify Audionauts Complete` | exists (auto-assigned) |
+| `Airtable [n8n] (PAT)` | `airtableTokenApi` | `Find Episode`, `Set Status AI Analysis Complete`, `Swap Frame.io URL`, `Store Duration`, `Save Audionauts Transcript` (Airtable **nodes**, auto-assign) + **`Fetch Mood Library`** (HTTP node — **rebind by hand after every push**) | exists |
+| `Airtable PAT` | `httpBearerAuth` | `Upload Chapters Attachment` | live credential; same PAT as `Airtable [n8n] (PAT)` but as an HTTP Bearer credential type |
 
 The **HTTP Request nodes are skipped by credential auto-assignment** on every push (confirmed again on the 2026-06-21 push — the tool reported skipping Show File, Create Review Link, Download Proxy, Start Gemini Upload, Upload Bytes to Gemini, Get File State, Transcribe with Gemini, Upload Chapters Attachment). After each push, open them and verify/attach:
 - `Show File` and `Create Review Link` → `Adobe OAuth` (usually re-attaches from the by-name reference, but verify it didn't drop to bearer).
-- `Start Gemini Upload`, `Get File State`, `Transcribe with Gemini` → `Gemini API Key [n8n]` (Header Auth).
+- `Start Gemini Upload`, `Get File State`, `Transcribe with Gemini` → `google-ai-studio_[pod21-n8n-temp]` (Header Auth).
 - `Download Proxy` and `Upload Bytes to Gemini` → **no credential** (both URLs are pre-signed). Leave auth as None.
-- `Upload Chapters Attachment` → `Airtable PAT (Bearer)`.
+- `Upload Chapters Attachment` → `Airtable PAT`.
 - **`Fetch Mood Library` → `Airtable [n8n] (PAT)`** (predefined credential type `airtableTokenApi`). New 2026-08-04. It's `neverError`, so a missing credential does **not** fail the run — the mood list just comes back empty and the packaging message says the library is empty. Check this first if the moods vanish from the message.
 
 The four Airtable **node** types (`airtableTokenApi`) — including the new `Swap Frame.io URL` and `Store Duration` — auto-assign cleanly on push.
@@ -118,6 +122,12 @@ Goal: a manual override so Jonny can re-upload a cut and have the workflow **onl
 
 Because the check is before the download, a bypass is essentially free — unlike the same-length short-circuit, which can only decide after the Gemini upload (duration isn't known until then). `Swap Frame.io URL` has **two** incoming connections now (from `Name Ends _Bypass?` true and from `Same Length?` true); both feed the same node.
 
+## Skip detection
+
+`Name Ends _Skip?` runs immediately after `Extract Episode Info`, before the media-type check and before `Create Review Link`. It strips the extension, trims the file name, then checks for a final `_skip` suffix case-insensitively. `BA-hPtPmN_EditorReference_SKIP.mp4` matches; `BA-hPtPmN_skip_notes.mp4` does not.
+
+The true branch has no downstream node, so the run ends without creating a Frame.io review link, changing Airtable, refreshing `Frame.io URL`, or sending Telegram. `_Skip` is for uploads that must be invisible to the pipeline. `_Bypass` remains the marker for a URL-only refresh.
+
 ---
 
 ## Same-length detection
@@ -170,7 +180,9 @@ The type shapes the summary primarily, but type + guest are given to the model a
 
 `Send Packaging Request` is the message Jonny replies to. That matters architecturally: the **Telegram Airtable Assistant** treats the *replied-to* message as its specification, so everything needed to act on a reply has to be in this one message. Splitting the options across the file caption and a follow-up would break that — a reply to the follow-up wouldn't tell the assistant what "T3" meant.
 
-It shows five things, each labelled with the Airtable field it lands in (`1 · Title → Title`, `5 · Image prompt → Custom Image Prompt`, and so on) so the assistant reads its target from the message rather than inferring it:
+It shows six things. The editable choices are labelled with the Airtable field they land in (`1 · Title → Title`, `6 · Image prompt → Custom Image Prompt`, and so on) so the assistant reads its target from the message rather than inferring it. Visual ideas are optional text-only inspiration and do not write to Airtable:
+
+**Overwrite warning (added 2026-09-09).** If any of the five packaging fields already contain data, the message starts with a red warning and lists the current values. Long values are shortened to 120 characters in Telegram so the warning cannot consume the message limit; Airtable data is not changed. The approval still overwrites only fields explicitly included in the reply. This protects `Title`, `Thumbnail Caption`, `Guests`, `Thumbnail Moods`, and `Custom Image Prompt`. It cannot protect `Transcript`, `Summary`, or `Chapters`, because the Frame.io workflow writes those before this message exists.
 
 | # | Ask | Airtable field | Notes |
 |---|---|---|---|
@@ -178,7 +190,8 @@ It shows five things, each labelled with the Airtable field it lands in (`1 · T
 | 2 | Thumbnail caption | `Thumbnail Caption` | Options labelled `TC1`–`TC5`. |
 | 3 | Guests | `Guests` | Shows the guests **already linked** (via the `Guest Name` lookup), or "none linked yet". The assistant links existing `Guests` rows only and reports names it can't find rather than creating half-empty records. |
 | 4 | Thumbnail moods | `Thumbnail Moods` | The mood list is read **live** from `Thumbnail References` by the `Fetch Mood Library` node and numbered. Jonny replies with names, e.g. "moods: confident, shocked". |
-| 5 | Image prompt | `Custom Image Prompt` | **Required** — artwork is gated on it. `default` means "no extra direction". |
+| 5 | Visual ideas | None | Eight short object, scene, or metaphor suggestions based on the transcript. Use one or combine several in the image prompt. They never change Airtable on their own. |
+| 6 | Image prompt | `Custom Image Prompt` | **Required** — artwork is gated on it. `default` means "no extra direction". |
 
 Option labels are the reply codes themselves (`T1.`, `TC1.`) rather than bare numbers, so a reply maps back to an option unambiguously even if the assistant sees both lists at once.
 
@@ -196,7 +209,9 @@ Option labels are the reply codes themselves (`T1.`, `TC1.`) rather than bare nu
   - **Name Ends _Bypass? → True →** Swap Frame.io URL → *(end)*
   - **Name Ends _Bypass? → False →** Download Proxy → Start Gemini Upload → Capture Upload URL → Merge URL + Bytes → Upload Bytes to Gemini → Wait for Processing → Get File State → Is File Active → Parse Duration → Same Length?
     - **Same Length? → True →** Swap Frame.io URL → *(end)*
-    - **Same Length? → False →** Transcribe → Extract Transcript → **Fetch Mood Library** → Generate Metadata → Build Outputs → Set Status AI Analysis Complete → Store Duration → Upload Chapters Attachment → Prepare Telegram File → Convert Markdown to File → Send Metadata to Telegram → **Send Packaging Request**
+    - **Same Length? → False →** Transcribe → Extract Transcript → **Validate Transcript Quality** → **Is Audionauts?**
+      - **Is Audionauts? → True →** Save Audionauts Transcript → Notify Audionauts Complete → *(end)*
+      - **Is Audionauts? → False →** Fetch Mood Library → Generate Metadata → Build Outputs → Set Status AI Analysis Complete → Store Duration → Upload Chapters Attachment → Prepare Telegram File → Convert Markdown to File → Send Metadata to Telegram → **Send Packaging Request**
 
 1. **Frame.io Webhook** — `POST` listener; responds `200` immediately (`responseMode: onReceived`), then runs async. Fires on **every** `file.ready` in the project (incl. audio/image shares).
 2. **Parse Frame.io Event** (Code) — reads `body.resource.id` (file id) and `body.account.id`; drops anything without a file id.
@@ -213,14 +228,17 @@ Option labels are the reply codes themselves (`T1.`, `TC1.`) rather than bare nu
     - **False →** the full pipeline below.
 12. **Transcribe with Gemini** (HTTP, Gemini header) — `generateContent` on `gemini-2.5-flash` with `fileData` (`fps 0.2` + `MEDIA_RESOLUTION_LOW`) + a verbatim-transcription prompt asking for `[MM:SS]` markers and speaker labels. 10-minute timeout, **Retry On Fail 5× / 5s** (Gemini 503s — added 2026-07-29).
 13. **Extract Transcript** (Set) — joins `candidates[0].content.parts[].text` into `transcript`.
-14. **Generate Metadata** (chain LLM + OpenRouter + structured parser) — returns `{ titles[5], thumbnail_captions[5], description, summary, chapters[] }`, strictly grounded in the transcript. The summary voice is **geared to the episode `Type`** (Take/Chat/Roundtable/Clip) and `Guest Name`, both read from `Find Episode` (see [Type-aware summary](#type-aware-summary)): first person as the host for Take/Chat/Roundtable; **third person about the guest for Clip**.
-15. **Build Outputs** (Code) — renders the Markdown deliverable, base64-encodes it, builds the Telegram caption strings, converts `chapters` to `(HH:MM:SS) - Title` text + Podcasting 2.0 JSON, and resolves `frameioUrl`.
-16. **Set Status AI Analysis Complete** (Airtable update) — writes `Status = AI Analysis Complete`, `Summary`, `Chapters`, `Transcript`, `Frame.io URL`, and `Chapters JSON: []` (clears prior attachment). One atomic update; deliberately does **not** include `Duration (s)`.
-17. **Store Duration** (Airtable update) — separate node, `continueRegularOutput`. Writes `Duration (s) = durationSeconds` (from `Parse Duration` / Gemini), establishing the baseline for next time. Isolated so a missing `Duration (s)` field can't fail the step 16 metadata write.
-18. **Upload Chapters Attachment** (HTTP, `Airtable PAT (Bearer)`) — `POST …/v0/{baseId}/{recordId}/Chapters%20JSON/uploadAttachment` with a JSON body containing the base64 chapters JSON.
-19. **Prepare Telegram File** (Set) — re-injects `mdBase64` + `fileName` (HTTP nodes replaced the flowing item).
-20. **Convert Markdown to File → Send Metadata to Telegram** — `sendDocument`, full description attached, **short** caption (title + episode ID only).
-21. **Send Packaging Request** (Telegram `sendMessage`, HTML) — the reply target. T1–T5, TC1–TC5, the title + guests already set, the mood library, and the required custom image prompt ask. See [Packaging request message](#packaging-request-message).
+14. **Validate Transcript Quality** (Code) — stops before Airtable is changed if the transcript is under 200 characters, implausibly short for the media duration, ends before 80% of a video's runtime according to its final timestamp, or repeats one word 20 or more times in a row. Audio skips timestamp coverage because Gemini does not provide an audio duration here. The thrown error includes the `BA-xxxx` ID and the exact failed checks, so the global error workflow can alert the team.
+15. **Is Audionauts?** (IF, case-insensitive) — reads `Type` from `Find Episode`. True exits through the transcript-only path below; false continues into the existing metadata and packaging path.
+16. **Save Audionauts Transcript → Notify Audionauts Complete** — Audionauts only. One Airtable update writes `Status = AI Analysis Complete`, `Transcript`, `Frame.io URL`, and `Duration (s)`, preserving any existing summary or chapter fields. Telegram then confirms completion with the episode ID in a `<code>` block. No OpenRouter, chapters, metadata document, or packaging message runs.
+17. **Generate Metadata** (chain LLM + OpenRouter + structured parser) — non-Audionauts only. Returns `{ titles[5], thumbnail_captions[5], iconography_ideas[8], description, summary, chapters[] }`, strictly grounded in the transcript. Iconography suggestions are short visual concepts only, with no text, logos, or literal currency symbols. The summary voice is **geared to the episode `Type`** (Take/Chat/Roundtable/Clip) and `Guest Name`, both read from `Find Episode` (see [Type-aware summary](#type-aware-summary)): first person as the host for Take/Chat/Roundtable; **third person about the guest for Clip**.
+18. **Build Outputs** (Code) — renders the Markdown deliverable, base64-encodes it, builds the Telegram caption strings plus the optional visual-ideas list, converts `chapters` to `(HH:MM:SS) - Title` text + Podcasting 2.0 JSON, and resolves `frameioUrl`.
+19. **Set Status AI Analysis Complete** (Airtable update) — writes `Status = AI Analysis Complete`, `Summary`, `Chapters`, `Transcript`, `Frame.io URL`, and `Chapters JSON: []` (clears prior attachment). One atomic update; deliberately does **not** include `Duration (s)`.
+20. **Store Duration** (Airtable update) — separate node, `continueRegularOutput`. Writes `Duration (s) = durationSeconds` (from `Parse Duration` / Gemini), establishing the baseline for next time. Isolated so a missing `Duration (s)` field can't fail the step 19 metadata write.
+21. **Upload Chapters Attachment** (HTTP, `Airtable PAT`) — `POST …/v0/{baseId}/{recordId}/Chapters%20JSON/uploadAttachment` with a JSON body containing the base64 chapters JSON.
+22. **Prepare Telegram File** (Set) — re-injects `mdBase64` + `fileName` (HTTP nodes replaced the flowing item).
+23. **Convert Markdown to File → Send Metadata to Telegram** — `sendDocument`, full description attached, **short** caption (title + episode ID only).
+24. **Send Packaging Request** (Telegram `sendMessage`, HTML) — the reply target. T1–T5, TC1–TC5, the title + guests already set, the mood library, eight optional visual ideas, and the required custom image prompt ask. See [Packaging request message](#packaging-request-message).
 
 ---
 
@@ -228,6 +246,7 @@ Option labels are the reply codes themselves (`T1.`, `TC1.`) rather than bare nu
 
 - **`Custom Image Prompt` and `Thumbnail Moods` must exist on Episodes (both Long text), and the artwork trigger view must gate on the prompt.** Until `Custom Image Prompt` exists, the assistant's write of it 422s (Airtable rejects the **whole** record write on an unknown field name), which would silently drop the title and caption in the same PATCH. Until the **view** gates on it, artwork fires as soon as the caption lands and your art direction is ignored — see the thumbnail workflow's readme for the exact view condition.
 - **Two Telegram messages now, and the second one is the reply target.** Replying to the *document* no longer works properly: its caption only carries the title and episode ID, so the assistant can't resolve "T3" from it. Reply to the **`Send Packaging Request`** message underneath. If the document send succeeds but the packaging send fails (transient DNS/Telegram blip — it retries 4×/5s), all the Airtable writes have already happened; re-running the execution re-sends both messages but also re-transcribes unless the `_Bypass` / same-length short-circuit applies.
+- **Audionauts deliberately do not receive either standard Telegram message.** They branch immediately after transcript validation, before `Fetch Mood Library` and `Generate Metadata`, and receive only `Notify Audionauts Complete`. The route logic and node configurations are verified, but the first real Audionauts upload after 2026-09-09 still needs checking in executions and Telegram.
 - **`Duration (s)` field must exist (Number).** Create it on the Episodes table. Until it does, `Store Duration` fails silently and the same-length short-circuit never fires — every upload runs the full pipeline. No breakage, just no optimisation.
 - **`Frame.io URL` field rename.** Jonny renamed the Airtable column `Frami.io URL` → `Frame.io URL` on 2026-06-21; the workflow was updated to match. If any field is still named `Frami.io URL`, the status update 422s (Airtable rejects the **whole** record write on an unknown field name) and lands no metadata — rename the column to match.
 - **Duration comes from Gemini, not Frame.io.** Frame.io's file object has no duration field (confirmed exec #778), so `Parse Duration` reads `videoMetadata.videoDuration` from the ACTIVE Gemini file. The original Frame.io-sourced version always produced `0` and silently broke the short-circuit. If `durationSeconds` is `0` now, check that the Gemini `Get File State` response actually carries `videoMetadata.videoDuration` (it appears only once the file is `ACTIVE`).
