@@ -451,7 +451,7 @@ if (duration > 300 && transcript.length < duration * 2) {
 }
 
 if (mimeType.startsWith('video/') && duration > 300) {
-  const timestampPattern = /\\[(\\d{1,3}):(\\d{2})(?::(\\d{2}))?\\]/g;
+  const timestampPattern = /\\[\\s*(\\d{1,3}):(\\d{2})(?::(\\d{2}))?\\s*\\]/g;
   let match;
   let lastTimestamp = -1;
   while ((match = timestampPattern.exec(transcript)) !== null) {
@@ -461,8 +461,11 @@ if (mimeType.startsWith('video/') && duration > 300) {
     if (seconds > lastTimestamp) lastTimestamp = seconds;
   }
   const coverage = lastTimestamp < 0 ? 0 : lastTimestamp / duration;
-  if (coverage < 0.8) {
-    failures.push('final timestamp covers only ' + Math.round(coverage * 100) + '% of the media');
+  const reachesEnd = lastTimestamp >= 0 && (lastTimestamp >= duration - 120 || coverage >= 0.8);
+  if (!reachesEnd) {
+    failures.push(lastTimestamp < 0
+      ? 'no timecode markers found in the transcript'
+      : 'final timestamp covers only ' + Math.round(coverage * 100) + '% of the media');
   }
 }
 

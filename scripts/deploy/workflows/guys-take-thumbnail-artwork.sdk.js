@@ -502,6 +502,9 @@ const sendThumbnailOptions = node({
     position: [4480,-128],
     parameters: {"operation":"sendMediaGroup","chatId":"-5254203539","media":{"media":[{"media":"={{ $json.urls[0] }}","additionalFields":{"caption":"={{ $json.captions[0] }}","parse_mode":"HTML"}},{"media":"={{ $json.urls[1] }}","additionalFields":{"caption":"={{ $json.captions[1] }}","parse_mode":"HTML"}},{"media":"={{ $json.urls[2] }}","additionalFields":{"caption":"={{ $json.captions[2] }}","parse_mode":"HTML"}},{"media":"={{ $json.urls[3] }}","additionalFields":{"caption":"={{ $json.captions[3] }}","parse_mode":"HTML"}}]},"additionalFields":{}},
     credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
+    retryOnFail: true,
+    maxTries: 5,
+    waitBetweenTries: 5000,
     webhookId: "e0ebe366-cb60-4698-b35c-bea31acca5e2"
   },
   output: [{}]
@@ -515,6 +518,9 @@ const sendPickInstructions = node({
     position: [4704,-128],
     parameters: {"chatId":"-5254203539","text":"=Reply with 1, 2, 3 or 4 to pick the thumbnail for \"{{ $('Collect Thumbnails').item.json.titleHtml }}\" ({{ $('Plan Generate').first().json.episodeDisplayId || 'no-id' }}) — or set a row's Status to Selected in the Thumbnails table. I'll reject the others and mark the episode Artwork Ready.","additionalFields":{"appendAttribution":false,"parse_mode":"HTML"}},
     credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
+    retryOnFail: true,
+    maxTries: 5,
+    waitBetweenTries: 5000,
     webhookId: "c8d18396-8119-4b1b-b208-99207bf47c9b"
   },
   output: [{}]

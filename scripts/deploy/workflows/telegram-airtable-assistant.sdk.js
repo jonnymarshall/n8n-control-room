@@ -82,6 +82,25 @@ const handleButtonPress = node({
     return [{ json: out }];
   }
 
+  // Single-use approvals (added 2026-09-25). Telegram keeps an inline keyboard live
+  // forever, so a re-tap re-runs the same write. That repeated write kept re-setting
+  // the thumbnail row to "Selected", which re-armed the artwork pick trigger - the
+  // overnight feedback loop (assistant + artwork, every ~20s for 23 minutes on
+  // BA-5GM2XJ). Refuse any approval whose message has already been executed; the
+  // message_id is recorded on success in "Record Executed Write", and "Is Duplicate?"
+  // keeps the refusal silent so a stray tapper cannot spam the group.
+  const msgId = String(cq.message?.message_id ?? '');
+  const dedupeable = data === 'wa' || /^pick:/.test(data);
+  if (dedupeable && msgId) {
+    const store = $getWorkflowStaticData('global');
+    const done = (store.approvedMessages = store.approvedMessages || {});
+    if (done[msgId]) {
+      out.duplicate = true;
+      return [{ json: out }];
+    }
+    out.messageId = msgId;
+  }
+
   const pick = data.match(/^pick:(rec[A-Za-z0-9]+)$/);
   if (pick) {
     out.execute = true;
@@ -195,7 +214,22 @@ const recordExecutedWrite = node({
   version: 2,
   config: {
     name: 'Record Executed Write',
-    parameters: { jsCode: `return [{ json: $input.first().json }];` },
+    parameters: { jsCode: `const j = $input.first().json;
+  const from = $('Handle Button Press').first().json;
+  // Remember that this approval message has been executed, so a later re-tap is
+  // refused by "Handle Button Press". Only marked on a successful Airtable write,
+  // so a failed write can still be retried. Store is bounded to ~7 days / 500 ids.
+  if (from.messageId && !j.error) {
+    const store = $getWorkflowStaticData('global');
+    const done = (store.approvedMessages = store.approvedMessages || {});
+    done[from.messageId] = Date.now();
+    const keys = Object.keys(done);
+    if (keys.length > 500) {
+      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      for (const k of keys) { if (done[k] < cutoff) { delete done[k]; } }
+    }
+  }
+  return [{ json: j }];` },
     position: [1680, 32]
   },
   output: [{ records: [{ id: 'rec1' }] }]
@@ -833,7 +867,24 @@ const sendAlbumDetails = node({
   output: [{ ok: true }]
 });
 
+const isDuplicate = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Is Duplicate?',
+    parameters: {
+      conditions: {
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 },
+        combinator: 'and',
+        conditions: [{ id: 'is-dup-1', leftValue: expr("{{ $('Handle Button Press').item.json.duplicate ? \"yes\" : \"no\" }}"), rightValue: 'yes', operator: { type: 'string', operation: 'equals' } }]
+      },
+      looseTypeValidation: true,
+      options: {}
+    },
+    position: [976, 224]
+  }
+});
+
 // ── Compose ──────────────────────────────────────────────────────────────
 // NOTE: kept on a single line on purpose — the SDK parser mis-handles deeply
 // nested multi-line .onTrue()/.onFalse() chains when both branches are complex.
-export default workflow('telegram-airtable-assistant', 'BA: Telegram Airtable Assistant').add(telegramTrigger).to(isButtonPress.onTrue(handleButtonPress.to(answerButtonTap).to(runApprovedWrite.onTrue(executeAirtableWrite.to(recordExecutedWrite).to(confirmWriteDone)).onFalse(sendOutcomeNotice))).onFalse(addressedToBot.onTrue(fromJonnyOrCharlie.onTrue(prepAgentInput.to(airtableAgent).to(parseAgentDecision).to(isWriteRequest.onTrue(stashPendingWrite.to(sendApprovalButtons)).onFalse(isPhotoReply.onTrue(buildPhotoAlbum.to(isFourPhotos.onTrue(sendAlbum.to(sendAlbumDetails)).onFalse(sendRequestedPhoto.to(sendAlbumDetails)))).onFalse(sendAnswer)))))));
+export default workflow('telegram-airtable-assistant', 'BA: Telegram Airtable Assistant').add(telegramTrigger).to(isButtonPress.onTrue(handleButtonPress.to(answerButtonTap).to(runApprovedWrite.onTrue(executeAirtableWrite.to(recordExecutedWrite).to(confirmWriteDone)).onFalse(isDuplicate.onFalse(sendOutcomeNotice)))).onFalse(addressedToBot.onTrue(fromJonnyOrCharlie.onTrue(prepAgentInput.to(airtableAgent).to(parseAgentDecision).to(isWriteRequest.onTrue(stashPendingWrite.to(sendApprovalButtons)).onFalse(isPhotoReply.onTrue(buildPhotoAlbum.to(isFourPhotos.onTrue(sendAlbum.to(sendAlbumDetails)).onFalse(sendRequestedPhoto.to(sendAlbumDetails)))).onFalse(sendAnswer)))))));

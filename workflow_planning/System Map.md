@@ -28,11 +28,16 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-09-14. `_skip` now makes a Frame.io upload fully invisible to the
-pipeline. Artwork options also get restrained, per-slot composition directions so a
-one-mood run does not send identical requests. Previously: 2026-08-20, Artwork Path 2
-skipped the 1:1 / 9:16 versions for `Clip`, `Read` and `Audionauts` episodes while the
-reject/status half continued for every type.*
+*Last updated 2026-09-29. Scheduling is now driven by EMAIL, not Calendly: emailing the
+scheduling poll to guests (with the AgentMail inbox as a recipient) sets `Scheduling`; the
+confirmed Google Calendar invite sets `Scheduled` and stamps `Record Date`; a cancellation
+reverts to `Scheduling`; and replying `suspend this episode` to a cancellation notice sets
+`Suspended`. Calendly meeting polls are invisible to the Calendly API and emit no webhook,
+which is why scheduling moved to email. The **publish gate also moved**: the archived
+`Airtable - View to Published` is replaced by the Fountain publishing workflow, which watches
+the same ready view (see stage 5). A read-only **Public API** for the client was added
+(stage 8), over the Episodes table only. Previously: 2026-09-14, `_skip` makes a Frame.io
+upload fully invisible; artwork gained per-slot composition directions.*
 
 > **How the agent should use it:** the pipeline is a state machine keyed on the
 > Episode `Status` field. To answer "what does this episode need before X runs?",
@@ -61,6 +66,10 @@ Shortlist: Shortlisted --[human: Picked]--> Picked --[auto]--> Scripted
                                                 |
                                                 v  (Script Generation creates the Episode)
 Episode:  Script Ready
+             --[human: email the scheduling poll to guests, with pod21@agentmail.to as a recipient]-->
+          Scheduling
+             --[auto: a guest confirms a slot; the Google Calendar invite lands in the AgentMail inbox]-->
+          Scheduled                       (Record Date stamped from the confirmed start time)
              --[human: record, edit, upload final cut to Frame.io]-->
           AI Analysis Complete            (Frame.io metadata workflow: transcript + summary + chapters, then a "Packaging for ..." message)
              --[human: ONE reply setting title, caption, guests, moods and image prompt]-->
@@ -76,6 +85,10 @@ Episode:  Script Ready
 ```
 
 **Branch / holding states** (not on the straight line):
+- `Suspended` — the episode is fully cancelled. Set when Jonny replies `suspend this
+  episode` to a booking-cancellation notice (the Telegram assistant proposes the
+  `Status = Suspended` write). The cancellation workflow itself only reverts to
+  `Scheduling`; `Suspended` is a deliberate human follow-up.
 - `Awaiting Manual Artwork` — the artwork workflow could not auto-generate (Type is
   blank or unrecognised). Someone must make the artwork by hand.
 - `Revising` — this is a **Thumbnails row** status (not an Episode status). The
@@ -89,12 +102,18 @@ Episode:  Script Ready
 
 **Human handoffs (the only steps a person must do):**
 1. Pick a Shortlist topic (`Shortlisted` -> `Picked`).
-2. Record + edit + upload the final cut to Frame.io, named `BA-{id}_...`.
-3. **Reply to the "Packaging for ..." Telegram message.** One reply can set the title,
+2. **Email the scheduling poll to guests**, with `pod21@agentmail.to` as a recipient
+   (that email is what moves the episode to `Scheduling`), and add that inbox as a guest
+   when the slot is booked so its confirmation reaches the workflow.
+3. Record + edit + upload the final cut to Frame.io, named `BA-{id}_...`.
+4. **Reply to the "Packaging for ..." Telegram message.** One reply can set the title,
    the thumbnail caption, any guests to add, the thumbnail moods, and the **custom image
    prompt**. The image prompt is the one that gates artwork — nothing generates without
    it. Then set the episode to `Approved`.
-4. Pick one of the 4 thumbnail options (set a Thumbnails row to `Selected`).
+5. Pick one of the 4 thumbnail options (set a Thumbnails row to `Selected`).
+
+If a booking is cancelled, optionally reply `suspend this episode` to the cancellation
+notice to set the episode to `Suspended`.
 
 Everything between those is automatic.
 
@@ -149,6 +168,7 @@ why a Clip has no 9:16, this is why, and it is deliberate, not a failure.
 | `Chapters JSON` | attachment | Podcasting 2.0 chapters file. Written by the metadata workflow. |
 | `Frame.io URL` | URL | Link to the cut. Written/refreshed by the metadata workflow. |
 | `Duration (s)` | number | Integer seconds. Written by the metadata workflow. |
+| `Record Date` | date/time | The confirmed recording slot. Written by the scheduling workflow (2b) when a booking is confirmed, read from the calendar invite; also settable by hand. |
 | `Thumbnail Caption` | long text | The artwork headline. Set by Jonny's reply to the packaging message (`TC1`–`TC5` or his own wording). A precondition for artwork. |
 | `Custom Image Prompt` | long text | **His free-text art direction for this episode's artwork.** Set by the same reply. **This is the field artwork is gated on** — an episode with it empty never generates, with no error and no reminder. `default` (or `none`) is a valid answer meaning "no extra direction". Fills a `{{CUSTOM}}` placeholder in the layout prompt template. |
 | `Thumbnail Moods` | long text | Comma-separated mood names he picked, e.g. `confident, shocked`. Matched by name (case-insensitively) against the `Thumbnail References` library and cycled across the 4 artwork options **in the order given** — one mood means all four use it, two means they alternate. Empty or all-unmatched quietly falls back to the whole library, so a typo costs variety rather than breaking the run. Not a gate. |
@@ -179,6 +199,29 @@ Episodes table `tbl3uYLIvtB9APZp6`.
   `Summary`, `Script`, `References`, and a link back to the Shortlist row; attaches
   a slideshow HTML; sets the Shortlist row to `Scripted`; DMs Jonny the script.
 - **Next:** human records + edits + uploads the final cut to Frame.io.
+
+### 2b. AgentMail Received > Episode Scheduling
+- **Fires:** an email arrives in the `pod21@agentmail.to` inbox (AgentMail `message.received`
+  webhook). This replaces the Calendly webhook entirely.
+- **Why email:** Calendly meeting polls are invisible to the Calendly API and send no
+  webhook (confirmed 2026-09-29), so the poll-link email and the calendar emails are the
+  only reliable signals.
+- **Preconditions checklist (Episode):** the episode `ID` (`BA-xxxx`) appears somewhere in
+  the email body. (`Title` is only cosmetic in the notice, never used for matching.)
+- **Does, by email type:**
+  - **Poll email** (from `pod21.xyz` / `jonnymarshall5@gmail.com`, no calendar attachment,
+    mentions the `ID`) -> `Status = Scheduling`.
+  - **Confirmation** (a Google Calendar `Invitation:` email with an `.ics` attachment) ->
+    `Status = Scheduled` and `Record Date` = the confirmed start time, taken from the
+    `.ics` `DTSTART`.
+  - **Cancellation** (a Google Calendar `Cancelled event:` email) -> `Status = Scheduling`.
+  - If no episode matches, it posts a **Not Matched Alert** to the group rather than
+    failing silently.
+- **Status guards:** only episodes still pre-scheduling are moved (a blank status counts),
+  so it can't drag a `Recorded`/`Published` episode backwards. A cancellation only acts on
+  `Scheduled`.
+- **Next:** the human records + edits + uploads; on a cancellation, reply
+  `suspend this episode` to the notice to set `Suspended`.
 
 ### 3. Frame.io Uploaded > AI Metadata
 - **Fires:** a file becomes ready in the Frame.io project (any upload).
@@ -315,10 +358,16 @@ Three paths in one workflow.
   `16x9` alone leaves the 1:1/9:16 as they were (with a heads-up note).
 - **Next:** publishing, or another revision.
 
-### 5. View to Published
-- **Fires:** an Episode enters a specific "ready to publish" view.
-- **Does:** sets `Status = Ready to Publish`. (The full publishing fan-out is not
-  yet built.)
+### 5. Publishing (Fountain)
+- **Was:** `Airtable - View to Published` (`7O9z3UwcUOkHjAC2`) polled the ready view
+  `viwDfPHHKrgggdw20` and set `Status = Ready to Publish`. **Archived 2026-09-29.**
+- **Now:** the Fountain publishing workflow watches the same ready view and owns this
+  gate: `BA - Ready for Publishing View Entered > Fountain Scheduled` (`LTmRVKn9TWJd6Gtk`).
+  A companion reconciler, `BA - Schedule Every 15m > Fountain Publication Reconciled`
+  (`pvCPy320OjawDkSu`, currently inactive), marks the episode `Published` once Fountain
+  publishes. See those two readmes for the flow.
+- **Still being built out:** the per-channel fan-out beyond Fountain (Phase 3 in the
+  Build Status).
 
 ### 6. n8n GitHub Backups
 - **Fires:** daily at **3am**. Infra only. Backs up every workflow's JSON to a
@@ -329,6 +378,13 @@ Three paths in one workflow.
 - **Does:** posts the failure (workflow, node, error, execution link) to the group
   and logs it to an Ops Log table. No episode involvement.
 
+### 8. Public API (client access, not a pipeline stage)
+- **What it is:** a token-authenticated, **read-only** webhook (`POST /webhook/api`) that lets an external client read the Episodes table only. It never writes and cannot reach another table. It is not part of the production pipeline; it exists so a third party can read episode data without ever seeing our credentials.
+- **Fires:** an HTTP POST from the client with their bearer token in the `Authorization` header.
+- **Does:** checks the token against the `api_tokens` n8n Data Table (`revoked = false`), then serves either `list_episodes` (a page of up to 100, with optional `filterByFormula` / `fields`) or `get_episode` (by `BA-xxxx` or `rec...` id), returning JSON.
+- **Errors:** 401 for a missing/wrong/revoked token; 400 for an unknown action or an invalid query (a plain `{ error, detail }`, never a crash).
+- **Guardrail:** if someone asks how a client gets episode data, this is the answer. The client never sees the Airtable PAT. Tokens are minted/revoked with `scripts/deploy/tokens/issue.sh` / `revoke.sh`. Client-facing doc: `setup/Public API - client guide.md`.
+
 ---
 
 ## Known problems and recent fixes (as of 2026-08-20)
@@ -338,6 +394,10 @@ The bug log is the **Automation Upgrades** table (base `appwcz1Bux9YLcZYm`, tabl
 `tblja27Lsn7qXJfZM`); read it to answer "what's currently broken?" and add to it when
 something new is reported.
 
+- **Calendly meeting polls are invisible to the API (confirmed 2026-09-29).** Poll creation
+  and booking produce no Calendly webhook, no `scheduled_event`, and the poll isn't in
+  `GET /event_types`. Scheduling is email-driven instead (workflow 2b above). If someone
+  asks why Calendly shows nothing for a poll, this is why — not a bug.
 - **Clip / Read / Audionauts skipping the 1:1 and 9:16 — NEW 2026-08-20, not yet run.**
   This is intended behaviour, not a bug, but it has not been confirmed on a real pick
   yet. If a **non**-Clip episode stops getting its square and vertical versions, that IS
@@ -398,3 +458,7 @@ something new is reported.
 - Airtable polling triggers fire when a row's `Last Modified Time` **advances**, not
   because a row is sitting in a view. A row that stops changing never re-fires by itself.
 - Generating artwork costs real money per image, so don't suggest re-running it casually.
+- Scheduling is email-driven. A poll-link email the workflow recognizes moves an episode to
+  `Scheduling`; a Google Calendar confirmation moves it to `Scheduled` and sets `Record
+  Date`; a cancellation reverts it to `Scheduling`. Reply `suspend this episode` to a
+  cancellation notice to set `Suspended`.

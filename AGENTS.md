@@ -4,7 +4,7 @@ Instructions for any AI coding agent (opencode, Claude Code, Cursor, etc.) worki
 
 ## What this repo is
 
-The admin side of a self-hosted n8n automation server. It runs the **Guy's Take / Pod21 content machine** (Airtable is the state machine, n8n executes, Telegram is the team interface) plus a separate Calendly bookings + public API setup. This repo holds admin shell scripts, per-workflow SDK source files, per-workflow readmes, and the planning docs.
+The admin side of a self-hosted n8n automation server. It runs the **Guy's Take / Pod21 content machine** (Airtable is the state machine, n8n executes, Telegram is the team interface). This repo holds admin shell scripts, per-workflow SDK source files, per-workflow readmes, and the planning docs.
 
 ## Read before touching anything
 
@@ -44,7 +44,7 @@ The `n8n-skills` knowledge base (from `github.com/czlonkowski/n8n-skills`, MIT) 
 
 ## Don't
 
-- Never commit secrets (`.env`, tokens, `client/.env`). `.gitignore` already covers these.
+- Never commit secrets (`.env`, tokens). `.gitignore` already covers these.
 - Never give the n8n agent write endpoints; read-only tools only.
 - Never trigger a workflow stage from the previous stage's workflow; trigger off Airtable state.
 - Never put a second Telegram Trigger on `@pod21_n8n_agent_bot`.

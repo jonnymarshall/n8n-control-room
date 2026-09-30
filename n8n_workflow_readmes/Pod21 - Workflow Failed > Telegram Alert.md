@@ -59,7 +59,7 @@ Wiring checklist (active workflows as of 2026-07-06):
 - [ ] `Airtable - View to Published` (`7O9z3UwcUOkHjAC2`)
 - [x] `BA: Telegram Airtable Assistant` (`Hx8Ul6M41fM8HuxU`)
 - [x] `pod21: n8n Githup Backups` (`spXF48NOXJYaDfnz`) — keep its own inline failure DM too; belt and braces
-- [ ] `Calendly Bookings` (`VPjMyEdiiEobpskU`) — optional, not content-machine
+- [x] `Calendly Bookings` (`VPjMyEdiiEobpskU`) — archived 2026-09-29 (superseded by `AgentMail Received > Episode Scheduling`, `DFkl8armVlXqBWWD`, which has the error workflow wired)
 - [ ] **New workflows:** wiring this setting is part of the standard post-build checklist from now on
 
 ---
