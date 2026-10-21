@@ -156,6 +156,30 @@ git, so nobody can diff what changed or spot drift.
 
 ---
 
+## RULE: Agents create PRs; Jonny merges them
+
+**An agent never merges its own pull request, and never pushes straight to `main`.** The
+workflow is: branch, commit, push the branch, open the PR, **report the URL and stop**.
+
+**These authorise a merge:** "merge it", "merge the PR", "merge the branch",
+"go ahead and merge", "approve the merge", "you can merge".
+
+**These do not:** "push the code", "push this", "create a PR", "open a PR", "push and
+merge", "I'm ready to merge this". They authorise the PR at most.
+
+- Enforced in code, not by good intentions: `.opencode/plugins/merge-guard.js` (opencode)
+  and `.claude/hooks/merge-guard.py` (Claude Code, wired as a `PreToolUse` hook on `Bash`)
+  block `gh pr merge`, the API merge endpoint, and any `git push` that targets `main`.
+- The `no-auto-merge` skill (`~/.claude/skills/no-auto-merge/SKILL.md`) carries the same
+  rule, but a skill only applies if the agent loads it, which is why the code guard exists.
+- `.claude/settings.local.json` previously allow-listed `Bash(gh pr *)`, which pre-approved
+  `gh pr merge`. It is now split into the read and create subcommands only.
+
+**Why.** On 2026-10-21 an agent read "I'm ready to merge this" as authorisation and merged
+PR #15 unattended. The content was wanted; the merge was not the agent's to make.
+
+---
+
 ## Related conventions enforced elsewhere
 
 - **Airtable Trigger Fields** — when restricting the Fields list, include the
