@@ -28,16 +28,23 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-09-29. Scheduling is now driven by EMAIL, not Calendly: emailing the
-scheduling poll to guests (with the AgentMail inbox as a recipient) sets `Scheduling`; the
-confirmed Google Calendar invite sets `Scheduled` and stamps `Record Date`; a cancellation
-reverts to `Scheduling`; and replying `suspend this episode` to a cancellation notice sets
-`Suspended`. Calendly meeting polls are invisible to the Calendly API and emit no webhook,
-which is why scheduling moved to email. The **publish gate also moved**: the archived
-`Airtable - View to Published` is replaced by the Fountain publishing workflow, which watches
-the same ready view (see stage 5). A read-only **Public API** for the client was added
-(stage 8), over the Episodes table only. Previously: 2026-09-14, `_skip` makes a Frame.io
-upload fully invisible; artwork gained per-slot composition directions.*
+*Last updated 2026-10-21 (the scheduling workflow now looks the episode up by `ID` alone and
+checks the status separately, so its alerts distinguish "no episode with that ID" from
+"found but the status guard blocked it"; a poll email revives a `Suspended` episode to
+`Scheduling`, a booking confirmation revives it straight to `Scheduled`, and every route back
+to `Scheduling` clears `Record Date` so a cancelled slot's time can't linger on the episode).
+Previously: 2026-10-07 (the ready-for-publishing view now excludes `Clip`/`Audionauts` episodes and any episode with no 1x1 thumbnail, after a Clip wrongly reached the Fountain publisher; artwork per-option variation is now a required, front-loaded instruction, so one-mood runs stop returning identical options). The Frame.io metadata workflow now transcribes long video in
+20-minute Gemini windows (chunked, then stitched), after a 2h20m roundtable degenerated
+into a repetition loop in a single whole-file call. Previously: 2026-10-01 (guest intake
+became an Airtable-only flow: a Chat episode's `Guest Form URL` sends the guest a
+pre-filled form, and their submission creates or links a `Guests` record automatically,
+stage 9; publishing to Fountain went LIVE, with the ready view `viwDfPHHKrgggdw20`
+(`Status = Ready to Publish`, plus `Title`, `Frame.io URL`, `Summary`, `Chapters` and
+`Thumbnails` not empty, plus `Release Date` on or after `today`, America/New_York)
+driving the publisher / reconciler / content-sync trio, see stage 5); 2026-09-29
+(scheduling moved from Calendly to EMAIL, `Airtable - View to Published` archived, Public
+API added); 2026-09-14 (`_skip` makes a Frame.io upload fully invisible, artwork gained
+per-slot composition directions).*
 
 > **How the agent should use it:** the pipeline is a state machine keyed on the
 > Episode `Status` field. To answer "what does this episode need before X runs?",
@@ -88,7 +95,9 @@ Episode:  Script Ready
 - `Suspended` — the episode is fully cancelled. Set when Jonny replies `suspend this
   episode` to a booking-cancellation notice (the Telegram assistant proposes the
   `Status = Suspended` write). The cancellation workflow itself only reverts to
-  `Scheduling`; `Suspended` is a deliberate human follow-up.
+  `Scheduling`; `Suspended` is a deliberate human follow-up. It is not a dead end: a
+  reschedule poll revives it to `Scheduling`, and a slot booked off an existing link revives
+  it to `Scheduled` (a real booking outranks the status flag).
 - `Awaiting Manual Artwork` — the artwork workflow could not auto-generate (Type is
   blank or unrecognised). Someone must make the artwork by hand.
 - `Revising` — this is a **Thumbnails row** status (not an Episode status). The
@@ -215,11 +224,18 @@ Episodes table `tbl3uYLIvtB9APZp6`.
     `Status = Scheduled` and `Record Date` = the confirmed start time, taken from the
     `.ics` `DTSTART`.
   - **Cancellation** (a Google Calendar `Cancelled event:` email) -> `Status = Scheduling`.
-  - If no episode matches, it posts a **Not Matched Alert** to the group rather than
-    failing silently.
-- **Status guards:** only episodes still pre-scheduling are moved (a blank status counts),
-  so it can't drag a `Recorded`/`Published` episode backwards. A cancellation only acts on
-  `Scheduled`.
+  - Both routes back to `Scheduling` also clear `Record Date`, so the field only holds a time
+    while the episode is actually `Scheduled`.
+  - It finds the episode by `ID` **only**, then checks the status separately, so the alert
+    always names the real reason: no episode with that `ID` -> a **Not Found Alert** (kind,
+    ID, subject); episode found but excluded by the status guard -> a **Guard Blocked Alert**
+    naming the episode and its current status. Neither alert changes anything.
+- **Status guards:** a poll email acts on a blank status, `Script Ready`, `Stories Picked`,
+  `Research Ready` and `Suspended` (so a reschedule poll revives a cancelled episode, which
+  is the normal way an episode comes back); a confirmation acts on those plus `Scheduling`
+  and `Scheduled` (and also `Suspended`, because a booked slot is proof the recording exists);
+  a cancellation only acts on `Scheduled`. Anything else is left untouched
+  and reported, so it can't drag a `Recorded`/`Published` episode backwards.
 - **Next:** the human records + edits + uploads; on a cancellation, reply
   `suspend this episode` to the notice to set `Suspended`.
 
@@ -459,6 +475,8 @@ something new is reported.
   because a row is sitting in a view. A row that stops changing never re-fires by itself.
 - Generating artwork costs real money per image, so don't suggest re-running it casually.
 - Scheduling is email-driven. A poll-link email the workflow recognizes moves an episode to
-  `Scheduling`; a Google Calendar confirmation moves it to `Scheduled` and sets `Record
-  Date`; a cancellation reverts it to `Scheduling`. Reply `suspend this episode` to a
-  cancellation notice to set `Suspended`.
+  `Scheduling`, including one that is currently `Suspended`; a Google Calendar confirmation
+  moves it to `Scheduled` and sets `Record Date`; a cancellation reverts it to `Scheduling`.
+  Reply `suspend this episode` to a cancellation notice to set `Suspended`. When an email
+  can't be acted on, the group gets an alert that says whether the `ID` matched nothing or
+  the status guard blocked it (and which status it found).

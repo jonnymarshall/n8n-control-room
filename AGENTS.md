@@ -22,7 +22,7 @@ Before changing any `.sdk.js` file, pull the live workflow (`get_workflow_detail
 
 1. **Publish** it (an MCP/SDK push only saves a draft; `versionId` must equal `activeVersionId`).
 2. **Confirm Active** and `availableInMCP` are still set.
-3. **Rebind every HTTP-node credential by hand** (auto-assignment skips HTTP Request nodes on every push; the readmes list which credential each node needs).
+3. **Check every HTTP-node credential is still bound** rather than rebinding by default. MCP pushes now bind credentials passed inline and a partial update leaves existing bindings alone, so the old blanket rebind is no longer needed. Verify via REST `GET /api/v1/workflows/<id>` (it returns `credentials`; the MCP read strips them).
 4. **Fresh-flip test any polling trigger** (Airtable pollers re-baseline their cursor to ~now on publish; a row already in the trigger view won't fire).
 
 ## Shell scripts
@@ -37,6 +37,7 @@ The `.claude/hooks/` Python hooks only run inside Claude Code. Under opencode:
 - **Telegram record-ID lint**: every Telegram message about a record must include its ID (`BA-xxxx`) in a `<code>` block. (No plugin; do by hand.)
 - **Airtable trigger-fields lint**: leave the Fields list empty (whole record); if restricting, include the trigger field and use commas with no spaces. (No plugin; do by hand.)
 - **Readme reminder**: when a workflow is created/updated, write or update its readme in `n8n_workflow_readmes/` (filename = workflow display name, colon → hyphen). (No plugin; do by hand.)
+- **`.sdk.js` snapshot reminder**: **every non-archived workflow has a snapshot in `scripts/deploy/workflows/`.** Create it when the workflow is created, refresh it when the workflow changes. `./scripts/deploy/workflows/snapshot-sdk.sh <workflow_id>` generates it from live; `./scripts/query/sdk-coverage.sh` lists anything missing and exits non-zero. (No plugin; do by hand.)
 
 ## n8n expert guidance
 

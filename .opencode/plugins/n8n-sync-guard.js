@@ -57,6 +57,27 @@ function saveBaseline(dir, id, updatedAt, name, how) {
   } catch {}
 }
 
+// Tool-name matching. MCP exposes the push as n8n_update_partial_workflow,
+// n8n_update_full_workflow, or (older builds) update_workflow. Matching only the
+// literal "update_workflow" silently skipped every partial push, which is the
+// common case, so the manual-edit guard never ran. Match the family instead.
+const UPDATE_TOOL_RE = /update_(partial_|full_)?workflow$/
+const CREATE_FROM_CODE_RE = /create_workflow_from_code$/
+const PULL_TOOL_RE = /get_workflow_details$|get_workflow$/
+
+const isUpdateTool = (name) => UPDATE_TOOL_RE.test(String(name || ""))
+const isCreateFromCodeTool = (name) => CREATE_FROM_CODE_RE.test(String(name || ""))
+const isPullTool = (name) => PULL_TOOL_RE.test(String(name || ""))
+
+// opencode passes tool arguments on the output object for before-hooks; older
+// builds and the after-hook shape put them on the input. Read whichever exists,
+// otherwise the id is never found and the guard silently does nothing.
+function argsOf(input, output) {
+  if (output && output.args && typeof output.args === "object") return output.args
+  if (input && input.args && typeof input.args === "object") return input.args
+  return {}
+}
+
 function workflowIdFrom(args, resultText) {
   if (args && typeof args === "object") {
     for (const k of ["workflowId", "id", "workflow_id"]) {
@@ -93,10 +114,10 @@ export const N8nSyncGuard = async ({ directory, client }) => {
 
   return {
     "tool.execute.before": async (input, output) => {
-      // Guard the push tool only. create_workflow_from_code makes a NEW workflow
+      // Guard every push tool. create_workflow_from_code makes a NEW workflow
       // (nothing live to clobber), so it doesn't need the pre-check.
-      if (!input.tool.includes("update_workflow")) return
-      const id = workflowIdFrom(output.args, null)
+      if (!isUpdateTool(input.tool)) return
+      const id = workflowIdFrom(argsOf(input, output), null)
       if (!id) return // nothing to compare against (e.g. no id in args) -> allow
 
       if (!baseUrl || !apiKey) {
@@ -143,10 +164,17 @@ export const N8nSyncGuard = async ({ directory, client }) => {
     },
 
     "tool.execute.after": async (input, output) => {
-      const isWrite = input.tool.includes("update_workflow") || input.tool.includes("create_workflow_from_code")
-      const isPull = input.tool.includes("get_workflow_details")
+      // Record a baseline after any successful push, and after a pull (a pull is
+      // how an agent acknowledges the live version, so it refreshes the baseline
+      // too). Without this the next push has nothing to compare against.
+      const isWrite = isUpdateTool(input.tool) || isCreateFromCodeTool(input.tool)
+      const isPull = isPullTool(input.tool)
       if (!isWrite && !isPull) return
-      const id = workflowIdFrom(input.args, output.output)
+      const rawResult = output && output.output
+      const id = workflowIdFrom(
+        argsOf(input, output),
+        typeof rawResult === "string" ? rawResult : ""
+      )
       if (!id || !baseUrl || !apiKey) return
       try {
         const live = await fetchUpdatedAt(baseUrl, apiKey, id)
