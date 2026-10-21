@@ -45,6 +45,7 @@ The `n8n-skills` knowledge base (from `github.com/czlonkowski/n8n-skills`, MIT) 
 
 ## Don't
 
+- **Never merge a pull request.** Create the branch and the PR, report the URL, and stop. Jonny merges. "I'm ready to merge this", "push and merge" and "create a PR" are readiness, not authorisation; "merge it", "merge the PR", "go ahead and merge" and "you can merge" are. Enforced by `.opencode/plugins/merge-guard.js` and `.claude/hooks/merge-guard.py`.
 - Never commit secrets (`.env`, tokens). `.gitignore` already covers these.
 - Never give the n8n agent write endpoints; read-only tools only.
 - Never trigger a workflow stage from the previous stage's workflow; trigger off Airtable state.
