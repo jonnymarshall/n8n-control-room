@@ -150,7 +150,7 @@ return out;`;
 
 const transcribePrompt = "You are a precise transcription engine. Transcribe the ENTIRE audio of the supplied video or audio file verbatim. Do not summarise, paraphrase, or omit anything. At the start of each new topic or roughly every 30-60 seconds, insert a timecode marker in the form [MM:SS] on its own. Where two or more distinct speakers are present, label turns as 'Speaker 1:', 'Speaker 2:' etc. Output plain text only.";
 
-const metadataSystemPrompt = "You are the YouTube growth editor for Guy's Take, a punchy Bitcoin and sovereign-tech commentary show hosted by Guy. From the supplied transcript produce packaging options. Return a JSON object with EXACTLY these six keys: (1) titles: array of exactly 5 high-CTR YouTube title strings, punchy, max 70 chars, no emojis; (2) thumbnail_captions: array of exactly 5 ultra-short viral thumbnail captions, 2-5 words each; (3) iconography_ideas: array of exactly 8 concise visual concepts for thumbnail art, grounded in the episode's subject. Use physical objects, scenes, metaphors, or symbols that make the topic instantly recognisable. Do not suggest text, words, logos, watermarks, literal currency symbols, or generic "Bitcoin" imagery; (4) description: a single string opening with a 2-3 sentence hook paragraph, then a line 'Chapters:' followed by timecoded chapter markers each on its own line formatted as 'MM:SS Chapter title', first chapter at 00:00, 5-10 chapters total; (5) summary: a single concise 2-3 sentence podcast-listing summary — voice depends on EPISODE TYPE: Take/Chat/Roundtable = first person as host Guy; Clip = THIRD PERSON about the GUEST (e.g. 'In this clip, {GUEST} explains...'); Unknown = general first person; (6) chapters: array of chapter objects, each with startTime as an INTEGER number of seconds converted from the [MM:SS] timecode in the transcript (e.g. [02:14] becomes the integer 134, NOT the string '02:14') and title as a 2-5 word string — 5-10 chapters, first at startTime 0. Base everything strictly on the transcript. Never invent facts or timecodes not present in the transcript.";
+const metadataSystemPrompt = "You are the YouTube growth editor for Guy's Take, a punchy Bitcoin and sovereign-tech commentary show hosted by Guy. From the supplied transcript produce packaging options. Return a JSON object with EXACTLY these six keys: (1) titles: array of exactly 5 high-CTR YouTube title strings, punchy, max 70 chars, no emojis; (2) thumbnail_captions: array of exactly 5 ultra-short viral thumbnail captions, 2-5 words each; (3) iconography_ideas: array of exactly 8 concise visual concepts for thumbnail art, grounded in the episode's subject. Use physical objects, scenes, metaphors, or symbols that make the topic instantly recognisable. Do not suggest text, words, logos, watermarks, literal currency symbols, or generic \"Bitcoin\" imagery; (4) description: a single string opening with a 2-3 sentence hook paragraph, then a line 'Chapters:' followed by timecoded chapter markers each on its own line formatted as 'MM:SS Chapter title', first chapter at 00:00, 5-10 chapters total; (5) summary: a single concise 2-3 sentence podcast-listing summary — voice depends on EPISODE TYPE: Take/Chat/Roundtable = first person as host Guy; Clip = THIRD PERSON about the GUEST (e.g. 'In this clip, {GUEST} explains...'); Unknown = general first person; (6) chapters: array of chapter objects, each with startTime as an INTEGER number of seconds converted from the [MM:SS] timecode in the transcript (e.g. [02:14] becomes the integer 134, NOT the string '02:14') and title as a 2-5 word string — 5-10 chapters, first at startTime 0. Base everything strictly on the transcript. Never invent facts or timecodes not present in the transcript.";
 
 const metadataPromptText = "Generate the packaging options for this Guy's Take episode.\n\nEPISODE TYPE: {{ $('Find Episode').all().length ? ($('Find Episode').first().json.Type || $('Find Episode').first().json.Category || 'Unknown') : 'Unknown' }}\n\nGUEST: {{ $('Find Episode').all().length && $('Find Episode').first().json['Guest Name'] ? (Array.isArray($('Find Episode').first().json['Guest Name']) ? $('Find Episode').first().json['Guest Name'].join(', ') : $('Find Episode').first().json['Guest Name']) : 'Unknown' }}\n\nWORKING TITLE: {{ $('Extract Episode Info').first().json.fileName }}\n\nTRANSCRIPT (with timecodes):\n{{ $('Extract Transcript').first().json.transcript }}";
 
@@ -451,7 +451,7 @@ if (duration > 300 && transcript.length < duration * 2) {
 }
 
 if (mimeType.startsWith('video/') && duration > 300) {
-  const timestampPattern = /\\[(\\d{1,3}):(\\d{2})(?::(\\d{2}))?\\]/g;
+  const timestampPattern = /\\[\\s*(\\d{1,3}):(\\d{2})(?::(\\d{2}))?\\s*\\]/g;
   let match;
   let lastTimestamp = -1;
   while ((match = timestampPattern.exec(transcript)) !== null) {
@@ -461,8 +461,11 @@ if (mimeType.startsWith('video/') && duration > 300) {
     if (seconds > lastTimestamp) lastTimestamp = seconds;
   }
   const coverage = lastTimestamp < 0 ? 0 : lastTimestamp / duration;
-  if (coverage < 0.8) {
-    failures.push('final timestamp covers only ' + Math.round(coverage * 100) + '% of the media');
+  const reachesEnd = lastTimestamp >= 0 && (lastTimestamp >= duration - 120 || coverage >= 0.8);
+  if (!reachesEnd) {
+    failures.push(lastTimestamp < 0
+      ? 'no timecode markers found in the transcript'
+      : 'final timestamp covers only ' + Math.round(coverage * 100) + '% of the media');
   }
 }
 

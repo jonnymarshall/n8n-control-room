@@ -2,10 +2,6 @@
 .env
 .env.*
 !.env.example
-client/.env
-
-# Local state written by deploy scripts
-.public-api-workflow-id
 
 # Claude Code per-user state (not shared)
 .claude/settings.local.json
@@ -35,3 +31,6 @@ yarn-error.log*
 
 # Local scratch / temp work (session notes, build scraps)
 tmp/
+
+# Working data (not source): Bitcoin podcast RSS enrichment batches
+data/
