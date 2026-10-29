@@ -380,6 +380,10 @@ pipeline); a webhook cannot be made idempotent, but a `Status` can.
   Replying to the *file* instead of the packaging message will not work properly.
 - **If a run fails:** the row sits at `Generating Metadata` and the error workflow names it.
   Set `Status = Ready for Metadata` to retry.
+- **Never queue a published episode.** Setting `Ready for Metadata` on an episode that is
+  already `Approved` or beyond re-runs everything, rewrites `Summary`/`Transcript`/`Chapters`
+  and knocks `Status` back to `AI Analysis Complete`, which invalidates the Fountain
+  publisher's approved fingerprint. The lever is for pre-approval episodes only.
 - **Next:** Jonny replies (see human handoff 3) and sets the episode to `Approved`.
 
 ### 4. Thumbnail Artwork

@@ -22,6 +22,8 @@ SDK source: `scripts/deploy/workflows/guys-take-metadata-from-view.sdk.js`.
 
 **Debug footer.** Every Telegram message ends with `⚙️ <workflow id> · exec <execution id>`.
 
+⚠️ **Never hand-queue a published episode.** `Ready for Metadata` is also the manual retry lever, but setting it on an episode that has already been approved or published re-runs the whole pipeline and rewrites `Summary`, `Transcript` and `Chapters`, and knocks `Status` back to `AI Analysis Complete`. The Fountain publisher's approved-fingerprint check would then see the description as stale. Queue only pre-approval episodes; for a genuine re-cut on a published episode, handle it deliberately (the content-sync path) rather than by re-queuing metadata.
+
 ---
 
 ## TL;DR
