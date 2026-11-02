@@ -48,6 +48,17 @@
         ]
       },
       {
+        "matcher": "mcp__n8n-mcp__update_workflow|mcp__n8n-mcp__update_partial_workflow|mcp__n8n-mcp__update_full_workflow|mcp__n8n-mcp__create_workflow|mcp__n8n-mcp__create_workflow_from_code",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/sdk-snapshot.py\"",
+            "timeout": 60,
+            "statusMessage": "Refreshing the workflow's .sdk.js snapshot from live"
+          }
+        ]
+      },
+      {
         "matcher": "mcp__n8n-mcp__create_workflow_from_code|mcp__n8n-mcp__update_workflow",
         "hooks": [
           {

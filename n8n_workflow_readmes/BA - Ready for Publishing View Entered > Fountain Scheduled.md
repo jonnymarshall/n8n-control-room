@@ -2,9 +2,12 @@
 
 > **Find this workflow in n8n by name.** Workflow IDs can change when a workflow is rebuilt. ID at time of writing: `LTmRVKn9TWJd6Gtk`.
 
+> **2026-10-29 - same-day releases now schedule one hour out (LIVE, published `9dcae82d`).** `BA-8YfSPH` was published with `Release Date = 2026-11-01`, so it scheduled for 1 Nov 06:00 EST and went live correctly. The Release Date was then edited to the same day, 29 Oct, and nothing moved (schedule edits after the fact are still manual, see below). That exposed a second trap while diagnosing it: the ready view admits `Release Date = today`, but `Build Fountain Plan` computed **today at `Default Publish Time` (06:00)** and threw `Fountain schedule time must be in the future` whenever the flip happened later in the day. A same-day release was therefore impossible after 06:00. **Fix:** `Build Fountain Plan` now branches. A **future** `Release Date` still uses that date at `Default Publish Time`; a **today** `Release Date` schedules **`$now + 1 hour`** with seconds zeroed. No per-episode time field. The plan also emits `scheduledReleaseDate`, which `Mark Fountain Scheduled` writes to the new `Publications.Scheduled Release Date` (`fld0GMFuqzPu9dat6`) so the sync work below can tell whether the Airtable date has moved since the item was scheduled. Live edit was two `patchNodeField` operations (no structural change); `versionId` = `activeVersionId`; still active; 16 Airtable, 9 `FOUNTAIN_API_KEY`, 2 Telegram and 1 `Adobe OAuth` bindings intact. SDK snapshot refreshed. **Not yet exercised on a real same-day publish** - the next one is the test.
+
+
 Local SDK source: `scripts/deploy/workflows/guys-take-fountain-publishing.sdk.js`
 
-Live state as of 2026-09-29: **active**, version `84570af3-fd51-402c-acf2-a3675e65a5d1` (version counter 9, and the published/active version). The local source mirrors live: the `FOUNTAIN_API_KEY` bearer binding on all nine Fountain HTTP nodes, a `Resolve Frame.io Media` step that exchanges the Episode `Frame.io URL` for a fresh signed download URL via the Frame.io API, per-part uploads via inline Node scripts, and a guard that starts only when no Publication exists or its status is `Pending`.
+Live state as of 2026-09-30: **active**, version `dbc1e3fd-15cc-4754-910e-940bbd7d535e` (version counter 17, and the published/active version). **Added 2026-10-07:** two ready-view guards (`Type` is not `Clip`/`Audionauts`; `1x1 Thumbnail Count` must be greater than 0), after `BA-5XpVHJ` (a `Clip` with only a 16x9) wrongly reached the publisher and failed at `Build Fountain Plan` (exec 5056). The local source mirrors live: the `FOUNTAIN_API_KEY` bearer binding on all nine Fountain HTTP nodes, a `Resolve Frame.io Media` step that exchanges the Episode `Frame.io URL` for a fresh signed download URL via the Frame.io API, per-part uploads via inline Node scripts, a shared description builder sub-workflow, and a guard that starts when there is no Publication row or its status is `Pending`, `Failed`, or `Needs Attention`.
 
 ---
 
@@ -49,7 +52,41 @@ The workflow is guarded and resumable through the `Publications` row. It does no
 
 The Airtable poller checks the trigger view every minute using `Last Modified Time`. A record must newly enter the view or have a later modification time than the poller's stored cursor. Merely leaving an old row in the view does not make it a dependable test.
 
-`Claim Episode as Publishing` runs first and changes `Status` to `Publishing`, which should remove the record from the ready view before any long upload starts. The exact filters on view `viwDfPHHKrgggdw20` are managed in Airtable and are not exposed by the Airtable API used for this snapshot. Verify in the Airtable UI that the view selects only complete episodes intended for publishing and excludes `Publishing`, `Scheduled`, and `Publishing Failed`.
+`Claim Episode as Publishing` runs first and changes `Status` to `Publishing`, which removes the record from the ready view before any long upload starts.
+
+The view `viwDfPHHKrgggdw20` shows an episode only when **all** of these hold:
+
+- `Title` is not empty
+- `Frame.io URL` is not empty
+- `Summary` is not empty
+- `Chapters` is not empty
+- `Thumbnails` is not empty
+- `Type` is **not** `Clip` and **not** `Audionauts` (added 2026-10-07)
+- `1x1 Thumbnail Count` is **greater than 0** (added 2026-10-07)
+- `Status` is `Ready to Publish`
+- `Release Date` is **on or after `today`** (relative filter, America/New_York)
+
+The `Release Date` filter is relative, so a past-dated episode never enters the view (and drops out once the date passes). That is what keeps the publisher's `Fountain schedule time must be in the future` preflight from firing on stale episodes. These filters were hand-transcribed from the Airtable UI on 2026-10-01 and can drift, so re-check the view if the trigger misbehaves.
+
+### 1x1 guard helper field
+
+`1x1 Thumbnail Count` (`fldL2ttmgchk8y40J`, added 2026-10-07) is a rollup on Episodes:
+`COUNTA(values)` over the `Thumbnails` link, aggregating the linked `1x1` attachment field.
+It is `0` when no linked thumbnail row has a 1x1, and `1` (or more) when one does. The ready
+view requires it to be greater than `0`, so an episode with no square artwork is never
+claimed. This was added after `BA-5XpVHJ` (a `Clip` carrying only a 16x9) reached the
+publisher and failed at `Build Fountain Plan` with `Fountain preflight failed. Missing or
+disabled: artworkUrl` (exec `5056`).
+
+Two caveats:
+
+- The rollup counts a 1x1 on **any** linked thumbnail row, while `Build Fountain Plan` reads
+  only the **first** linked row. On the normal single-row episode they agree; on a rare
+  multi-row episode they can still disagree.
+- A second rollup, `zz BROKEN 1x1 rollup - delete in Airtable UI` (`fldFUV4KHwzOrb9WB`), is an
+  early mistake: it used `COUNTALL`, which counts blank rows, so it returned `1` even with no
+  1x1. It is unused; delete it in the Airtable UI when convenient. Airtable's public API cannot
+  delete fields.
 
 ---
 
@@ -174,7 +211,7 @@ All Airtable IDs below were read from base `app8Xw9Tq0XLjhmp9` on 2026-09-24.
 |---|---|---|---|
 | ID | `fldYVimbhGfgFZF1X` | Formula | Publication key and Telegram record ID |
 | Title | `fldVUH8a3zxuNqlo1` | Single line text | Fountain title and notifications |
-| Type | `fldkNY2dTfo8Zogvx` | Single select | Present in table, unused here |
+| Type | `fldkNY2dTfo8Zogvx` | Single select | Ready-view guard added 2026-10-07: `Clip` and `Audionauts` are excluded |
 | Status | `fldUkNtr7lXG5s9DB` | Single select | Trigger view and state transitions |
 | Thumbnail Caption | `fldWtYyNxKKgclKxx` | Long text | Present in table, unused here |
 | Script | `fldzkcv5XYUdyRYHX` | Long text | Unused here |
@@ -192,6 +229,7 @@ All Airtable IDs below were read from base `app8Xw9Tq0XLjhmp9` on 2026-09-24.
 | Chapters JSON | `fldCrDP5ob2QaKSaY` | Attachments | Unused here |
 | Source Shortlist | `fldH2gP3skGco8ITg` | Linked records | Unused here |
 | Thumbnails | `fldo2Hn8Ba1rSgtMa` | Linked records | Finds square artwork row |
+| 1x1 Thumbnail Count | `fldL2ttmgchk8y40J` | Rollup (number) | Added 2026-10-07; ready-view guard, must be greater than 0 (counts non-empty `1x1` on linked thumbnails) |
 | References | `fld5p3qxJaXCbgiVl` | Long text | Unused here |
 | Guest Name | `fldwIGK5K4iJruTyB` | Lookup | Unused here |
 | From field: Associated Episode | `fldKOG3QfqJoYoN9v` | Linked records | Unused here |
@@ -269,10 +307,10 @@ Both media Wait nodes read `Upload Poll Seconds` from the Fountain settings row.
 | Attempt Count | `fldwpnu5yD4uxtz0s` | Number | Incremented only when the guard allows a run |
 | Error | `fldr0SWXElMD4ACu7` | Long text | Human-readable failure reason |
 | Raw Error | `fldoGPYlKktedjgdC` | Long text | Serialized failing node output, capped at 9,000 characters |
-| Retry Requested | `fldKdPeDpYzWcJcmZ` | Checkbox | Unused since 2026-09-29; safe to delete the column |
 | Published At | `fldwJ1mUyo9ZJcanr` | Date/time | Unused until publication is confirmed later |
 | Formatted Description | `fldtX0gp3BMbjdQc6` | Long text | Exact description prepared for Fountain |
 | Source Fingerprint | `fldHTjSgkNAlHAjeY` | Single line text | Eight-character FNV-1a hash of source inputs |
+| Content Fingerprint | `flduU7XOPRsXVMi6d` | Single line text | `textHash.artHash` of the content last pushed to Fountain; written here at schedule time and by the content-sync workflow |
 | Notes | `fldIdviXvCb3NJYlQ` | Long text | Manual notes, unused here |
 
 ---
@@ -284,9 +322,9 @@ Both media Wait nodes read `Upload Poll Seconds` from the Fountain settings row.
 `Find Fountain Publication` looks up `<Episode.ID> - Fountain` with `Platform = Fountain`. `Guard Fountain Publication` allows work only when:
 
 - No Publication row exists.
-- Existing status is `Pending`.
+- Existing status is `Pending`, `Failed`, or `Needs Attention`.
 
-All other states are blocked at `Should Run Fountain`. This prevents duplicate work for `Uploading`, `Draft`, `Processing`, `Scheduled`, or `Published` rows, and it means a `Failed`/`Needs Attention` Publication never auto-retries: a failure is a terminal, human-attention state. There is no `Retry Requested` gate anymore; to retry, set the Publication `Status` back to `Pending` and move the episode back into the ready view.
+Blocked states are `Uploading`, `Draft`, `Processing`, `Scheduled`, and `Published` — those mean work is already in flight or finished, so a re-trigger must not start a duplicate. There is no `Retry Requested` gate. A failure sets the Episode to `Publishing Failed` and out of the view, so re-entering the view is the only way to trigger a retry: moving the episode back is the retry action, and it is never automatic.
 
 Because the Episode was already claimed as `Publishing`, the false branch runs `Restore Guarded Episode Status`, which mirrors the Publication status: `Published` → `Published`, `Failed`/`Needs Attention` → `Publishing Failed`, anything else → `Scheduled`. This keeps a guarded no-op from leaving the Episode stuck in `Publishing` and avoids mislabelling a failed Publication as `Scheduled`.
 
@@ -372,6 +410,8 @@ Ready for Publishing View
              -> Fetch Publishing Links
              -> Fetch 1x1 Thumbnail
              -> Build Fountain Plan
+             -> Build Fountain Content   (shared sub-workflow)
+             -> Finish Fountain Plan
              -> Save Fountain Plan
              -> Resolve Frame.io Media
              -> Probe Frame.io Video
@@ -379,7 +419,7 @@ Ready for Publishing View
              -> Validate Fountain Media
 ```
 
-`Build Fountain Plan` creates the formatted description, converts Episode release date plus the configured local time into UTC, copies the explicit flag, and calculates an eight-character FNV-1a source fingerprint from title, description, media URLs, and scheduled time.
+`Build Fountain Plan` validates the episode and settings and computes the UTC schedule time. `Build Fountain Content` is a **shared sub-workflow** (`BA - Subworkflow - Build Fountain Content`, `guys-take-fountain-build-content.sdk.js`) that turns the summary, chapters and publishing links into the Fountain Markdown description, with a trailing-backslash hard line break on each chapter/link line so they stay on their own lines in Fountain's Markdown. The content-sync workflow calls the same sub-workflow, so the two can never drift. `Finish Fountain Plan` then computes the content fingerprint (`textHash.artHash`) and the eight-character FNV-1a source fingerprint. `references/EpisodeDescriptionReference.md` shows the intended layout (same backslash style).
 
 ### Draft resolution
 
@@ -458,7 +498,7 @@ The first claim, Publication lookup, and Publication upsert do not use `continue
 1. Read the `Error` and `Raw Error` fields on the Fountain Publication row.
 2. Correct the reported Episode field, settings row, media URL, artwork, credential, or Fountain-side problem.
 3. If `Create Fountain Draft` timed out or returned no `item.id`, inspect Fountain's newest drafts first. If a draft was created, place that ID in `Platform Item ID` so the next run reuses it.
-4. Set the Fountain Publication `Status` back to `Pending` (the guard only starts from no row or `Pending`).
+4. No Publication reset is needed: the guard starts from `Failed`/`Needs Attention` too.
 5. Move or edit the Episode so it freshly re-enters the ready view. Do not rely on a row that was already sitting in the view.
 6. Confirm the next attempt increments `Attempt Count` and resumes the saved draft when `Platform Item ID` exists.
 
@@ -497,12 +537,14 @@ Do not test by moving a real episode into the view until the Fountain bearer bin
 ## Known fidelity and operational concerns
 
 - The SDK snapshot preserves all 53 live nodes, the live graph, the `FOUNTAIN_API_KEY` references on all nine Fountain HTTP nodes, and the `Adobe OAuth` reference on `Resolve Frame.io Media`.
-- The workflow is **active**. One real run has executed (exec `3057`) and failed at `Validate Fountain Media` because the Episode `Frame.io URL` was a login-walled view link. `Resolve Frame.io Media` was added after that run and is not yet proven end to end.
+- The workflow is **active** and proven end to end: exec `3184` (2026-09-30) uploaded all 5 video parts, Fountain transcoded to `READY`, artwork uploaded, the item scheduled for `2026-10-31T10:00Z`, and the Telegram "scheduled" message was sent.
 - `Resolve Frame.io Media` assumes the last path segment of `Frame.io URL` is the Frame.io file id, which held for the tested file, and that the `Adobe OAuth` credential can read that project.
 - The resolved video source prefers `original.download_url` (a range-able CloudFront mp4). `efficient` is an HLS manifest and is only a last-resort fallback.
+- **Fountain transcodes every `ITEM_VIDEO` to HLS**, so the item's video enclosure is an HLS playlist (`playlist.m3u8`). That is normal for video and is not a sign the wrong file was sent; the source mp4 is uploaded correctly. The upload API has **no filename parameter**, so the source filename can't be controlled.
+- **The Fountain item API has no chapters field.** The Markdown description is the only text we can send; Fountain generates its own chapter markers. The Episode `Chapters JSON` attachment cannot be fed to Fountain through this API.
 - Failure Telegram messages include the real reason and an `<b>Execution:</b> <code>{id}</code>` line built from `$execution.id`.
 - `n8n_validate_workflow` reports a **false positive** on the two Execute Command upload nodes: it insists `executeOnce` belongs at the node level, but the node reads it from `parameters` and ignores the node-level value. Runtime testing (3 items in → 3 items out) confirms `parameters.executeOnce: false` is correct; ignore the validator error.
-- Airtable view filters cannot be fetched by the tools used here. Verify `viwDfPHHKrgggdw20` manually.
+- The ready-view filters are hand-transcribed above (from the Airtable UI, 2026-10-01); the tools used here cannot read Airtable view filters, so re-check the view if the trigger misbehaves.
 - `Publishing Settings.Upload Poll Seconds` controls both Wait nodes, with a 30-second fallback. `Upload Poll Limit` is not used, so polling has no explicit count limit below the 12-hour workflow timeout.
 - `Episodes.Status` did not list `Publishing` or `Publishing Failed` when checked. The workflow relies on `typecast: true` or manual creation of those choices.
 - A failure before the Publication row exists cannot be fully recorded by the local failure branch.
@@ -516,3 +558,5 @@ Do not test by moving a real episode into the view until the Fountain bearer bin
 - Upstream state and system map: `workflow_planning/System Map.md`
 - Build status and publishing roadmap: `workflow_planning/Guys Take Build Status.md`
 - Thumbnail source workflow: `n8n_workflow_readmes/BA - Guy's Take Thumbnail Artwork.md`
+- Content sync (pushes later Airtable edits onto already scheduled/published items): `n8n_workflow_readmes/BA - Schedule Every 15m > Publication Content Synced.md`
+- Shared description builder: `n8n_workflow_readmes/BA - Subworkflow - Build Fountain Content.md`

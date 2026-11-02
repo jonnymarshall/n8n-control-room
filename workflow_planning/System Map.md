@@ -28,7 +28,10 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-10-29 (stage 3 is now live as two workflows: `Ready for Metadata` and
+*Last updated 2026-10-29 (the episode status `Scheduled` is now **`Recording Scheduled`**, so it can
+no longer be confused with `Scheduled to Publish`; a successful publisher run marks the
+episode `Scheduled to Publish`, and the reconciler that flips it to `Published` is active.
+Also stage 3 is live as two workflows: `Ready for Metadata` and
 `Generating Metadata` are real `Status` options, the upload workflow stamps the row, and the
 metadata workflow is triggered by the `Ready for Metadata` view. Also fixed the Airtable
 `fields` read that had silently disabled the same-length check, the Audionauts exit and the
@@ -52,7 +55,7 @@ a book-cover ask in the packaging message and a 1:1 on pick).
 Previously: 2026-10-21 (the scheduling workflow now looks the episode up by `ID` alone and
 checks the status separately, so its alerts distinguish "no episode with that ID" from
 "found but the status guard blocked it"; a poll email revives a `Suspended` episode to
-`Scheduling`, a booking confirmation revives it straight to `Scheduled`, and every route back
+`Scheduling`, a booking confirmation revives it straight to `Recording Scheduled`, and every route back
 to `Scheduling` clears `Record Date` so a cancelled slot's time can't linger on the episode).
 Previously: 2026-10-07 (the ready-for-publishing view now excludes `Clip`/`Audionauts` episodes and any episode with no 1x1 thumbnail, after a Clip wrongly reached the Fountain publisher; artwork per-option variation is now a required, front-loaded instruction, so one-mood runs stop returning identical options). The Frame.io metadata workflow now transcribes long video in
 20-minute Gemini windows (chunked, then stitched), after a 2h20m roundtable degenerated
@@ -103,7 +106,7 @@ Episode:  Script Ready
              --[human: email the scheduling poll to guests, with pod21@agentmail.to as a recipient]-->
           Scheduling
              --[auto: a guest confirms a slot; the Google Calendar invite lands in the AgentMail inbox]-->
-          Scheduled                       (Record Date stamped from the confirmed start time)
+          Recording Scheduled             (Record Date stamped from the confirmed start time)
              --[human: record, edit, upload final cut to Frame.io]-->
           Ready for Metadata              (set automatically by BA - Frame.io Uploaded > Episode Marked,
                                            which records the Frame.io link; only set when the status is
@@ -124,34 +127,37 @@ Episode:  Script Ready
           Ready to Publish
              --[auto: the Fountain publisher claims it, uploads the video + 1x1 artwork and
                  schedules the Fountain item]-->
-          Publishing  (transient)  --[auto]-->  Scheduled
-             --[human: a person sets Published after Fountain actually publishes; the workflow
-                 that used to do it is INACTIVE]-->
+          Publishing  (transient)
+             --[auto: the publisher uploads the video + artwork, schedules the Fountain item,
+                 and marks the episode]-->
+          Scheduled to Publish            (Fountain holds it; the Publication row is `Scheduled`)
+             --[auto: the reconciler sees the Fountain item is PUBLISHED, every 15m]-->
           Published
 ```
 
 **Branch / holding states** (not on the straight line):
-- ⚠️ **`Scheduled` means two different things.** Stage 2b sets it when a **recording slot** is
-  booked; the Fountain publisher sets it again when the **Fountain item is scheduled**. Tell
-  them apart by the record, not the word: a recording-scheduled episode has a `Record Date`
-  and no `Publications` row; a published-scheduled episode has a `Publications` row with
-  `Scheduled For` set. Never answer a publishing question off the status word alone.
+- **The two "scheduled" states are now separate words.** A booked **recording** is
+  `Recording Scheduled` (stage 2b, has a `Record Date`, no `Publications` row). An episode
+  already handed to **Fountain** is `Scheduled to Publish` (has a `Publications` row with
+  `Scheduled For`, no `Record Date` meaning). Before 2026-10-29 both were the single word
+  `Scheduled`, which is exactly how a publishing question got answered off the wrong state.
 - `Publishing` — transient. The Fountain publisher claims the episode with this status so it
   leaves the ready view before the (long) upload starts. It should never sit here for hours;
   if it does, the publisher run is still working or died before its failure writer could fire.
 - `Publishing Failed` — the Fountain publisher failed. The reason and execution id are in the
   Telegram message and on the `Publications` row. Fix the cause, then set the episode back to
   `Ready to Publish` to retry. See stage 5.
-- `Scheduled` — the Fountain item exists and is scheduled. **Nothing sets `Published`
-  automatically**: the reconciler that would do it is inactive, so a `Scheduled` episode may
-  already be live on Fountain and still show `Scheduled` here.
+- `Scheduled to Publish` — the Fountain item exists and is scheduled, and the episode is
+  **not live yet**. The reconciler checks Fountain every 15 minutes and moves it to
+  `Published` when the item goes live, so this should clear itself. If an episode sits here
+  long after its `Scheduled For` time, read the `Publications` row before answering.
 - `Partially Published` — the per-channel fan-out left some channels done and others not.
 - `Suspended` — the episode is fully cancelled. Set when Jonny replies `suspend this
   episode` to a booking-cancellation notice (the Telegram assistant proposes the
   `Status = Suspended` write). The cancellation workflow itself only reverts to
   `Scheduling`; `Suspended` is a deliberate human follow-up. It is not a dead end: a
   reschedule poll revives it to `Scheduling`, and a slot booked off an existing link revives
-  it to `Scheduled` (a real booking outranks the status flag).
+  it to `Recording Scheduled` (a real booking outranks the status flag).
 - `Awaiting Manual Artwork` — the artwork workflow could not auto-generate (Type is
   blank or unrecognised). Someone must make the artwork by hand.
 - `Revising` — this is a **Thumbnails row** status (not an Episode status). The
@@ -277,7 +283,7 @@ cover can also have the cover replaced later; the `Read Reversion 1x1` and
 | `Record Date` | date/time | The confirmed recording slot. Written by the scheduling workflow (2b) when a booking is confirmed, read from the calendar invite; also settable by hand. |
 | `Release Date` | date | The date the episode should go live. **This is the publish date**: the Fountain publisher schedules the item for this date at `Publishing Settings.Default Publish Time` (currently `06:00`, `America/New_York`), and the ready view requires it to be **today or later**. Set by hand; written by nothing automatically. |
 | `Publications` | link -> Publications | One row per channel. `<BA-xxxx> - Fountain` carries the Fountain item id, upload ids, schedule time and any error. |
-| `Thumbnail Caption` | long text | The artwork headline. Set by Jonny's reply to the packaging message (`TC1`–`TC5` or his own wording). A precondition for artwork. |
+| `Thumbnail Caption` | long text | The artwork headline. Set by Jonny's reply to the packaging message (`TC1`–`TC5` or his own wording). A precondition for artwork. It is typeset manually over the artwork afterwards, into the reserved top-quarter band. |
 | `Custom Image Prompt` | long text | **His free-text art direction for this episode's artwork.** Set by the same reply. **Optional. The view does not gate on it (corrected 2026-10-23).** `default` (or `none`) means "no extra direction". Fills a `{{CUSTOM}}` placeholder in the layout prompt template. `Read` is never asked for it and uses `Book Cover`. |
 | `Thumbnail Moods` | long text | Comma-separated mood names he picked, e.g. `confident, shocked`. Matched by name (case-insensitively) against the `Thumbnail References` library and cycled across the 4 artwork options **in the order given** — one mood means all four use it, two means they alternate. **Empty or all-unmatched uses `Neutral` for all four** (since 2026-10-22), so a typo never breaks the run; the whole library is only used if the `Neutral` row has no photo. Not a gate. **On a `Read` this field is the facial expression** (2026-10-28); empty means `Neutral`. |
 | `Guests` | link -> Guests | The linked guest(s). Required for `Chat` / `Roundtable` / `Clip`. |
@@ -322,11 +328,11 @@ Episodes table `tbl3uYLIvtB9APZp6`.
   - **Poll email** (from `pod21.xyz` / `jonnymarshall5@gmail.com`, no calendar attachment,
     mentions the `ID`) -> `Status = Scheduling`.
   - **Confirmation** (a Google Calendar `Invitation:` email with an `.ics` attachment) ->
-    `Status = Scheduled` and `Record Date` = the confirmed start time, taken from the
+    `Status = Recording Scheduled` and `Record Date` = the confirmed start time, taken from the
     `.ics` `DTSTART`.
   - **Cancellation** (a Google Calendar `Cancelled event:` email) -> `Status = Scheduling`.
   - Both routes back to `Scheduling` also clear `Record Date`, so the field only holds a time
-    while the episode is actually `Scheduled`.
+    while the episode is actually `Recording Scheduled`.
   - It finds the episode by `ID` **only**, then checks the status separately, so the alert
     always names the real reason: no episode with that `ID` -> a **Not Found Alert** (kind,
     ID, subject); episode found but excluded by the status guard -> a **Guard Blocked Alert**
@@ -334,8 +340,10 @@ Episodes table `tbl3uYLIvtB9APZp6`.
 - **Status guards:** a poll email acts on a blank status, `Script Ready`, `Stories Picked`,
   `Research Ready` and `Suspended` (so a reschedule poll revives a cancelled episode, which
   is the normal way an episode comes back); a confirmation acts on those plus `Scheduling`
-  and `Scheduled` (and also `Suspended`, because a booked slot is proof the recording exists);
-  a cancellation only acts on `Scheduled`. Anything else is left untouched
+  and `Recording Scheduled` (and also `Suspended`, because a booked slot is proof the recording
+  exists); a cancellation only acts on `Recording Scheduled`. An episode at `Scheduled to
+  Publish` is deliberately not in either guard, so a stray calendar email cannot drag a
+  published episode backwards. Anything else is left untouched
   and reported, so it can't drag a `Recorded`/`Published` episode backwards.
 - **Next:** the human records + edits + uploads; on a cancellation, reply
   `suspend this episode` to the notice to set `Suspended`.
@@ -447,9 +455,17 @@ Three paths in one workflow.
   variations are gone. Since 2026-10-07 these directions are stated as required and are
   **prepended** ahead of the template, not appended and labelled "secondary". Before that
   a detailed `Custom Image Prompt` overrode them, which flattened all four options into the
-  same picture (`BA-C8Uwej`). They preserve subject count and do not control colour or
-  text position; they were first added 2026-09-09 after a one-mood run returned duplicate
-  options.
+  same picture (`BA-C8Uwej`). They preserve subject count and do not control colour; they
+  were first added 2026-09-09 after a one-mood run returned duplicate options. Since
+  2026-10-30 they also restate the caption safe zone, so a shot direction can no longer
+  fill the frame and eat the space the caption needs.
+- **Every 16:9 option keeps a clean caption band at the top.** The prompts reserve the
+  **top 25% of the height, full width** (top third on 9:16) as background only, with
+  nothing of the people or props in it, and tell the model to check it before returning
+  the image. It is achieved with the camera (headroom), never a bar, band or overlay, and
+  it applies to reruns: the 1:1, 9:16 and revision prompts carry the same rule. If a
+  thumbnail ever comes back with no clean area for the caption, the `Prompts` rows are
+  the place to look, not the workflow.
 - **Diagnosing "it ignored my moods":** the `Resolve Vibes` node emits a `moodSource`
   field on every run. `picked` means his chosen moods were used; `default-neutral`
   means the field was empty or nothing matched and `Neutral` was used for all four
@@ -544,11 +560,13 @@ Three paths in one workflow.
   the execution id. To retry, fix the problem and set the episode back to `Ready to Publish`
   (the guard accepts a `Failed`/`Needs Attention` Publication, so nothing else needs
   resetting).
-- **Nothing sets `Published`.** The reconciler that would do it is INACTIVE (confirmed
-  again 2026-10-29), so after a successful run the Episode sits at `Scheduled` even once
-  Fountain has actually published it. Never tell anyone that `Published` happens on its
-  own, and never call a `Scheduled` episode "not published yet" — check the Fountain side
-  or the `Publications` row's `Scheduled For` before answering.
+- **`Published` is set by the reconciler**, which is ACTIVE as of 2026-10-29. After a
+  successful publisher run the Episode sits at `Scheduled to Publish`; every 15 minutes the
+  reconciler asks Fountain whether the item is live and, if so, flips the episode to
+  `Published` and fills `Published At` and `URL` on the `Publications` row. It also carries
+  the per-channel fan-out result: `Published` when every channel is done, `Partially
+  Published` when some are. If an episode is stuck at `Scheduled to Publish` past its slot,
+  read the `Publications` row before answering.
 
 #### If someone asks you to publish / upload / schedule an episode
 Requests to publish are often mistaken for something the assistant cannot do, so follow
@@ -584,16 +602,20 @@ this exactly.
   day for future releases, edit the settings row, not the episode. (Changed 2026-10-29: a
   same-day release used to fail with "Fountain schedule time must be in the future", because
   06:00 had already passed.)
+- **Ignoring a proposal ("adopt what's on Fountain", 2026-10-30).** If Jonny says the change was already made on Fountain, or that he does not want it, set the Fountain Publication row's `Sync Status` to `Adopt Requested` and clear `Sync Approved`. The next 15-minute tick records what Airtable would currently send as the new baseline (`Content Fingerprint`, `Frame.io File ID`), marks the row `Synced`, and replies once. Nothing is sent to Fountain. Future changes will still be offered normally. Never set `Adopt Requested` when he actually wants the change applied; that is `Sync Approved`.
+- **Live items are never re-scheduled.** If the Publication is already `Published`, the sync ignores release-date differences, because re-scheduling something that is live makes no sense.
+- **The approval gate (2026-10-30).** The content sync no longer changes Fountain on its own. Every 15 minutes it compares four things and, if any differ, it posts ONE Telegram message headed "Fountain needs updating" listing the changed items with ticks, writes `Sync Status = Awaiting Approval` and stores a hash of that exact proposal in `Approved Fingerprint`. Nothing is sent until the Publication row's `Sync Approved` is ticked. **If Jonny replies "approve sync"** for an episode, tick `Sync Approved` on that episode's Fountain Publication row; if several are pending, ask which one. The next tick recomputes the hash and only acts if it still matches what was proposed, so an approval cannot be applied to a cut that changed afterwards. After a successful run it clears `Sync Approved`, sets `Sync Status = Synced` and updates the baselines (`Content Fingerprint`, `Frame.io File ID`, `Scheduled For`). If the proposal is superseded, a new message arrives with a new hash.
+- **What each change means.** `title and description` and `1x1 artwork` are content edits. `video file` means the episode's `Frame.io URL` now points at a different file than the one Fountain holds (`Publications.Frame.io File ID`), and applying it re-uploads the video (a 4.84 GB master takes about 80 minutes) and swaps `video_default_id`. `release date` means the Episode's `Release Date` day no longer matches the day the Fountain item is scheduled for; applying it re-schedules the item (today = now + 1 hour, otherwise the date at `Default Publish Time`).
+- **Fountain and audio.** Attaching a new video only rebuilds the audio when the item's audio slot is empty. On an episode that already has audio, a video swap leaves the old audio track. Check the item's `audio_default` URL after a video sync: it should contain the new upload id.
 - **Changing the date or the episode's details after it has been scheduled:**
   - Title, description and 1x1 artwork edits **do** reach the already-scheduled item
     automatically (the content sync, every 15m). Those are safe to promise.
-  - **The schedule time does not.** The guard blocks a `Scheduled` Publication and the
-    content sync never touches the schedule time, so editing `Release Date` on a `Scheduled`
-    episode changes nothing on Fountain. Say that plainly: it has to be rescheduled in
-    Fountain (or the `Publications` row reset) before the publisher will run again.
+  - **The schedule time now does**, since 2026-10-30. Editing `Release Date` on an
+    already-scheduled episode produces a "Fountain needs updating" message; once `Sync Approved`
+    is ticked the sync re-schedules the item. Before that tick nothing moves.
 - **Nothing is uploaded until the flip.** An episode at `Artwork Ready` with a full
   `Release Date` will sit there indefinitely; no timer, no nudge.
-- **Success:** Episode `Scheduled`, Publication `Scheduled`, Telegram confirmation.
+- **Success:** Episode `Scheduled to Publish`, Publication `Scheduled`, Telegram confirmation.
 - **Failure:** Episode `Publishing Failed`, Publication `Failed`, Telegram with the reason
   and execution id. Read the `Publications` row's `Error`, fix it, then set the episode back
   to `Ready to Publish`.
@@ -671,7 +693,7 @@ something new is reported.
 - **Rescheduling after the Fountain item is scheduled is manual (open, 2026-10-29).** The
   publisher's guard blocks a Publication in `Scheduled`, and the content sync pushes title,
   description and artwork but never the schedule time. Editing `Release Date` on an
-  already-`Scheduled` episode therefore changes nothing on Fountain. Fixing it means
+  already-scheduled episode therefore changes nothing on Fountain. Fixing it means
   rescheduling in Fountain or resetting the `Publications` row by hand. Do not promise a
   date change will "flow through".
 - **Per-type variation control is the `Artwork Settings` table (2026-10-06, UNTESTED end-to-end).**
@@ -743,7 +765,7 @@ something new is reported.
 - Generating artwork costs real money per image, so don't suggest re-running it casually.
 - Scheduling is email-driven. A poll-link email the workflow recognizes moves an episode to
   `Scheduling`, including one that is currently `Suspended`; a Google Calendar confirmation
-  moves it to `Scheduled` and sets `Record Date`; a cancellation reverts it to `Scheduling`.
+  moves it to `Recording Scheduled` and sets `Record Date`; a cancellation reverts it to `Scheduling`.
   Reply `suspend this episode` to a cancellation notice to set `Suspended`. When an email
   can't be acted on, the group gets an alert that says whether the `ID` matched nothing or
   the status guard blocked it (and which status it found).

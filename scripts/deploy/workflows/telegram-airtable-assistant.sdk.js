@@ -1,890 +1,156 @@
-import { workflow, node, trigger, ifElse, languageModel, memory, tool, newCredential, expr } from '@n8n/workflow-sdk';
+import { workflow, node, trigger } from '@n8n/workflow-sdk';
 
-// ── Trigger ──────────────────────────────────────────────────────────────
-const telegramTrigger = trigger({
-  type: 'n8n-nodes-base.telegramTrigger',
-  version: 1.2,
-  config: {
-    name: 'Telegram Message Received',
-    parameters: { updates: ['message', 'callback_query'], additionalFields: {} },
-    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
-    position: [-160, 288]
-  },
-  output: [{ message: { text: '@pod21_n8n_agent_bot hello', chat: { id: 1512868522 }, from: { id: 1512868522 } } }]
-});
+// Snapshot of live workflow Hx8Ul6M41fM8HuxU, fetched 2026-11-02.
+// Parameters and node settings are intentionally kept verbatim from live.
+// Regenerate with: scripts/deploy/workflows/snapshot-sdk.sh Hx8Ul6M41fM8HuxU telegram-airtable-assistant
+const liveNodes = [
+  {"id": "03b7bf01-f297-4671-b13d-ed5fd865d36e", "name": "Telegram Message Received", "type": "n8n-nodes-base.telegramTrigger", "typeVersion": 1.2, "position": [-160, 288], "webhookId": "d50ad090-c511-40b5-a457-c39f1abdf500", "parameters": {"updates": ["message", "callback_query"], "additionalFields": {}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "3c10a749-f966-477e-bce0-44a74ccb85fa", "name": "Is Button Press?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [64, 288], "parameters": {"conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 3}, "conditions": [{"id": "is-cb-1", "leftValue": "={{ $json.callback_query ? \"yes\" : \"no\" }}", "rightValue": "yes", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "looseTypeValidation": true, "options": {}}},
+  {"id": "5cf96932-46a6-4ce9-820c-5bd84a9bebd3", "name": "Handle Button Press", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [288, 128], "parameters": {"jsCode": "const upd = $input.first().json;\n  const cq = upd.callback_query;\n  const chatId = cq.message?.chat?.id ?? 1512868522;\n  const fromId = cq.from?.id;\n  const queryId = cq.id;\n  const data = String(cq.data || '');\n  // Link fields want plain record-ID strings, but the agent sometimes proposes [{\"id\":\"rec...\"}],\n  // which Airtable rejects with INVALID_RECORD_ID and the whole write fails. Unwrap those here too,\n  // so an approval message written before this fix still executes correctly on a re-tap.\n  // Only touches values inside \"fields\", and only a bare {id} / {id, name} record ref, so\n  // attachment objects ({url, filename}) and the record wrapper itself are left alone.\n  const unwrapFields = (fields) => {\n    if (!fields || typeof fields !== 'object') { return fields; }\n    const copy = {};\n    for (const k of Object.keys(fields)) {\n      const v = fields[k];\n      copy[k] = !Array.isArray(v) ? v : v.map(e => {\n        if (!e || typeof e !== 'object' || Array.isArray(e)) { return e; }\n        const keys = Object.keys(e);\n        const isRecordRef = typeof e.id === 'string' && /^rec[A-Za-z0-9]{10,}$/.test(e.id)\n          && keys.every(x => x === 'id' || x === 'name');\n        return isRecordRef ? e.id : e;\n      });\n    }\n    return copy;\n  };\n  const normalizeLinkFields = (b) => {\n    if (!b || typeof b !== 'object') { return b; }\n    if (Array.isArray(b.records)) {\n      b.records = b.records.map(r => (r && typeof r === 'object' && r.fields)\n        ? Object.assign({}, r, { fields: unwrapFields(r.fields) })\n        : r);\n    }\n    if (b.fields) { b.fields = unwrapFields(b.fields); }\n    return b;\n  };\n  let out = { execute: false, queryId: queryId, chatId: chatId, reasonMessage: '', method: 'POST', path: '', body: {}, summary: '' };\n\n  const approvers = [1512868522, 8923732358];\n  if (!approvers.includes(fromId)) {\n    out.chatId = 1512868522;\n    out.reasonMessage = 'Ignored a button press from an unauthorized user.';\n    return [{ json: out }];\n  }\n\n  // Single-use approvals (added 2026-09-25). Telegram keeps an inline keyboard live\n  // forever, so a re-tap re-runs the same write. That repeated write kept re-setting\n  // the thumbnail row to \"Selected\", which re-armed the artwork pick trigger - the\n  // overnight feedback loop (assistant + artwork, every ~20s for 23 minutes on\n  // BA-5GM2XJ). Refuse any approval whose message has already been executed; the\n  // message_id is recorded on success in \"Record Executed Write\", and \"Is Duplicate?\"\n  // keeps the refusal silent so a stray tapper cannot spam the group.\n  const msgId = String(cq.message?.message_id ?? '');\n  const dedupeable = data === 'wa' || /^pick:/.test(data);\n  if (dedupeable && msgId) {\n    const store = $getWorkflowStaticData('global');\n    const done = (store.approvedMessages = store.approvedMessages || {});\n    if (done[msgId]) {\n      out.duplicate = true;\n      return [{ json: out }];\n    }\n    out.messageId = msgId;\n  }\n\n  const pick = data.match(/^pick:(rec[A-Za-z0-9]+)$/);\n  if (pick) {\n    out.execute = true;\n    out.method = 'PATCH';\n    out.path = 'app8Xw9Tq0XLjhmp9/Thumbnails';\n    out.body = { records: [{ id: pick[1], fields: { Status: 'Selected' } }] };\n    out.summary = 'Set thumbnail ' + pick[1] + ' to Selected. The thumbnail workflow will reject the other options and mark the episode Artwork Ready.';\n    return [{ json: out }];\n  }\n\n  if (data === 'wc') {\n    out.reasonMessage = '❌ Cancelled. Nothing was changed in Airtable.';\n    return [{ json: out }];\n  }\n\n  if (data === 'wa') {\n    const msgText = String(cq.message?.text || '');\n    const m = msgText.match(/⟦([\\s\\S]*?)⟧/);\n    if (!m) {\n      out.reasonMessage = 'Could not find the pending change in this message. Nothing was changed.';\n      return [{ json: out }];\n    }\n    let payload;\n    try {\n      payload = JSON.parse(m[1]);\n    } catch (e) {\n      out.reasonMessage = 'The pending change was unreadable. Nothing was changed.';\n      return [{ json: out }];\n    }\n    let body = payload.body && typeof payload.body === 'object' ? payload.body : {};\n    if (body.records && !Array.isArray(body.records)) {\n      body.records = [body.records];\n    }\n    body = normalizeLinkFields(body);\n    out.execute = true;\n    out.method = payload.method || 'POST';\n    let path = payload.path || '';\n    if (out.method === 'DELETE') {\n      path = path.replace(/([?&])records=/g, '$1records[]=');\n    }\n    out.path = path;\n    out.body = body;\n    out.summary = (msgText.split('⟦')[0] || '').replace(/^🛠 Approval needed\\s*/, '').trim();\n    return [{ json: out }];\n  }\n\n  out.reasonMessage = 'Unrecognized button. Nothing was changed.';\n  return [{ json: out }];"}},
+  {"id": "bdf57d0a-ef11-4cff-bd31-e5063da9d24a", "name": "Addressed to bot?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [288, 528], "parameters": {"conditions": {"options": {"version": 3, "leftValue": "", "caseSensitive": true, "typeValidation": "strict"}, "conditions": [{"id": "890dca68-3f64-43a1-8cab-e4fc8f786ed1", "leftValue": "={{ ($json.message?.entities || []).some(entity => entity.type === 'mention' && $json.message.text.substring(entity.offset, entity.offset + entity.length) === '@pod21_n8n_agent_bot') }}", "operator": {"type": "boolean", "operation": "true", "singleValue": true}, "rightValue": ""}, {"id": "cb830762-aa6a-44f5-8ee1-b92fdf622053", "leftValue": "={{ ($json.message?.entities || []).some(entity => entity.type === 'mention' && $json.message.text.substring(entity.offset, entity.offset + entity.length) === '@pod21_n8n_agent_bot') || $json.message?.reply_to_message?.from?.username === 'pod21_n8n_agent_bot' }}", "operator": {"type": "boolean", "operation": "true", "singleValue": true}, "rightValue": ""}, {"id": "private-chat-1", "leftValue": "={{ $json.message?.chat?.type === 'private' }}", "operator": {"type": "boolean", "operation": "true", "singleValue": true}, "rightValue": ""}, {"id": "caption-mention-1", "leftValue": "={{ (String($json.message?.caption || '') + ' ' + String($json.message?.text || '')).includes('@pod21_n8n_agent_bot') }}", "operator": {"type": "boolean", "operation": "true", "singleValue": true}, "rightValue": ""}], "combinator": "or"}, "options": {}}},
+  {"id": "29e31c66-5487-434a-a754-d5b7a8c1bd73", "name": "Answer Button Tap", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [512, 128], "webhookId": "0233f1c3-1f7e-4e56-8f82-32761fbb22ee", "parameters": {"resource": "callback", "queryId": "={{ $json.queryId }}", "additionalFields": {"text": "={{ $json.execute ? \"Approved ✅\" : \"OK\" }}"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "1e1236a0-22ed-419e-a5b9-728fe1030d19", "name": "From Jonny or Charlie?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [512, 528], "parameters": {"conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 3}, "conditions": [{"id": "from-jonny-1", "leftValue": "={{ ($json.message?.from?.id ?? 0) === 1512868522 ? \"yes\" : \"no\" }}", "rightValue": "yes", "operator": {"type": "string", "operation": "equals"}}, {"id": "68b7d680-3c0f-4537-a2c9-02aa3b10c287", "leftValue": "={{ ($json.message?.from?.id ?? 0) === 8923732358 ? \"yes\" : \"no\" }}", "rightValue": "yes", "operator": {"type": "string", "operation": "equals", "name": "filter.operator.equals"}}], "combinator": "or"}, "looseTypeValidation": true, "options": {}}},
+  {"id": "66af4265-de7c-4705-99e6-aa5b2ee58c99", "name": "Run Approved Write?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [736, 128], "parameters": {"conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2}, "combinator": "and", "conditions": [{"id": "run-write-1", "leftValue": "={{ $(\"Handle Button Press\").item.json.execute ? \"yes\" : \"no\" }}", "rightValue": "yes", "operator": {"type": "string", "operation": "equals"}}]}, "looseTypeValidation": true, "options": {}}},
+  {"id": "564c56d7-b6db-4c7c-a3c4-5639b1a4f238", "name": "Prep Agent Input", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [736, 528], "parameters": {"jsCode": "const results = [];\n\n  // The agent only ever sees promptText, so the sender has to be carried in the\n  // text itself. Without this it cannot fill \"Reported By\" on an issue report.\n  const SENDERS = { 1512868522: 'Jonny', 8923732358: 'Charlie' };\n\n  // Loop through all incoming items to prevent dropping batched messages\n  for (const item of $input.all()) {\n    const msg = item.json.message || {};\n    const sender = SENDERS[msg.from?.id] || 'an unknown user';\n\n    // Strip the bot @mention from the user's own text\n    let text = (msg.text || '').replace('@pod21_n8n_agent_bot', '').trim();\n\n    // The quoted message may be a plain text message (.text) OR a document/photo\n    // sent with a caption (.caption) — e.g. the \"Episode metadata ready\" document.\n    // Reading only .text dropped the caption and starved the agent of context.\n    const reply = msg.reply_to_message;\n    const quoted = reply ? (reply.text || reply.caption || '') : '';\n\n    if (quoted) {\n      text = 'The user is replying to your earlier message: \"' + quoted + '\". They now say: \"' + text + '\". The words \"this\" or \"it\"\\n  refer to the record that earlier message describes. Read the live base to confirm the exact record before proposing any\\n  write.';\n    }\n\n    results.push({\n      json: {\n        ...item.json, // keep all original Telegram data\n        recentActionsNote: '',\n        promptText: '[Message from ' + sender + '] ' + text\n      }\n    });\n  }\n\n  return results;"}},
+  {"id": "84f707c8-0ab4-4d86-8a33-f80999353225", "name": "Is Photo?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [760, 1000], "parameters": {"conditions": {"combinator": "and", "conditions": [{"id": "is-photo-1", "leftValue": "={{ (Array.isArray($json.message?.photo) && $json.message.photo.length > 0) || String($json.message?.document?.mime_type || '').startsWith('image/') }}", "operator": {"operation": "true", "singleValue": true, "type": "boolean"}, "rightValue": ""}], "options": {"version": 3, "leftValue": "", "caseSensitive": true, "typeValidation": "loose"}}, "options": {}}},
+  {"id": "2d7d882e-44af-48e4-874a-7f294fb2b0de", "name": "OpenRouter Sonnet 4.6", "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter", "typeVersion": 1, "position": [960, 752], "parameters": {"model": "anthropic/claude-sonnet-4.6", "options": {"temperature": 0.2}}, "credentials": {"openRouterApi": {"id": "fYdCNdLcAcCMjpnr", "name": "OpenRouter [n8n]"}}},
+  {"id": "10be7344-388a-438c-8a8b-772947825644", "name": "Is Duplicate?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [976, 224], "parameters": {"conditions": {"combinator": "and", "conditions": [{"id": "is-dup-1", "leftValue": "={{ $('Handle Button Press').item.json.duplicate ? \"yes\" : \"no\" }}", "operator": {"operation": "equals", "type": "string"}, "rightValue": "yes"}], "options": {"version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "loose"}}, "looseTypeValidation": true, "options": {}}},
+  {"id": "bea917fc-3a38-4776-aaba-032c125284c4", "name": "Extract Photo Info", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [976, 1000], "parameters": {"jsCode": "const msg = $json.message || {};\nconst chatId = (msg.chat && msg.chat.id) || null;\nlet fileId = '', mime = '', width = 0, height = 0, filename = '';\nif (Array.isArray(msg.photo) && msg.photo.length) {\n  const p = msg.photo[msg.photo.length - 1];\n  fileId = p.file_id; width = p.width || 0; height = p.height || 0; mime = 'image/jpeg';\n  filename = 'telegram-' + (p.file_unique_id || Date.now()) + '.jpg';\n} else if (msg.document && String(msg.document.mime_type || '').startsWith('image/')) {\n  const d = msg.document;\n  fileId = d.file_id; mime = d.mime_type || 'image/jpeg';\n  width = (d.thumb && d.thumb.width) || d.width || 0;\n  height = (d.thumb && d.thumb.height) || d.height || 0;\n  filename = d.file_name || ('telegram-' + Date.now() + '.jpg');\n}\nconst strip = function (s) { return String(s || '').replace('@pod21_n8n_agent_bot', ''); };\nconst cap = strip(msg.caption || '');\nconst rep = strip((msg.reply_to_message && (msg.reply_to_message.text || msg.reply_to_message.caption)) || '');\nconst idMatch = cap.match(/BA-[A-Za-z0-9]+/) || rep.match(/BA-[A-Za-z0-9]+/);\nconst episodeId = idMatch ? idMatch[0] : null;\n// A photo captioned \"book cover\" (or just \"cover\") is not artwork: it belongs on\n// the episode's Book Cover field, which the artwork workflow passes to Nano Banana\n// as Image 2 for Read episodes. The hint is read from the photo's caption only,\n// because the replied-to message can be long and may mention a cover in passing.\nconst isBookCover = /\\bbook[\\s-]*cover\\b/i.test(cap) || /^\\s*cover\\b/i.test(cap);\nlet slot = '';\nconst hint = (cap.match(/\\b(16x9|16:9|9x16|9:16|1x1|square)\\b/i) || [])[1];\nif (isBookCover) {\n  slot = 'BOOK_COVER';\n} else if (hint) {\n  const h = hint.toLowerCase();\n  slot = h === '16:9' ? '16x9' : (h === '9:16' ? '9x16' : (h === 'square' ? '1x1' : h));\n} else if (width > 0 && height > 0) {\n  const r = width / height;\n  slot = r >= 1.2 ? '16x9' : (r <= 0.85 ? '9x16' : '1x1');\n}\nreturn { json: { chatId: chatId, msgId: msg.message_id, fileId: fileId, mime: mime, width: width, height: height, filename: filename, episodeId: episodeId, slot: slot, isBookCover: isBookCover } };", "language": "javaScript", "mode": "runOnceForEachItem"}},
+  {"id": "7a3de0d3-6c57-4911-94f3-9f585b7bda2f", "name": "Conversation Memory", "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow", "typeVersion": 1.3, "position": [1088, 752], "parameters": {"sessionIdType": "customKey", "sessionKey": "=airtable-agent-v2-{{ $('Telegram Message Received').item.json.message.chat.id }}", "contextWindowLength": 20}},
+  {"id": "f8e6a384-f346-4fda-9bae-249125482eed", "name": "Airtable Agent", "type": "@n8n/n8n-nodes-langchain.agent", "typeVersion": 3.1, "position": [1152, 528], "parameters": {"promptType": "define", "text": "={{ $json.promptText }}", "options": {"systemMessage": "=You are Pod21's Airtable assistant on Telegram, working for Jonny and Charlie. You can READ anything in the company's\n  Airtable account with your tools and answer directly. You can PROPOSE writes (create / update / delete), but a human\n  must approve each one before it executes — you can never execute a write yourself.\n\n  Today is {{ $now.toFormat(\"cccc yyyy-MM-dd\") }}.\n\n  == HOW YOU RECEIVE WORK ==\n  You only act when someone @mentions you or replies to one of your messages. A turn is either:\n  - A direct question or instruction, or\n  - A reply to an earlier message. When it's a reply, the user's prompt includes the quoted earlier message (\"The user is\n  replying to your earlier message: ...\"). That quoted message was sent by you or by another Pod21 workflow, and it is\n  your primary source of context — read it carefully.\n\n  == INTERPRETING A REPLY (general protocol) ==\n  Treat the quoted message as the specification for what the user wants. Most Pod21 workflow notifications already contain\n  everything you need; your job is to read it, not to rely on memorised, workflow-specific rules. Work through:\n  1. TARGET — Find identifiers in the quoted message: record IDs (rec...), human codes (e.g. BA-a1b2c3), names, or\n  base/table hints. Use your read tools to locate the exact record(s). Confirm; never assume.\n  2. OPTIONS & CONVENTION — Notification messages usually present labelled or numbered options and state how to reply\n  (e.g. \"Reply T1-T5 to select a title\", \"Reply TC1-TC5 to select a caption\", \"Reply 1-4\"). Derive the meaning of any\n  shorthand FROM THE MESSAGE ITSELF: \"T3\" means whatever that message says option T3 is — do not assume a fixed meaning\n  across different messages. If the user types their own text instead of a listed option, treat that as a custom choice\n  and use it verbatim. One reply may pick several things at once (e.g. a title and a caption).\n  3. ACTION —\n     - If the quoted message states what to update (which field, status, or table), follow it exactly.\n     - Otherwise infer the obvious target by matching the option's label to a field on the record (an option labelled\n  \"Title\" -> the record's title field; \"Caption\" -> its caption field), confirming exact field names with get_base_schema.\n     - Change a record's Status or stage ONLY if the quoted message or the user explicitly asks for it. Never invent a\n  state transition.\n     - If the right record or field is genuinely ambiguous, ask ONE short clarifying question rather than guess.\n  4. PROPOSE — After confirming everything against the live base, propose ONE write covering the whole selection.\n\n  This protocol is deliberately generic: it should handle episode metadata today and any future selection message — social\n  posts, shortlist picks, anything — as long as the message says what it offers. You should not need new per-workflow\n  instructions; if a message doesn't give you enough to act safely, ask.\n\n  == TOOLS (all read-only) ==\n  - list_airtable_bases — list all bases (IDs and names).\n  - get_base_schema — tables, field names, field types and views for a base.\n  - airtable_read — generic GET to the Airtable API: records, single records, filtered queries.\n\n  == RESPONSE FORMAT (CRITICAL) ==\n  Every reply must be ONLY one raw JSON object — no markdown, no code fences, no text outside the JSON. Exactly three\n  shapes:\n  1. Answer / read result / clarifying question / refusal:\n     { \"action\": \"respond\", \"message\": \"text sent to the user on Telegram\" }\n  2. Propose a write:\n     { \"action\": \"write\", \"summary\": \"plain-English description of exactly what changes and where\", \"method\": \"PATCH\",\n  \"path\": \"appXXX/tblYYY\", \"body\": { \"records\": [ { \"id\": \"recZZZ\", \"fields\": { \"Status\": \"Recorded\" } } ] } }\n  3. Show real images with a separate details message below - use this INSTEAD of pasting attachment links:\n     { \"action\": \"photos\", \"urls\": [\"https://...\", \"https://...\"], \"caption\": \"details text sent below the photos\" }\n     Read the attachment record(s) with your tools and put each requested full-size attachment URL in \"urls\", in order\n  (1-4 images; for all thumbnail options this is 4). Four images are sent as one Telegram album; one to three are sent\n  individually so the workflow never pads the request with duplicates. \"caption\" is a SHORT text message sent below the images:\n  lead with the record code (BA-xxxx) as the reply anchor, then list each option and\n  its current state read from the records, e.g. \"BA-eObmD9 — Options: #1 (Rejected), #2 (Selected), #3, #4\". End with how\n  to choose if a pick is still open, e.g. \"Reply 1-4 to pick\". Image attachments only — for PDFs / video / audio fall back\n  to \"respond\" with a link. DEFAULT: whenever asked to see, send or show thumbnails or artwork, return them as \"photos\",\n  not links.\n\n  == WRITE RULES ==\n  - Reads never need approval: use tools, then \"respond\" with the answer.\n  - Memory is NOT a source of truth. A write you proposed before may have been cancelled, left unapproved, or failed.\n  Before stating that anything exists or changed, call airtable_read and answer only from what it returns right now.\n  - Before any filterByFormula, sort, or fields[], call get_base_schema first to confirm exact field names. Don't assume a\n  \"Name\" field; the primary field is usually \"Title\".\n  - Before proposing a write, always resolve the real base ID, table ID, field names and record IDs with read tools and\n  check current values. Use real IDs only — never invented ones.\n  - Cover the user's ENTIRE request; never silently do only part of it. Batch into one call where the API allows: create\n  and update accept up to 10 records in the body; delete accepts up to 10 record IDs as query params, e.g.\n  \"appXXX/tblYYY?records[]=recAAA&records[]=recBBB\" with body { }.\n  - Name every affected record in the summary so the approver sees the full scope.\n  - If a request needs MORE THAN ONE call - more than 10 records, more than one table, or mixed operations such as\n  a delete plus an update (one Airtable call can only touch ONE table, so a request spanning two tables always needs\n  several calls) - propose the FIRST call and, in its summary, state plainly that it is step 1 of N and exactly what\n  remains. ALWAYS end that summary with an explicit call to action that quotes the exact words to send, e.g. \"Approve\n  this delete, then reply 'run the second write' and I will propose resetting the episode Status to AI Analysis\n  Complete.\" Never leave a multi-write request with an unstated or unclear next step, and never imply the later steps\n  happen automatically - you are NOT re-invoked after an approval, so the approver has to send that message.\n  - method must be POST, PATCH, PUT or DELETE. path is everything after https://api.airtable.com/v0/. body must be valid\n  JSON for the Airtable API, or { } for DELETE by URL.\n  - A link field (like \"Guests\") takes an ARRAY OF PLAIN RECORD ID STRINGS: \"Guests\": [\"recAAA\", \"recBBB\"]. Never objects\n  like [{\"id\": \"recAAA\"}] — Airtable rejects those with INVALID_RECORD_ID and the whole write fails.\n  - Propose DELETE only when explicitly asked to delete something.\n  - If unsure which base, table, record or field is meant, ask ONE short clarifying question. Never guess on writes.\n\n== EPISODE PACKAGING REPLY ==\nThe metadata workflow posts a \"Packaging for ...\" message per episode, offering up to five things (Read messages offer four). A reply to it may answer any subset in any order, in one message or several. Each numbered item in that message names its target field after an arrow (e.g. \"5 - Image prompt -> Custom Image Prompt\"), so read the target from the message rather than guessing. Episodes live in base app8Xw9Tq0XLjhmp9, table tbl3uYLIvtB9APZp6, matched by the BA-xxxx code in the \"ID\" field. Batch everything they answered into ONE PATCH on that episode. Rules per item:\n1. Title -> \"Title\". \"T1\"..\"T5\" means that numbered option from the quoted message, verbatim. Their own text wins over a listed option. No mention of the title at all -> leave the field alone; never blank it.\n2. Thumbnail caption -> \"Thumbnail Caption\". Same handling with \"TC1\"..\"TC5\".\n3. Guests -> \"Guests\" (a link field). Read the \"Guests\" table FIRST and find each named person. Link ONLY people who already exist: set the field to the episode's existing guest links PLUS the matched ones, so you never drop a guest who was already attached. If a name has no match, do NOT create a Guests record and do NOT invent an ID - propose the write for whoever DID match (or \"respond\" if nobody did) and say plainly in the summary which names you couldn't find, so Jonny can add them himself. If two records match a name ambiguously, ask rather than pick.\n4. Thumbnail moods -> \"Thumbnail Moods\", a plain TEXT field holding comma-separated mood names, e.g. \"confident, shocked\". Use only names listed in the quoted message (they come from the Thumbnail References table). Drop anything not on that list and say so. Order matters: the moods cycle across the 4 artwork options in the order given. On a Read episode this field IS the facial expression for the artwork: accept \"expression: ...\" as this item, and an empty field means a neutral expression. If an older Read message did not show the mood list, still accept the expression name and check it against the Thumbnail References table rather than dropping it.\n5. Image prompt -> \"Custom Image Prompt\", long text. Write what they said VERBATIM and in full - this is art direction and paraphrasing it changes the artwork. Do not summarise, tidy, translate or shorten it. If they reply \"default\" (or \"none\"), write that literal word, which the artwork workflow reads as \"no extra direction\". Anything they say that isn't clearly a title, caption, guest, mood/expression or Read book cover is almost certainly this.\n6. Book cover (Read episodes only) -> \"Book Cover\", an attachment field. Send the image to the episode as a photo captioned \"book cover BA-xxxx\"; never put the cover in Custom Image Prompt. Artwork will not start for a Read until this field holds the cover.\nIMPORTANT: for every non-Read episode artwork starts as soon as the packaging write lands, whether or not \"Custom Image Prompt\" is filled (it is optional and not a gate). For a Read, the gate is \"Book Cover\": if their reply answers everything EXCEPT the cover, propose the write as normal and remind them the Read's artwork will not start until the cover is in place. Never fill in Custom Image Prompt or Book Cover for them. When the write includes what the episode needs, say in the summary that the artwork run starts automatically as soon as this write lands (usually within a minute), and that the episode does NOT need to be set to Approved. Never phrase it as \"artwork will start once this is approved\", and never say or imply that the episode Status must reach Approved for artwork to start.\n\n== ARTWORK REVISIONS ==\nWhen Jonny or Charlie asks to revise, re-do, re-create or change the artwork / thumbnail for an episode (e.g. \"redo the 9x16 for BA-eObmD9, make the background more red and lose the laptop\"), treat it as a WRITE with this exact recipe:\n1. Resolve the episode: find its Episodes record in base app8Xw9Tq0XLjhmp9 (table tbl3uYLIvtB9APZp6) by the BA-xxxx code in the \"ID\" field. Then find its chosen thumbnail: table \"Thumbnails\", the row linked to that episode whose Status = \"Final\" (confirm field names with get_base_schema, and read to get the real rec... row id). There is normally exactly one Final row per episode.\n2. Propose ONE PATCH to that one Thumbnails row, setting only these three fields:\n   - \"Revision Brief\" = the user's requested change, verbatim and complete (e.g. \"make the background more red and remove the laptop\"). Include every part of what they asked for.\n   - \"Revision Targets\" = an array of the aspect ratios they named, each one of \"16x9\", \"1x1\", \"9x16\". Map their wording: 16x9 / 16:9 / landscape / wide -> \"16x9\"; 1x1 / square -> \"1x1\"; 9x16 / 9:16 / vertical / portrait / story -> \"9x16\". If they name NO ratio (e.g. \"redo the artwork for BA-xxxx\"), use all three [\"16x9\",\"1x1\",\"9x16\"] and say so in the summary.\n   - \"Status\" = \"Revising\".\n3. In the summary, name the episode, the exact brief text, and which ratios will be redone, so the approver sees the full scope before tapping Approve.\nAfter approval the thumbnail workflow regenerates only those ratios with the brief, overwrites them on the row, sends the new artwork back to this chat, and resets Status to Final. You do nothing further.\nGuardrails: this only works once artwork has been PICKED (a Final row exists). If there is no Final thumbnail row for the episode, do NOT write - \"respond\" telling them the artwork hasn't been selected yet. Never touch the images or any other fields yourself; only these three fields on the one Final row.\n\n== PUBLISHING (FOUNTAIN) ==\nPublishing happens in Airtable, not on another platform. You have no Fountain access, and that is never a reason to refuse: a request to publish, upload, schedule or put an episode on Fountain is an ordinary WRITE you can propose. Never answer \"I can't upload to Fountain\" or tell them to do it by hand - that answer is wrong, and nobody needs to touch Fountain.\nThe recipe is one PATCH on the Episodes record: \"Status\" = \"Ready to Publish\", plus \"Release Date\" in the same write if it is empty or already past (use a real future date and say which one). That flip is the entire trigger; the episode does not need to reach \"Approved\" or any other status first. In the summary, say what happens next: within about a minute the publisher claims the episode (Status \"Publishing\"), uploads the video from \"Frame.io URL\" plus the 1x1 artwork, and SCHEDULES the Fountain item for the Release Date at the Publishing Settings publish time (currently 06:00, America/New_York). It is uploaded AND scheduled, not published immediately.\nThere is no draft-only mode. The Fountain draft exists for seconds inside that run, so if someone says \"upload it as a draft\", correct the premise: the item gets scheduled for the release date. The lever for holding an episode back is the \"Release Date\", not a draft.\nBefore proposing, check the episode against the System Map's publishing checklist (Title, Frame.io URL, Summary, Chapters, Thumbnails, 1x1 Thumbnail Count above 0, Type not Clip or Audionauts, Status, Release Date today or later) and name anything missing rather than promising a run that will silently not fire.\nIf the episode is already \"Scheduled to Publish\" and they want the date changed, say plainly that the schedule time does not re-sync: title, description and 1x1 artwork edits do re-sync every 15 minutes, but a new Release Date means rescheduling in Fountain or resetting the Publications row by hand.\nNothing marks an episode \"Published\" by itself: the reconciler checks Fountain every 15 minutes and flips it. Never claim an episode is not live while its Publication is still scheduled; read the Publications row first. Read the System Map, stage 5, before answering any publishing question.\n\n== LOGGING AUTOMATION ISSUES ==\nJonny and Charlie report broken or improvable things in the Pod21 automations through this chat, and every report must end up as a row in the Automation Upgrades table so it can be fixed later. Treat a turn as an issue report when they say something is broken, failing, wrong, missing or slow, or when they ask you to \"log this\", \"log it as an issue\", \"add it to the upgrades\", or anything similar - including when that is a reply to an earlier workflow message. Do NOT log an issue when they are simply asking a question, and if it is genuinely unclear whether they want one logged, ask one short question first.\nGATHER BEFORE YOU PROPOSE. A report is only useful if someone can act on it weeks later, so do this research first, even if they only said \"this is broken\":\n- If the turn quotes an earlier message, keep that message's full text; it is the single most useful piece of context.\n- If any episode code (BA-xxxx) or record is named or implied, read that record and note its ID and current field values.\n- Read the System Map, then compare it against what you just read, so you can state which stage should have run and which required fields are empty.\nThen propose ONE create: method POST, path appwcz1Bux9YLcZYm/tblja27Lsn7qXJfZM, body { \"records\": [ { \"fields\": { ... } } ] }. Use these EXACT field names, and for the choice fields ONLY these exact values:\n- \"Title\" - one short line naming the problem, e.g. \"Artwork never generated for BA-eObmD9\".\n- \"Type\" - one of: Bug, Improvement, Idea. Something not working = Bug. A request to change how something works = Improvement. A loose suggestion = Idea.\n- \"Status\" - always \"New\".\n- \"Priority\" - one of: Low, Medium, High. Use High only if they say it is blocking or urgent. Otherwise default to Medium for a Bug and Low for an Improvement or Idea.\n- \"Reported By\" - \"Jonny\" or \"Charlie\", read from the [Message from ...] tag at the start of their message. If it says an unknown user, omit this field rather than guessing.\n- \"Workflow\" - plain text naming the automation involved, using the workflow names from the System Map. Write \"Unknown\" if you genuinely cannot tell.\n- \"Related Record\" - the BA-xxxx code or rec... ID the report concerns. Omit the field entirely if there isn't one.\n- \"Description\" - what is wrong, in THEIR words. Quote their sentence verbatim, then add any clarifying detail they gave in earlier turns. Do not summarise, tidy or paraphrase their wording.\n- \"Context\" - everything a person needs to reproduce and fix this later, as plain lines: the full quoted message if there was one; the record you read, its ID and its current Status and relevant field values; which fields the System Map says are required for the stage that failed and which of those are empty; and what should have happened versus what actually happened. Stick to what you actually checked - if you checked nothing, say \"Not checked\" rather than speculating. Never invent an error message or a cause.\nPropose it as a normal write so they can approve it, and say in the summary what you are logging and against which workflow. After approval you are done; Jonny fixes it in his own time. Never mark anything Fixed yourself and never edit an existing row unless explicitly asked to.\n\n== STYLE ==\nKeep messages short, plain text, no markdown tables, under 3500 characters. Use simple lists like \"1. ...\" on separate lines.\n\n== HOW THE PIPELINE WORKS (System Map) ==\nThere is a living reference called the \"System Map\" that explains how all the Pod21 / Guy's Take automations fit together: what triggers each workflow, the exact Airtable field conditions an episode needs before the next stage runs, the Status ladder, and what each episode Type means. It lives in Airtable so it can be edited without touching n8n. Whenever a turn is about how the workflows work, why something has or hasn't happened, where an episode is in the pipeline, what an episode still needs before a stage (e.g. artwork) will run, or a request to publish / upload / schedule / take an episode live: FIRST read the System Map, then answer from it. Read it with airtable_read from base app8Xw9Tq0XLjhmp9, table \"Prompts\", the record where Name = \"System Map\" (filterByFormula={Name}=\"System Map\"); treat the long-text \"Prompt\" field as authoritative. Do not answer pipeline questions from memory. You may still read a specific episode's live field values and compare them against the Map's precondition checklist to say what is missing.\n\n== ARTWORK STATUS RULE ==\nFor whether initial thumbnail artwork will generate, the Path 1 preconditions checklist is the rule. The normal lifecycle diagram shows Approved as the usual human handoff, but Approved is NOT a requirement of the artwork trigger. Never say an episode must reach Approved for artwork to run. Report the actual Status rule exactly: Status must not be Awaiting Thumbnail Pick or Generating Artwork. Then check and name the other Path 1 fields that are actually missing. This also applies to the summary you attach to a packaging write: never write \"artwork will start once this is approved\". Say the artwork run starts automatically as soon as the write lands and that Approved is not required.\n\n  == KNOWN CONTEXT (verify with tools, don't assume) ==\n  Main base: Guy's Take (app8Xw9Tq0XLjhmp9) — Episodes (tbl3uYLIvtB9APZp6), plus Stories and Shortlist tables used by a\n  weekly YouTube research run. Authorized users / approvers are Jonny and Charlie.\n\n  {{ $json.recentActionsNote }}", "maxIterations": 15, "enableStreaming": false}}},
+  {"id": "0a9771d1-62da-410c-b3b3-6ae2b9c33b1c", "name": "Ready to Attach?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [1192, 1000], "parameters": {"conditions": {"combinator": "and", "conditions": [{"id": "has-episode", "leftValue": "={{ $json.episodeId }}", "operator": {"operation": "notEmpty", "singleValue": true, "type": "string"}, "rightValue": ""}, {"id": "has-slot", "leftValue": "={{ $json.slot }}", "operator": {"operation": "notEmpty", "singleValue": true, "type": "string"}, "rightValue": ""}], "options": {"version": 3, "leftValue": "", "caseSensitive": true, "typeValidation": "loose"}}, "options": {}}},
+  {"id": "5c2fe31e-c5ac-458f-9dba-43d8871bcea7", "name": "Execute Airtable Write", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1216, 32], "parameters": {"method": "={{ $('Handle Button Press').item.json.method }}", "url": "=https://api.airtable.com/v0/{{ $('Handle Button Press').item.json.path }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $('Handle Button Press').item.json.body }}", "options": {"response": {"response": {"neverError": true}}, "timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "6dcb114f-3319-4318-9634-37a02aa28c28", "name": "Send Outcome Notice", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [1216, 224], "webhookId": "e5b6fe45-7b72-4f96-9b41-bd603c454158", "parameters": {"chatId": "={{ $('Handle Button Press').item.json.chatId }}", "text": "={{ $('Handle Button Press').item.json.reasonMessage.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "5c0912c1-da5e-4e1a-a546-40594b2399a9", "name": "list_airtable_bases", "type": "n8n-nodes-base.httpRequestTool", "typeVersion": 4.4, "position": [1216, 752], "parameters": {"toolDescription": "List all Airtable bases the account has access to. Returns base IDs (start with app) and names. Takes no input.", "url": "https://api.airtable.com/v0/meta/bases", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {"response": {"response": {"neverError": true}}}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "acf07848-bc90-45d2-ae29-407e9d9b4d6e", "name": "get_base_schema", "type": "n8n-nodes-base.httpRequestTool", "typeVersion": 4.4, "position": [1344, 752], "parameters": {"toolDescription": "Get the full schema of one Airtable base: all tables with their IDs, fields, field types and views. Input: baseId.", "url": "=https://api.airtable.com/v0/meta/bases/{{ $fromAI('baseId', 'Airtable base ID, starts with app', 'string') }}/tables", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {"response": {"response": {"neverError": true}}}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "6427ebed-e0b0-4783-bfdd-a00cf5ee89c4", "name": "Find Episode Record", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1408, 880], "parameters": {"authentication": "predefinedCredentialType", "method": "GET", "nodeCredentialType": "airtableTokenApi", "options": {"response": {"response": {"neverError": true}}}, "queryParameters": {"parameters": [{"name": "filterByFormula", "value": "={{ '{ID}=\"' + $('Extract Photo Info').first().json.episodeId + '\"' }}"}, {"name": "maxRecords", "value": "1"}]}, "sendQuery": true, "specifyQuery": "keypair", "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Episodes"}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "5b619644-9390-4f47-9074-9e1eb6f44f48", "name": "Ask For Details", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [1408, 1120], "webhookId": "60dafbac-bfa4-44a7-9d5b-966c016c3ae3", "parameters": {"additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}, "chatId": "={{ $('Extract Photo Info').first().json.chatId }}", "operation": "sendMessage", "resource": "message", "text": "={{ '🖼️ Almost there. ' + ($('Extract Photo Info').first().json.episodeId ? ('Episode <code>' + $('Extract Photo Info').first().json.episodeId + '</code>. ') : 'I could not find an episode ID, so reply to a message about the episode or add its BA-xxxx to the photo caption. ') + ($('Extract Photo Info').first().json.slot ? ('Slot: <b>' + ($('Extract Photo Info').first().json.slot === 'BOOK_COVER' ? 'Book cover' : $('Extract Photo Info').first().json.slot) + '</b>.') : 'I could not detect the aspect ratio, so please send a 16:9, 1:1 or 9:16 image.') }}"}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "bf034a15-8ade-47a2-bcf2-5d996703023f", "name": "airtable_read", "type": "n8n-nodes-base.httpRequestTool", "typeVersion": 4.4, "position": [1472, 752], "parameters": {"toolDescription": "Generic read-only GET request to the Airtable REST API. Input: the path after https://api.airtable.com/v0/ including any query string. Examples: appXXX/tblYYY?maxRecords=20 lists records, appXXX/tblYYY/recZZZ gets one record, appXXX/tblYYY?filterByFormula=URL-encoded-formula filters records. Returns at most 100 records per page, use pageSize and offset for more.", "url": "=https://api.airtable.com/v0/{{ $fromAI('path', 'Path after /v0/ with optional query string, e.g. appXXX/tblYYY?maxRecords=20 or appXXX/tblYYY/recZZZ', 'string') }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {"response": {"response": {"neverError": true}}}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "d60a834e-1bd4-4811-8af1-91f6cd3bc5b1", "name": "Episode Found?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [1624, 880], "parameters": {"conditions": {"combinator": "and", "conditions": [{"id": "ep-found", "leftValue": "={{ $json.records && $json.records.length > 0 }}", "operator": {"operation": "true", "singleValue": true, "type": "boolean"}, "rightValue": ""}], "options": {"version": 3, "leftValue": "", "caseSensitive": true, "typeValidation": "loose"}}, "options": {}}},
+  {"id": "a5333a51-50fc-4690-9e0a-ea8e85b2f0b7", "name": "Record Executed Write", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1680, 32], "parameters": {"jsCode": "const j = $input.first().json;\n  const from = $('Handle Button Press').first().json;\n  // Remember that this approval message has been executed, so a later re-tap is\n  // refused by \"Handle Button Press\". Only marked on a successful Airtable write,\n  // so a failed write can still be retried. Store is bounded to ~7 days / 500 ids.\n  if (from.messageId && !j.error) {\n    const store = $getWorkflowStaticData('global');\n    const done = (store.approvedMessages = store.approvedMessages || {});\n    done[from.messageId] = Date.now();\n    const keys = Object.keys(done);\n    if (keys.length > 500) {\n      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;\n      for (const k of keys) { if (done[k] < cutoff) { delete done[k]; } }\n    }\n  }\n  return [{ json: j }];"}},
+  {"id": "f608bb28-b717-4bc2-ba3e-dec0362f444f", "name": "Parse Agent Decision", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1680, 528], "parameters": {"jsCode": "const raw = String($input.first().json.output ?? '').trim();\n  const fence = String.fromCharCode(96).repeat(3);\n  const cleaned = raw.replace(new RegExp(fence + '(?:json)?', 'gi'), '').trim();\n  // The agent often wraps its JSON in prose, or trails a stray brace after it. Scan for every\n  // balanced {...} block (ignoring braces inside strings) instead of trusting first-{ / last-}.\n  const scanBlocks = (text) => {\n    const found = [];\n    let depth = 0, start = -1, inString = false, escaped = false;\n    for (let i = 0; i < text.length; i++) {\n      const c = text[i];\n      if (inString) {\n        if (escaped) { escaped = false; }\n        else if (c === '\\\\') { escaped = true; }\n        else if (c === '\"') { inString = false; }\n        continue;\n      }\n      if (c === '\"') { inString = true; }\n      else if (c === '{') { if (depth === 0) { start = i; } depth++; }\n      else if (c === '}' && depth > 0) {\n        depth--;\n        if (depth === 0 && start !== -1) { found.push(text.slice(start, i + 1)); start = -1; }\n      }\n    }\n    return found;\n  };\n  const actions = ['write', 'respond', 'photos'];\n  const pickAction = (blocks) => {\n    let found = null, anyObject = null;\n    for (let i = blocks.length - 1; i >= 0; i--) {\n      let candidate = null;\n      try { candidate = JSON.parse(blocks[i]); } catch (e) { candidate = null; }\n      if (!candidate || typeof candidate !== 'object') { continue; }\n      if (anyObject === null) { anyObject = candidate; }\n      if (actions.indexOf(candidate.action) !== -1) { found = candidate; break; }\n    }\n    return { found: found, anyObject: anyObject };\n  };\n  let picked = pickAction(scanBlocks(cleaned));\n  // Repair pass (2026-10-27): the model occasionally leaves an inner double quote\n  // unescaped inside a string value (usually in \"summary\" when quoting text that\n  // itself contains quotes). That makes the whole envelope invalid, so a real write\n  // used to be dropped with \"came out malformed\". A quote is a closing quote only\n  // when the next non-whitespace character is ':', ',', '}' or ']' (or the end);\n  // every other quote inside a string is escaped. Strict parsing always runs first,\n  // so this can only rescue a would-be fallback, never change output that already parsed.\n  const envelopeStart = cleaned.search(/\\{\\s*\"action\"\\s*:/);\n  if (!picked.found && envelopeStart !== -1) {\n    // Repair only from the envelope's opening brace: the prose before it can contain\n    // balanced quotation marks that would otherwise throw off the string tracking.\n    const tail = cleaned.slice(envelopeStart);\n    let repaired = '', inStr = false, esc = false;\n    for (let i = 0; i < tail.length; i++) {\n      const c = tail[i];\n      if (!inStr) { if (c === '\"') { inStr = true; } repaired += c; continue; }\n      if (esc) { esc = false; repaired += c; continue; }\n      if (c === '\\\\') { esc = true; repaired += c; continue; }\n      if (c !== '\"') { repaired += c; continue; }\n      let j = i + 1;\n      while (j < tail.length && /\\s/.test(tail[j])) { j++; }\n      if (j >= tail.length || ':,}]'.indexOf(tail[j]) !== -1) { inStr = false; repaired += c; }\n      else { repaired += '\\\\\"'; }\n    }\n    if (repaired !== tail) {\n      const retry = pickAction(scanBlocks(repaired));\n      if (retry.found) { picked = retry; }\n      else if (!picked.anyObject) { picked.anyObject = retry.anyObject; }\n    }\n  }\n  let parsed = picked.found || picked.anyObject;\n  if (!parsed || typeof parsed !== 'object') {\n    const looksLikeWrite = /\"action\"\\s*:\\s*\"write\"/.test(cleaned);\n    parsed = { action: 'respond', message: looksLikeWrite\n      ? 'I tried to propose a database change but my own instruction came out malformed, so no approval buttons were sent and nothing was changed. Please ask me again.'\n      : (raw || 'I produced no usable answer, please try again.') };\n  }\n  const allowed = ['POST', 'PATCH', 'PUT', 'DELETE'];\n  let out;\n  if (parsed.action === 'write') {\n    const method = String(parsed.method || '').toUpperCase();\n    const path = String(parsed.path || '').replace(/^\\/+/, '');\n    let body = parsed.body && typeof parsed.body === 'object' ? parsed.body : {};\n    if (body.records && !Array.isArray(body.records)) {\n      body.records = [body.records];\n    }\n    // Link fields want plain record-ID strings, but the agent sometimes proposes [{\"id\":\"rec...\"}],\n    // which Airtable rejects with INVALID_RECORD_ID and the whole write fails. Unwrap before the\n    // payload is embedded in the approval message, so the message shows what will actually be sent.\n    // Only touches values inside \"fields\", and only a bare {id} / {id, name} record ref, so\n    // attachment objects ({url, filename}) and the record wrapper itself are left alone.\n    const unwrapFields = (fields) => {\n      if (!fields || typeof fields !== 'object') { return fields; }\n      const copy = {};\n      for (const k of Object.keys(fields)) {\n        const v = fields[k];\n        copy[k] = !Array.isArray(v) ? v : v.map(e => {\n          if (!e || typeof e !== 'object' || Array.isArray(e)) { return e; }\n          const keys = Object.keys(e);\n          const isRecordRef = typeof e.id === 'string' && /^rec[A-Za-z0-9]{10,}$/.test(e.id)\n            && keys.every(x => x === 'id' || x === 'name');\n          return isRecordRef ? e.id : e;\n        });\n      }\n      return copy;\n    };\n    if (Array.isArray(body.records)) {\n      body.records = body.records.map(r => (r && typeof r === 'object' && r.fields)\n        ? Object.assign({}, r, { fields: unwrapFields(r.fields) })\n        : r);\n    }\n    if (body.fields) { body.fields = unwrapFields(body.fields); }\n    if (!allowed.includes(method) || !path) {\n      out = { action: 'respond', message: 'The agent proposed an invalid write request, nothing was changed. Please rephrase your request.', summary: '', method: 'POST', path: '', body: {} };\n    } else {\n      out = { action: 'write', message: '', summary: String(parsed.summary || 'No summary provided'), method: method, path: path, body: body };\n    }\n  } else if (parsed.action === 'photos') {\n    const urls = Array.isArray(parsed.urls) ? parsed.urls.filter(u => typeof u === 'string' && /^https?:\\/\\//i.test(u)).slice(0, 10) : [];\n    if (urls.length === 0) {\n      out = { action: 'respond', message: String(parsed.message || parsed.caption || 'I had no images to send.'), summary: '', method: 'POST', path: '', body: {} };\n    } else {\n      out = { action: 'photos', caption: String(parsed.caption || ''), urls: urls, message: '', summary: '', method: 'POST', path: '', body: {} };\n    }\n  // Unwrap a double-encoded reply (2026-11-02). The model sometimes puts the whole\n  // envelope inside \"message\" as a JSON string, and Charlie got that raw JSON in\n  // Telegram three times over the weekend. Peel any such nesting before sending.\n  const unwrapMessage = (value) => {\n    let text = String(value == null ? '' : value).trim();\n    for (let pass = 0; pass < 3; pass++) {\n      const c = text.replace(new RegExp(fence + '(?:json)?', 'gi'), '').trim();\n      if (!c || c[0] !== '{') { break; }\n      let inner = null;\n      try { inner = JSON.parse(c); } catch (e) { inner = null; }\n      if (!inner || typeof inner !== 'object' || typeof inner.message !== 'string') { break; }\n      text = inner.message.trim();\n    }\n    return text;\n  };\n  } else {\n    out = { action: 'respond', message: unwrapMessage(parsed.message ?? raw), summary: '', method: 'POST', path: '', body: {} };\n  }\n  return [{ json: out }];"}},
+  {"id": "b5f532f5-a0a5-43b1-8bb1-ad3ffcc79a72", "name": "Get Telegram File", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [1840, 880], "webhookId": "258e10f8-a5d1-49f9-a6e0-b2d545d7420f", "parameters": {"download": true, "fileId": "={{ $('Extract Photo Info').first().json.fileId }}", "operation": "get", "resource": "file"}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "ace56f25-fa8f-4f49-8f6f-682d5d9d470a", "name": "Confirm Write Done", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [1904, 32], "webhookId": "a20b4004-2d10-484d-ad88-e1a90cdb9023", "parameters": {"chatId": "={{ $('Handle Button Press').item.json.chatId }}", "text": "={{ ($json.error ? ('⚠️   Airtable rejected the change: ' + (typeof $json.error === 'string' ? $json.error : (($json.error.type || 'error') + ($json.error.message ? (' — ' + $json.error.message) : '')))) : ('✅ Done.\\n\\n' + $('Handle Button Press').item.json.summary)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "95503ff0-d59d-4148-b1e7-dd7a6a19c612", "name": "Is Write Request?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [1904, 528], "parameters": {"conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2}, "combinator": "and", "conditions": [{"id": "is-write-1", "leftValue": "={{ $json.action }}", "rightValue": "write", "operator": {"type": "string", "operation": "equals"}}]}, "looseTypeValidation": true, "options": {}}},
+  {"id": "c17c48ba-24b5-48cd-9485-7ee55007f5f9", "name": "Build Attachment Body", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2056, 1000], "parameters": {"jsCode": "const items = $input.all();\nconst info = $('Extract Photo Info').first().json;\nconst ep = $('Find Episode Record').first().json;\nconst epRec = (ep.records && ep.records[0] && ep.records[0].id) || '';\nconst out = [];\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const bin = item.binary || {};\n  const prop = Object.keys(bin)[0];\n  if (!prop) { throw new Error('No image data was downloaded from Telegram. Nothing was attached.'); }\n  let buf = null;\n  const raw = bin[prop].data;\n  if (typeof raw === 'string' && raw && raw !== 'filesystem-v2' && raw.length > 64) {\n    buf = Buffer.from(raw, 'base64');\n  } else if (this.helpers && this.helpers.getBinaryDataBuffer) {\n    buf = this.helpers.getBinaryDataBuffer(i, prop);\n    if (buf && typeof buf.then === 'function') { buf = await buf; }\n  }\n  if (!buf || !buf.length) { throw new Error('Could not read the image bytes from Telegram. Nothing was attached.'); }\n  if (buf.length > 5 * 1024 * 1024) { throw new Error('Image is larger than the 5 MB Airtable limit. Send a smaller or compressed photo.'); }\n  const data = Buffer.isBuffer(buf) ? buf.toString('base64') : Buffer.from(buf).toString('base64');\n  out.push({ json: Object.assign({}, info, { episodeRecId: epRec, uploadBody: { contentType: info.mime || 'image/jpeg', filename: info.filename || 'image.jpg', file: data } }) });\n}\nreturn out;", "language": "javaScript", "mode": "runOnceForAllItems"}},
+  {"id": "dd7a0a64-e384-4146-97f7-2cc9e0973dca", "name": "Stash Pending Write", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2128, 624], "parameters": {"jsCode": "const item = $input.first().json;\n  const payload = JSON.stringify({ method: item.method, path: item.path, body: item.body });\n  return [{ json: { summary: item.summary, payload: payload, method: item.method, path: item.path, body: item.body } }];"}},
+  {"id": "87b337f2-4414-4620-9db8-0e3c9788fe75", "name": "Is Photo Reply?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [2128, 768], "parameters": {"conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2}, "combinator": "and", "conditions": [{"id": "is-photo-1", "leftValue": "={{ $json.action }}", "rightValue": "photos", "operator": {"type": "string", "operation": "equals"}}]}, "looseTypeValidation": true, "options": {}}},
+  {"id": "4d165660-5840-4b44-b541-d2e4ba937df8", "name": "Find Target Row", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2272, 1000], "parameters": {"authentication": "predefinedCredentialType", "method": "GET", "nodeCredentialType": "airtableTokenApi", "options": {}, "queryParameters": {"parameters": [{"name": "filterByFormula", "value": "={{ (function(){ const t = (($('Find Episode Record').first().json.records[0] || {}).fields || {}).Thumbnails || []; return t.length ? ('OR(' + t.map(function(r){ return 'RECORD_ID()=\"' + r + '\"'; }).join(',') + ')') : 'RECORD_ID()=\"NONE\"'; })() }}"}, {"name": "maxRecords", "value": "20"}]}, "sendQuery": true, "specifyQuery": "keypair", "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblkcASzE4DXlxokO"}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "05e07984-513a-4a71-a782-6cffbc003132", "name": "Is Book Cover?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [2272, 1160], "parameters": {"conditions": {"combinator": "and", "conditions": [{"id": "is-book-cover", "leftValue": "={{ $json.slot }}", "operator": {"type": "string", "operation": "equals"}, "rightValue": "BOOK_COVER"}], "options": {"version": 3, "leftValue": "", "caseSensitive": true, "typeValidation": "loose"}}, "options": {}}},
+  {"id": "d66e8ff6-6fd0-4428-bcb3-42de66e5a647", "name": "Send Answer", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [2352, 432], "webhookId": "3443c673-371b-4ea8-b4fc-c8b5f872146c", "parameters": {"chatId": "={{ $('Telegram Message Received').item.json.message.chat.id }}", "text": "={{ $json.message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "b9f82a91-bcb8-4694-81e4-c47b01461ca8", "name": "Send Approval Buttons", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [2352, 624], "webhookId": "59f16895-896b-4393-93a2-c4ad6a6e9854", "parameters": {"chatId": "={{ $('Telegram Message Received').item.json.message.chat.id }}", "text": "=🛠 Approval needed\n  \n  {{ $json.summary.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}\n  \n  ⟦{{ $json.payload.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}⟧", "replyMarkup": "inlineKeyboard", "inlineKeyboard": {"rows": [{"row": {"buttons": [{"text": "✅ Approve", "additionalFields": {"callback_data": "wa"}}, {"text": "❌ Cancel", "additionalFields": {"callback_data": "wc"}}]}}]}, "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "c421e6fd-5e53-4c68-bdd6-965eb6bb5a8d", "name": "Build Photo Album", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2352, 848], "parameters": {"jsCode": "const item = $input.first().json;\n  const chatId = $('Telegram Message Received').first().json.message.chat.id;\n  const urls = (Array.isArray(item.urls) ? item.urls : []).filter(u => typeof u === 'string' && u).slice(0, 4);\n  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n  const caption = esc(String(item.caption || 'Reply with the option number to pick.'));\n  const idMatch = String(item.caption || '').match(/\\bBA-[A-Za-z0-9]+\\b/);\n  const idTag = '<code>' + esc(idMatch ? idMatch[0] : 'no-id') + '</code>';\n  return urls.map((photoUrl) => ({\n    json: { chatId: chatId, caption: caption, idTag: idTag, urls: urls, count: urls.length, photoUrl: photoUrl },\n    pairedItem: { item: 0 }\n  }));"}},
+  {"id": "8abfb279-3d77-4a13-8389-9490140d6f0c", "name": "Upload Attachment", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2488, 1000], "parameters": {"authentication": "predefinedCredentialType", "jsonBody": "={{ $('Build Attachment Body').first().json.uploadBody }}", "method": "POST", "nodeCredentialType": "airtableTokenApi", "options": {"timeout": 60000}, "sendBody": true, "specifyBody": "json", "url": "=https://content.airtable.com/v0/app8Xw9Tq0XLjhmp9/{{ $json.records[0].id }}/{{ $('Extract Photo Info').first().json.slot }}/uploadAttachment"}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "faee179d-d2a2-48ab-b974-90e691e8d1c1", "name": "Has Target Row?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [2488, 1000], "parameters": {"conditions": {"combinator": "and", "conditions": [{"id": "has-row", "leftValue": "={{ $json.targetRecId }}", "operator": {"operation": "notEmpty", "singleValue": true, "type": "string"}, "rightValue": ""}], "options": {"version": 3, "leftValue": "", "caseSensitive": true, "typeValidation": "loose"}}, "options": {}}},
+  {"id": "b56700f3-83cd-4b3c-a22c-7b82e51deda4", "name": "Pick Target Row", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2488, 1000], "parameters": {"jsCode": "const rows = ($input.first().json.records) || [];\nlet target = '';\nfor (const r of rows) { if (((r.fields || {}).Status) === 'Final') { target = r.id; break; } }\nif (!target) { for (const r of rows) { if (((r.fields || {}).Status) === 'Selected') { target = r.id; break; } } }\nreturn [{ json: Object.assign({}, $('Build Attachment Body').first().json, { targetRecId: target }) }];", "language": "javaScript", "mode": "runOnceForAllItems"}},
+  {"id": "ae70059d-907e-4595-b1a8-965a4c1ce8ce", "name": "Clear Book Cover", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2488, 1240], "parameters": {"method": "PATCH", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $('Build Attachment Body').first().json.episodeRecId }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"fields\": { \"Book Cover\": [] } } }}", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "2fe18ebf-aed6-4b0c-9366-1e73c943d090", "name": "Four Photos?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [2576, 848], "parameters": {"conditions": {"options": {"version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "loose"}, "combinator": "and", "conditions": [{"id": "is-four-photos", "leftValue": "={{ $json.count }}", "rightValue": 4, "operator": {"type": "number", "operation": "equals"}}]}, "looseTypeValidation": true, "options": {}}},
+  {"id": "c5640976-ce52-4100-a196-4d843e78afc8", "name": "Clear Slot", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2704, 940], "parameters": {"authentication": "predefinedCredentialType", "jsonBody": "={{ (function(){ const s = $('Build Attachment Body').first().json.slot; const f = {}; f[s] = []; return { records: [ { id: $json.targetRecId, fields: f } ] }; })() }}", "method": "PATCH", "nodeCredentialType": "airtableTokenApi", "options": {}, "sendBody": true, "specifyBody": "json", "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblkcASzE4DXlxokO"}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "79da104e-437a-444b-b083-34994621acbf", "name": "Notify Photo Attached", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [2704, 1000], "webhookId": "7147b047-a20f-41cc-8a77-067be325296c", "parameters": {"additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}, "chatId": "={{ $('Extract Photo Info').first().json.chatId }}", "operation": "sendMessage", "resource": "message", "text": "={{ '🖼️ Attached to <code>' + $('Extract Photo Info').first().json.episodeId + '</code> as the <b>' + $('Extract Photo Info').first().json.slot + '</b> thumbnail (' + $('Extract Photo Info').first().json.width + 'x' + $('Extract Photo Info').first().json.height + ').' }}"}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "20f962c7-85cc-4aca-a61f-7b44a9be1423", "name": "Verify Attachment", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2704, 1000], "parameters": {"jsCode": "const res = $input.first().json;\nconst want = $('Build Attachment Body').first().json.uploadBody.filename;\nconst info = $('Extract Photo Info').first().json;\nlet found = null;\nconst fields = res.fields || {};\nfor (const k of Object.keys(fields)) {\n  const v = fields[k];\n  if (Array.isArray(v)) { for (const a of v) { if (a && a.filename === want) found = a; } }\n}\nif (!found || !found.size || Number(found.size) < 1024) { throw new Error('Image upload did not land (attachment missing or too small). Nothing was confirmed.'); }\nreturn [{ json: Object.assign({}, info, { uploadedSize: found.size }) }];", "language": "javaScript", "mode": "runOnceForAllItems"}},
+  {"id": "97d581cc-b99b-4741-86e9-bcfb0b3bfb78", "name": "Create Custom Row", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2704, 1060], "parameters": {"authentication": "predefinedCredentialType", "jsonBody": "={{ { records: [ { fields: { Name: $('Extract Photo Info').first().json.episodeId + ' Custom', Episode: [ $('Build Attachment Body').first().json.episodeRecId ], Status: 'Final' } } ] } }}", "method": "POST", "nodeCredentialType": "airtableTokenApi", "options": {}, "sendBody": true, "specifyBody": "json", "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblkcASzE4DXlxokO"}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "d7373de8-6815-4ff5-846a-2df24832723a", "name": "Upload Book Cover", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2704, 1240], "parameters": {"method": "POST", "url": "=https://content.airtable.com/v0/app8Xw9Tq0XLjhmp9/{{ $('Build Attachment Body').first().json.episodeRecId }}/Book%20Cover/uploadAttachment", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $('Build Attachment Body').first().json.uploadBody }}", "options": {"timeout": 60000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "3acc1403-8e59-4d45-b5ad-628ac36dcf5a", "name": "Send Album", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [2800, 784], "executeOnce": true, "webhookId": "3e557141-a995-4b57-b537-64d0a0808595", "parameters": {"operation": "sendMediaGroup", "chatId": "={{ $('Build Photo Album').item.json.chatId }}", "media": {"media": [{"media": "={{ $('Build Photo Album').item.json.urls[0] }}", "additionalFields": {}}, {"media": "={{ $('Build Photo Album').item.json.urls[1] }}", "additionalFields": {}}, {"media": "={{ $('Build Photo Album').item.json.urls[2] }}", "additionalFields": {}}, {"media": "={{ $('Build Photo Album').item.json.urls[3] }}", "additionalFields": {}}]}, "additionalFields": {}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "c1a4c012-1789-4fa1-a63b-454414c0b3cd", "name": "Send Requested Photo", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [2800, 912], "webhookId": "59f717db-0ad0-4fb7-aee0-3f3418f72e36", "parameters": {"resource": "message", "operation": "sendPhoto", "chatId": "={{ $json.chatId }}", "file": "={{ $json.photoUrl }}", "additionalFields": {"caption": "={{ $json.idTag }}", "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "c40c18e9-88ba-4045-bc49-10f46c0890c8", "name": "Verify Book Cover", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2920, 1240], "parameters": {"mode": "runOnceForAllItems", "language": "javaScript", "jsCode": "const res = $input.first().json;\nconst want = $('Build Attachment Body').first().json.uploadBody.filename;\nconst info = $('Extract Photo Info').first().json;\nlet found = null;\nconst fields = res.fields || {};\nfor (const k of Object.keys(fields)) {\n  const v = fields[k];\n  if (Array.isArray(v)) { for (const a of v) { if (a && a.filename === want) found = a; } }\n}\nif (!found || !found.size || Number(found.size) < 1024) { throw new Error('Image upload did not land (attachment missing or too small). Nothing was confirmed.'); }\nreturn [{ json: Object.assign({}, info, { uploadedSize: found.size }) }];"}},
+  {"id": "5e80342e-c2cf-45be-81ec-8b9ba801f06b", "name": "Send Album Details", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [3024, 848], "executeOnce": true, "webhookId": "34d3f8bf-20a6-4099-b119-d363b23c328a", "parameters": {"chatId": "={{ $('Build Photo Album').item.json.chatId }}", "text": "={{ $('Build Photo Album').item.json.caption }}", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "fbf4dfef-08f6-44d2-a291-3c069aa6cd47", "name": "Notify Book Cover Attached", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [3136, 1240], "webhookId": "99cd4ba5-efb2-4cae-b652-8e3ea1c929a0", "parameters": {"resource": "message", "operation": "sendMessage", "chatId": "={{ $('Extract Photo Info').first().json.chatId }}", "text": "={{ '📕 Attached to <code>' + $('Extract Photo Info').first().json.episodeId + '</code> as the book cover (' + $('Extract Photo Info').first().json.width + 'x' + $('Extract Photo Info').first().json.height + '). Read artwork will place it on the book.' }}", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}}
+];
 
-// ── Button (callback_query) path ─────────────────────────────────────────
-const isButtonPress = ifElse({
-  version: 2.3,
-  config: {
-    name: 'Is Button Press?',
-    parameters: {
-      conditions: {
-        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 3 },
-        conditions: [{ id: 'is-cb-1', leftValue: expr('{{ $json.callback_query ? "yes" : "no" }}'), rightValue: 'yes', operator: { type: 'string', operation: 'equals' } }],
-        combinator: 'and'
-      },
-      looseTypeValidation: true,
-      options: {}
-    },
-    position: [64, 288]
+// Node types that start an execution. Everything else is a regular step.
+const TRIGGER_TYPES = new Set([
+  'n8n-nodes-base.scheduleTrigger',
+  'n8n-nodes-base.webhook',
+  'n8n-nodes-base.formTrigger',
+  'n8n-nodes-base.airtableTrigger',
+  'n8n-nodes-base.telegramTrigger',
+  'n8n-nodes-base.gmailTrigger',
+  'n8n-nodes-base.executeWorkflowTrigger'
+]);
+
+const nodesByName = {};
+for (const live of liveNodes) {
+  const { type, typeVersion, credentials, ...config } = live;
+  if (credentials) {
+    config.credentials = Object.fromEntries(
+      Object.entries(credentials).map(([credentialType, reference]) => [credentialType, { id: reference.id, name: reference.name }])
+    );
   }
+  nodesByName[live.name] = (TRIGGER_TYPES.has(type) ? trigger : node)({
+    type,
+    version: typeVersion,
+    config,
+    output: [{}]
+  });
+}
+
+// [source, sourceOutputIndex, target, targetInputIndex?]
+const connections = [
+  ['Telegram Message Received', 0, 'Is Button Press?'],
+  ['Is Button Press?', 0, 'Handle Button Press'],
+  ['Is Button Press?', 1, 'Addressed to bot?'],
+  ['Handle Button Press', 0, 'Answer Button Tap'],
+  ['Answer Button Tap', 0, 'Run Approved Write?'],
+  ['Run Approved Write?', 0, 'Execute Airtable Write'],
+  ['Run Approved Write?', 1, 'Is Duplicate?'],
+  ['Execute Airtable Write', 0, 'Record Executed Write'],
+  ['Record Executed Write', 0, 'Confirm Write Done'],
+  ['Addressed to bot?', 0, 'From Jonny or Charlie?'],
+  ['Prep Agent Input', 0, 'Airtable Agent'],
+  ['Airtable Agent', 0, 'Parse Agent Decision'],
+  ['Parse Agent Decision', 0, 'Is Write Request?'],
+  ['Is Write Request?', 0, 'Stash Pending Write'],
+  ['Is Write Request?', 1, 'Is Photo Reply?'],
+  ['Stash Pending Write', 0, 'Send Approval Buttons'],
+  ['Is Photo Reply?', 0, 'Build Photo Album'],
+  ['Is Photo Reply?', 1, 'Send Answer'],
+  ['Send Album', 0, 'Send Album Details'],
+  ['Build Photo Album', 0, 'Four Photos?'],
+  ['Four Photos?', 0, 'Send Album'],
+  ['Four Photos?', 1, 'Send Requested Photo'],
+  ['Send Requested Photo', 0, 'Send Album Details'],
+  ['Is Duplicate?', 1, 'Send Outcome Notice'],
+  ['From Jonny or Charlie?', 0, 'Is Photo?'],
+  ['Is Photo?', 0, 'Extract Photo Info'],
+  ['Is Photo?', 1, 'Prep Agent Input'],
+  ['Extract Photo Info', 0, 'Ready to Attach?'],
+  ['Ready to Attach?', 0, 'Find Episode Record'],
+  ['Ready to Attach?', 1, 'Ask For Details'],
+  ['Find Episode Record', 0, 'Episode Found?'],
+  ['Episode Found?', 0, 'Get Telegram File'],
+  ['Episode Found?', 1, 'Ask For Details'],
+  ['Get Telegram File', 0, 'Build Attachment Body'],
+  ['Has Target Row?', 0, 'Clear Slot'],
+  ['Has Target Row?', 1, 'Create Custom Row'],
+  ['Clear Slot', 0, 'Upload Attachment'],
+  ['Create Custom Row', 0, 'Upload Attachment'],
+  ['Find Target Row', 0, 'Pick Target Row'],
+  ['Pick Target Row', 0, 'Has Target Row?'],
+  ['Upload Attachment', 0, 'Verify Attachment'],
+  ['Verify Attachment', 0, 'Notify Photo Attached'],
+  ['Build Attachment Body', 0, 'Is Book Cover?'],
+  ['Is Book Cover?', 0, 'Clear Book Cover'],
+  ['Is Book Cover?', 1, 'Find Target Row'],
+  ['Clear Book Cover', 0, 'Upload Book Cover'],
+  ['Upload Book Cover', 0, 'Verify Book Cover'],
+  ['Verify Book Cover', 0, 'Notify Book Cover Attached']
+];
+
+const telegramAirtableAssistant = workflow(
+  "Hx8Ul6M41fM8HuxU",
+  "BA: Telegram Airtable Assistant"
+).settings({
+  executionOrder: "v1",
+  availableInMCP: true,
+  binaryMode: "separate",
+  timeSavedMode: "fixed",
+  errorWorkflow: "9PMI1kuBjLW2YHwb",
+  callerPolicy: "workflowsFromSameOwner"
 });
 
-const handleButtonPress = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Handle Button Press',
-    parameters: {
-      jsCode: `const upd = $input.first().json;
-  const cq = upd.callback_query;
-  const chatId = cq.message?.chat?.id ?? 1512868522;
-  const fromId = cq.from?.id;
-  const queryId = cq.id;
-  const data = String(cq.data || '');
-  // Link fields want plain record-ID strings, but the agent sometimes proposes [{"id":"rec..."}],
-  // which Airtable rejects with INVALID_RECORD_ID and the whole write fails. Unwrap those here too,
-  // so an approval message written before this fix still executes correctly on a re-tap.
-  // Only touches values inside "fields", and only a bare {id} / {id, name} record ref, so
-  // attachment objects ({url, filename}) and the record wrapper itself are left alone.
-  const unwrapFields = (fields) => {
-    if (!fields || typeof fields !== 'object') { return fields; }
-    const copy = {};
-    for (const k of Object.keys(fields)) {
-      const v = fields[k];
-      copy[k] = !Array.isArray(v) ? v : v.map(e => {
-        if (!e || typeof e !== 'object' || Array.isArray(e)) { return e; }
-        const keys = Object.keys(e);
-        const isRecordRef = typeof e.id === 'string' && /^rec[A-Za-z0-9]{10,}$/.test(e.id)
-          && keys.every(x => x === 'id' || x === 'name');
-        return isRecordRef ? e.id : e;
-      });
-    }
-    return copy;
-  };
-  const normalizeLinkFields = (b) => {
-    if (!b || typeof b !== 'object') { return b; }
-    if (Array.isArray(b.records)) {
-      b.records = b.records.map(r => (r && typeof r === 'object' && r.fields)
-        ? Object.assign({}, r, { fields: unwrapFields(r.fields) })
-        : r);
-    }
-    if (b.fields) { b.fields = unwrapFields(b.fields); }
-    return b;
-  };
-  let out = { execute: false, queryId: queryId, chatId: chatId, reasonMessage: '', method: 'POST', path: '', body: {}, summary: '' };
+for (const live of liveNodes) telegramAirtableAssistant.add(nodesByName[live.name]);
+for (const [source, output, target, targetIndex = 0] of connections) {
+  telegramAirtableAssistant.connect(nodesByName[source], output, nodesByName[target], targetIndex);
+}
 
-  const approvers = [1512868522, 8923732358];
-  if (!approvers.includes(fromId)) {
-    out.chatId = 1512868522;
-    out.reasonMessage = 'Ignored a button press from an unauthorized user.';
-    return [{ json: out }];
-  }
-
-  // Single-use approvals (added 2026-09-25). Telegram keeps an inline keyboard live
-  // forever, so a re-tap re-runs the same write. That repeated write kept re-setting
-  // the thumbnail row to "Selected", which re-armed the artwork pick trigger - the
-  // overnight feedback loop (assistant + artwork, every ~20s for 23 minutes on
-  // BA-5GM2XJ). Refuse any approval whose message has already been executed; the
-  // message_id is recorded on success in "Record Executed Write", and "Is Duplicate?"
-  // keeps the refusal silent so a stray tapper cannot spam the group.
-  const msgId = String(cq.message?.message_id ?? '');
-  const dedupeable = data === 'wa' || /^pick:/.test(data);
-  if (dedupeable && msgId) {
-    const store = $getWorkflowStaticData('global');
-    const done = (store.approvedMessages = store.approvedMessages || {});
-    if (done[msgId]) {
-      out.duplicate = true;
-      return [{ json: out }];
-    }
-    out.messageId = msgId;
-  }
-
-  const pick = data.match(/^pick:(rec[A-Za-z0-9]+)$/);
-  if (pick) {
-    out.execute = true;
-    out.method = 'PATCH';
-    out.path = 'app8Xw9Tq0XLjhmp9/Thumbnails';
-    out.body = { records: [{ id: pick[1], fields: { Status: 'Selected' } }] };
-    out.summary = 'Set thumbnail ' + pick[1] + ' to Selected. The thumbnail workflow will reject the other options and mark the episode Artwork Ready.';
-    return [{ json: out }];
-  }
-
-  if (data === 'wc') {
-    out.reasonMessage = '❌ Cancelled. Nothing was changed in Airtable.';
-    return [{ json: out }];
-  }
-
-  if (data === 'wa') {
-    const msgText = String(cq.message?.text || '');
-    const m = msgText.match(/⟦([\\s\\S]*?)⟧/);
-    if (!m) {
-      out.reasonMessage = 'Could not find the pending change in this message. Nothing was changed.';
-      return [{ json: out }];
-    }
-    let payload;
-    try {
-      payload = JSON.parse(m[1]);
-    } catch (e) {
-      out.reasonMessage = 'The pending change was unreadable. Nothing was changed.';
-      return [{ json: out }];
-    }
-    let body = payload.body && typeof payload.body === 'object' ? payload.body : {};
-    if (body.records && !Array.isArray(body.records)) {
-      body.records = [body.records];
-    }
-    body = normalizeLinkFields(body);
-    out.execute = true;
-    out.method = payload.method || 'POST';
-    let path = payload.path || '';
-    if (out.method === 'DELETE') {
-      path = path.replace(/([?&])records=/g, '$1records[]=');
-    }
-    out.path = path;
-    out.body = body;
-    out.summary = (msgText.split('⟦')[0] || '').replace(/^🛠 Approval needed\\s*/, '').trim();
-    return [{ json: out }];
-  }
-
-  out.reasonMessage = 'Unrecognized button. Nothing was changed.';
-  return [{ json: out }];`
-    },
-    position: [288, 128]
-  },
-  output: [{ execute: true, queryId: 'q1', chatId: 1512868522, method: 'PATCH', path: 'app/tbl', body: {}, summary: 'x' }]
-});
-
-const answerButtonTap = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'Answer Button Tap',
-    parameters: {
-      resource: 'callback',
-      queryId: expr('{{ $json.queryId }}'),
-      additionalFields: { text: expr('{{ $json.execute ? "Approved ✅" : "OK" }}') }
-    },
-    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
-    position: [512, 128]
-  },
-  output: [{ ok: true }]
-});
-
-const runApprovedWrite = ifElse({
-  version: 2.3,
-  config: {
-    name: 'Run Approved Write?',
-    parameters: {
-      conditions: {
-        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 },
-        combinator: 'and',
-        conditions: [{ id: 'run-write-1', leftValue: expr("{{ $(\"Handle Button Press\").item.json.execute ? \"yes\" : \"no\" }}"), rightValue: 'yes', operator: { type: 'string', operation: 'equals' } }]
-      },
-      looseTypeValidation: true,
-      options: {}
-    },
-    position: [736, 128]
-  }
-});
-
-const executeAirtableWrite = node({
-  type: 'n8n-nodes-base.httpRequest',
-  version: 4.4,
-  config: {
-    name: 'Execute Airtable Write',
-    parameters: {
-      method: expr("{{ $('Handle Button Press').item.json.method }}"),
-      url: expr("https://api.airtable.com/v0/{{ $('Handle Button Press').item.json.path }}"),
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'airtableTokenApi',
-      sendBody: true,
-      specifyBody: 'json',
-      jsonBody: expr("{{ $('Handle Button Press').item.json.body }}"),
-      options: { response: { response: { neverError: true } }, timeout: 30000 }
-    },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') },
-    position: [1216, 32]
-  },
-  output: [{ records: [{ id: 'rec1' }] }]
-});
-
-const recordExecutedWrite = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Record Executed Write',
-    parameters: { jsCode: `const j = $input.first().json;
-  const from = $('Handle Button Press').first().json;
-  // Remember that this approval message has been executed, so a later re-tap is
-  // refused by "Handle Button Press". Only marked on a successful Airtable write,
-  // so a failed write can still be retried. Store is bounded to ~7 days / 500 ids.
-  if (from.messageId && !j.error) {
-    const store = $getWorkflowStaticData('global');
-    const done = (store.approvedMessages = store.approvedMessages || {});
-    done[from.messageId] = Date.now();
-    const keys = Object.keys(done);
-    if (keys.length > 500) {
-      const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      for (const k of keys) { if (done[k] < cutoff) { delete done[k]; } }
-    }
-  }
-  return [{ json: j }];` },
-    position: [1680, 32]
-  },
-  output: [{ records: [{ id: 'rec1' }] }]
-});
-
-const confirmWriteDone = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'Confirm Write Done',
-    parameters: {
-      chatId: expr("{{ $('Handle Button Press').item.json.chatId }}"),
-      text: expr("{{ ($json.error ? ('⚠️   Airtable rejected the change: ' + (typeof $json.error === 'string' ? $json.error : (($json.error.type || 'error') + ($json.error.message ? (' — ' + $json.error.message) : '')))) : ('✅ Done.\\n\\n' + $('Handle Button Press').item.json.summary)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}"),
-      additionalFields: { appendAttribution: false, parse_mode: 'HTML' }
-    },
-    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
-    position: [1904, 32]
-  },
-  output: [{ ok: true }]
-});
-
-const sendOutcomeNotice = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'Send Outcome Notice',
-    parameters: {
-      chatId: expr("{{ $('Handle Button Press').item.json.chatId }}"),
-      text: expr("{{ $('Handle Button Press').item.json.reasonMessage.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}"),
-      additionalFields: { appendAttribution: false, parse_mode: 'HTML' }
-    },
-    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
-    position: [1216, 224]
-  },
-  output: [{ ok: true }]
-});
-
-// ── Message path: gates ──────────────────────────────────────────────────
-const addressedToBot = ifElse({
-  version: 2.3,
-  config: {
-    name: 'Addressed to bot?',
-    parameters: {
-      conditions: {
-        options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 3 },
-        conditions: [
-          { id: '890dca68-3f64-43a1-8cab-e4fc8f786ed1', leftValue: expr("{{ ($json.message?.entities || []).some(entity => entity.type === 'mention' && $json.message.text.substring(entity.offset, entity.offset + entity.length) === '@pod21_n8n_agent_bot') }}"), rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } },
-          { id: 'cb830762-aa6a-44f5-8ee1-b92fdf622053', leftValue: expr("{{ ($json.message?.entities || []).some(entity => entity.type === 'mention' && $json.message.text.substring(entity.offset, entity.offset + entity.length) === '@pod21_n8n_agent_bot') || $json.message?.reply_to_message?.from?.username === 'pod21_n8n_agent_bot' }}"), rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } },
-          // In a 1:1 DM with the bot there is nobody else to address, so treat any
-          // message as addressed to it. Group chats still require an @mention or a
-          // reply. The next IF still restricts senders to Jonny + Charlie.
-          { id: 'private-chat-1', leftValue: expr("{{ $json.message?.chat?.type === 'private' }}"), rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } }
-        ],
-        combinator: 'or'
-      },
-      options: {}
-    },
-    position: [288, 528]
-  }
-});
-
-const fromJonnyOrCharlie = ifElse({
-  version: 2.3,
-  config: {
-    name: 'From Jonny or Charlie?',
-    parameters: {
-      conditions: {
-        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 3 },
-        conditions: [
-          { id: 'from-jonny-1', leftValue: expr('{{ ($json.message?.from?.id ?? 0) === 1512868522 ? "yes" : "no" }}'), rightValue: 'yes', operator: { type: 'string', operation: 'equals' } },
-          { id: '68b7d680-3c0f-4537-a2c9-02aa3b10c287', leftValue: expr('{{ ($json.message?.from?.id ?? 0) === 8923732358 ? "yes" : "no" }}'), rightValue: 'yes', operator: { type: 'string', operation: 'equals', name: 'filter.operator.equals' } }
-        ],
-        combinator: 'or'
-      },
-      looseTypeValidation: true,
-      options: {}
-    },
-    position: [512, 528]
-  }
-});
-
-const prepAgentInput = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Prep Agent Input',
-    parameters: {
-      jsCode: `const results = [];
-
-  // The agent only ever sees promptText, so the sender has to be carried in the
-  // text itself. Without this it cannot fill "Reported By" on an issue report.
-  const SENDERS = { 1512868522: 'Jonny', 8923732358: 'Charlie' };
-
-  // Loop through all incoming items to prevent dropping batched messages
-  for (const item of $input.all()) {
-    const msg = item.json.message || {};
-    const sender = SENDERS[msg.from?.id] || 'an unknown user';
-
-    // Strip the bot @mention from the user's own text
-    let text = (msg.text || '').replace('@pod21_n8n_agent_bot', '').trim();
-
-    // The quoted message may be a plain text message (.text) OR a document/photo
-    // sent with a caption (.caption) — e.g. the "Episode metadata ready" document.
-    // Reading only .text dropped the caption and starved the agent of context.
-    const reply = msg.reply_to_message;
-    const quoted = reply ? (reply.text || reply.caption || '') : '';
-
-    if (quoted) {
-      text = 'The user is replying to your earlier message: "' + quoted + '". They now say: "' + text + '". The words "this" or "it"\\n  refer to the record that earlier message describes. Read the live base to confirm the exact record before proposing any\\n  write.';
-    }
-
-    results.push({
-      json: {
-        ...item.json, // keep all original Telegram data
-        recentActionsNote: '',
-        promptText: '[Message from ' + sender + '] ' + text
-      }
-    });
-  }
-
-  return results;`
-    },
-    position: [736, 528]
-  },
-  output: [{ message: { chat: { id: 1512868522 } }, recentActionsNote: '', promptText: 'hello' }]
-});
-
-// ── AI agent + subnodes ──────────────────────────────────────────────────
-const openRouterModel = languageModel({
-  type: '@n8n/n8n-nodes-langchain.lmChatOpenRouter',
-  version: 1,
-  config: {
-    name: 'OpenRouter Sonnet 4.6',
-    parameters: { model: 'anthropic/claude-sonnet-4.6', options: { temperature: 0.2 } },
-    credentials: { openRouterApi: newCredential('OpenRouter [n8n]') },
-    position: [960, 752]
-  }
-});
-
-const conversationMemory = memory({
-  type: '@n8n/n8n-nodes-langchain.memoryBufferWindow',
-  version: 1.3,
-  config: {
-    name: 'Conversation Memory',
-    parameters: { sessionIdType: 'customKey', sessionKey: expr("airtable-agent-v2-{{ $('Telegram Message Received').item.json.message.chat.id }}"), contextWindowLength: 20 },
-    position: [1088, 752]
-  }
-});
-
-const listAirtableBases = tool({
-  type: 'n8n-nodes-base.httpRequestTool',
-  version: 4.4,
-  config: {
-    name: 'list_airtable_bases',
-    parameters: {
-      toolDescription: 'List all Airtable bases the account has access to. Returns base IDs (start with app) and names. Takes no input.',
-      url: 'https://api.airtable.com/v0/meta/bases',
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'airtableTokenApi',
-      options: { response: { response: { neverError: true } } }
-    },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') },
-    position: [1216, 752]
-  }
-});
-
-const getBaseSchema = tool({
-  type: 'n8n-nodes-base.httpRequestTool',
-  version: 4.4,
-  config: {
-    name: 'get_base_schema',
-    parameters: {
-      toolDescription: 'Get the full schema of one Airtable base: all tables with their IDs, fields, field types and views. Input: baseId.',
-      url: expr("https://api.airtable.com/v0/meta/bases/{{ $fromAI('baseId', 'Airtable base ID, starts with app', 'string') }}/tables"),
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'airtableTokenApi',
-      options: { response: { response: { neverError: true } } }
-    },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') },
-    position: [1344, 752]
-  }
-});
-
-const airtableRead = tool({
-  type: 'n8n-nodes-base.httpRequestTool',
-  version: 4.4,
-  config: {
-    name: 'airtable_read',
-    parameters: {
-      toolDescription: 'Generic read-only GET request to the Airtable REST API. Input: the path after https://api.airtable.com/v0/ including any query string. Examples: appXXX/tblYYY?maxRecords=20 lists records, appXXX/tblYYY/recZZZ gets one record, appXXX/tblYYY?filterByFormula=URL-encoded-formula filters records. Returns at most 100 records per page, use pageSize and offset for more.',
-      url: expr("https://api.airtable.com/v0/{{ $fromAI('path', 'Path after /v0/ with optional query string, e.g. appXXX/tblYYY?maxRecords=20 or appXXX/tblYYY/recZZZ', 'string') }}"),
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'airtableTokenApi',
-      options: { response: { response: { neverError: true } } }
-    },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') },
-    position: [1472, 752]
-  }
-});
-
-const airtableAgent = node({
-  type: '@n8n/n8n-nodes-langchain.agent',
-  version: 3.1,
-  config: {
-    name: 'Airtable Agent',
-    parameters: {
-      promptType: 'define',
-      text: expr('={{ $json.promptText }}'),
-      options: {
-        systemMessage: expr(`You are Pod21's Airtable assistant on Telegram, working for Jonny and Charlie. You can READ anything in the company's
-  Airtable account with your tools and answer directly. You can PROPOSE writes (create / update / delete), but a human
-  must approve each one before it executes — you can never execute a write yourself.
-
-  Today is {{ $now.toFormat("cccc yyyy-MM-dd") }}.
-
-  == HOW YOU RECEIVE WORK ==
-  You only act when someone @mentions you or replies to one of your messages. A turn is either:
-  - A direct question or instruction, or
-  - A reply to an earlier message. When it's a reply, the user's prompt includes the quoted earlier message ("The user is
-  replying to your earlier message: ..."). That quoted message was sent by you or by another Pod21 workflow, and it is
-  your primary source of context — read it carefully.
-
-  == INTERPRETING A REPLY (general protocol) ==
-  Treat the quoted message as the specification for what the user wants. Most Pod21 workflow notifications already contain
-  everything you need; your job is to read it, not to rely on memorised, workflow-specific rules. Work through:
-  1. TARGET — Find identifiers in the quoted message: record IDs (rec...), human codes (e.g. BA-a1b2c3), names, or
-  base/table hints. Use your read tools to locate the exact record(s). Confirm; never assume.
-  2. OPTIONS & CONVENTION — Notification messages usually present labelled or numbered options and state how to reply
-  (e.g. "Reply T1-T5 to select a title", "Reply TC1-TC5 to select a caption", "Reply 1-4"). Derive the meaning of any
-  shorthand FROM THE MESSAGE ITSELF: "T3" means whatever that message says option T3 is — do not assume a fixed meaning
-  across different messages. If the user types their own text instead of a listed option, treat that as a custom choice
-  and use it verbatim. One reply may pick several things at once (e.g. a title and a caption).
-  3. ACTION —
-     - If the quoted message states what to update (which field, status, or table), follow it exactly.
-     - Otherwise infer the obvious target by matching the option's label to a field on the record (an option labelled
-  "Title" -> the record's title field; "Caption" -> its caption field), confirming exact field names with get_base_schema.
-     - Change a record's Status or stage ONLY if the quoted message or the user explicitly asks for it. Never invent a
-  state transition.
-     - If the right record or field is genuinely ambiguous, ask ONE short clarifying question rather than guess.
-  4. PROPOSE — After confirming everything against the live base, propose ONE write covering the whole selection.
-
-  This protocol is deliberately generic: it should handle episode metadata today and any future selection message — social
-  posts, shortlist picks, anything — as long as the message says what it offers. You should not need new per-workflow
-  instructions; if a message doesn't give you enough to act safely, ask.
-
-  == TOOLS (all read-only) ==
-  - list_airtable_bases — list all bases (IDs and names).
-  - get_base_schema — tables, field names, field types and views for a base.
-  - airtable_read — generic GET to the Airtable API: records, single records, filtered queries.
-
-  == RESPONSE FORMAT (CRITICAL) ==
-  Every reply must be ONLY one raw JSON object — no markdown, no code fences, no text outside the JSON. Exactly three
-  shapes:
-  1. Answer / read result / clarifying question / refusal:
-     { "action": "respond", "message": "text sent to the user on Telegram" }
-  2. Propose a write:
-     { "action": "write", "summary": "plain-English description of exactly what changes and where", "method": "PATCH",
-  "path": "appXXX/tblYYY", "body": { "records": [ { "id": "recZZZ", "fields": { "Status": "Recorded" } } ] } }
-  3. Show real images with a separate details message below - use this INSTEAD of pasting attachment links:
-     { "action": "photos", "urls": ["https://...", "https://..."], "caption": "details text sent below the photos" }
-     Read the attachment record(s) with your tools and put each requested full-size attachment URL in "urls", in order
-  (1-4 images; for all thumbnail options this is 4). Four images are sent as one Telegram album; one to three are sent
-  individually so the workflow never pads the request with duplicates. "caption" is a SHORT text message sent below the images:
-  lead with the record code (BA-xxxx) as the reply anchor, then list each option and
-  its current state read from the records, e.g. "BA-eObmD9 — Options: #1 (Rejected), #2 (Selected), #3, #4". End with how
-  to choose if a pick is still open, e.g. "Reply 1-4 to pick". Image attachments only — for PDFs / video / audio fall back
-  to "respond" with a link. DEFAULT: whenever asked to see, send or show thumbnails or artwork, return them as "photos",
-  not links.
-
-  == WRITE RULES ==
-  - Reads never need approval: use tools, then "respond" with the answer.
-  - Memory is NOT a source of truth. A write you proposed before may have been cancelled, left unapproved, or failed.
-  Before stating that anything exists or changed, call airtable_read and answer only from what it returns right now.
-  - Before any filterByFormula, sort, or fields[], call get_base_schema first to confirm exact field names. Don't assume a
-  "Name" field; the primary field is usually "Title".
-  - Before proposing a write, always resolve the real base ID, table ID, field names and record IDs with read tools and
-  check current values. Use real IDs only — never invented ones.
-  - Cover the user's ENTIRE request; never silently do only part of it. Batch into one call where the API allows: create
-  and update accept up to 10 records in the body; delete accepts up to 10 record IDs as query params, e.g.
-  "appXXX/tblYYY?records[]=recAAA&records[]=recBBB" with body { }.
-  - Name every affected record in the summary so the approver sees the full scope.
-  - If a request genuinely can't fit one call (>10 records, multiple tables, mixed operations), propose the first call and
-  state in the summary what remains; the user must ask you to continue after approving — you are NOT re-invoked
-  automatically.
-  - method must be POST, PATCH, PUT or DELETE. path is everything after https://api.airtable.com/v0/. body must be valid
-  JSON for the Airtable API, or { } for DELETE by URL.
-  - A link field (like "Guests") takes an ARRAY OF PLAIN RECORD ID STRINGS: "Guests": ["recAAA", "recBBB"]. Never objects
-  like [{"id": "recAAA"}] — Airtable rejects those with INVALID_RECORD_ID and the whole write fails.
-  - Propose DELETE only when explicitly asked to delete something.
-  - If unsure which base, table, record or field is meant, ask ONE short clarifying question. Never guess on writes.
-
-== EPISODE PACKAGING REPLY ==
-The metadata workflow posts a "Packaging for ..." message per episode, offering five things. A reply to it may answer any subset in any order, in one message or several. Each numbered item in that message names its target field after an arrow (e.g. "5 - Image prompt -> Custom Image Prompt"), so read the target from the message rather than guessing. Episodes live in base app8Xw9Tq0XLjhmp9, table tbl3uYLIvtB9APZp6, matched by the BA-xxxx code in the "ID" field. Batch everything they answered into ONE PATCH on that episode. Rules per item:
-1. Title -> "Title". "T1".."T5" means that numbered option from the quoted message, verbatim. Their own text wins over a listed option. No mention of the title at all -> leave the field alone; never blank it.
-2. Thumbnail caption -> "Thumbnail Caption". Same handling with "TC1".."TC5".
-3. Guests -> "Guests" (a link field). Read the "Guests" table FIRST and find each named person. Link ONLY people who already exist: set the field to the episode's existing guest links PLUS the matched ones, so you never drop a guest who was already attached. If a name has no match, do NOT create a Guests record and do NOT invent an ID - propose the write for whoever DID match (or "respond" if nobody did) and say plainly in the summary which names you couldn't find, so Jonny can add them himself. If two records match a name ambiguously, ask rather than pick.
-4. Thumbnail moods -> "Thumbnail Moods", a plain TEXT field holding comma-separated mood names, e.g. "confident, shocked". Use only names listed in the quoted message (they come from the Thumbnail References table). Drop anything not on that list and say so. Order matters: the moods cycle across the 4 artwork options in the order given.
-5. Image prompt -> "Custom Image Prompt", long text. Write what they said VERBATIM and in full - this is art direction and paraphrasing it changes the artwork. Do not summarise, tidy, translate or shorten it. If they reply "default" (or "none"), write that literal word, which the artwork workflow reads as "no extra direction". Anything they say that isn't clearly a title, caption, guest or mood is almost certainly this.
-IMPORTANT: artwork generation is gated on "Custom Image Prompt" being non-empty. So if their reply answers everything EXCEPT the image prompt, propose the write as normal, and in the summary remind them artwork won't start until they send one. Never fill it in for them.
-
-== ARTWORK REVISIONS ==
-When Jonny or Charlie asks to revise, re-do, re-create or change the artwork / thumbnail for an episode (e.g. "redo the 9x16 for BA-eObmD9, make the background more red and lose the laptop"), treat it as a WRITE with this exact recipe:
-1. Resolve the episode: find its Episodes record in base app8Xw9Tq0XLjhmp9 (table tbl3uYLIvtB9APZp6) by the BA-xxxx code in the "ID" field. Then find its chosen thumbnail: table "Thumbnails", the row linked to that episode whose Status = "Final" (confirm field names with get_base_schema, and read to get the real rec... row id). There is normally exactly one Final row per episode.
-2. Propose ONE PATCH to that one Thumbnails row, setting only these three fields:
-   - "Revision Brief" = the user's requested change, verbatim and complete (e.g. "make the background more red and remove the laptop"). Include every part of what they asked for.
-   - "Revision Targets" = an array of the aspect ratios they named, each one of "16x9", "1x1", "9x16". Map their wording: 16x9 / 16:9 / landscape / wide -> "16x9"; 1x1 / square -> "1x1"; 9x16 / 9:16 / vertical / portrait / story -> "9x16". If they name NO ratio (e.g. "redo the artwork for BA-xxxx"), use all three ["16x9","1x1","9x16"] and say so in the summary.
-   - "Status" = "Revising".
-3. In the summary, name the episode, the exact brief text, and which ratios will be redone, so the approver sees the full scope before tapping Approve.
-After approval the thumbnail workflow regenerates only those ratios with the brief, overwrites them on the row, sends the new artwork back to this chat, and resets Status to Final. You do nothing further.
-Guardrails: this only works once artwork has been PICKED (a Final row exists). If there is no Final thumbnail row for the episode, do NOT write - "respond" telling them the artwork hasn't been selected yet. Never touch the images or any other fields yourself; only these three fields on the one Final row.
-
-== LOGGING AUTOMATION ISSUES ==
-Jonny and Charlie report broken or improvable things in the Pod21 automations through this chat, and every report must end up as a row in the Automation Upgrades table so it can be fixed later. Treat a turn as an issue report when they say something is broken, failing, wrong, missing or slow, or when they ask you to "log this", "log it as an issue", "add it to the upgrades", or anything similar - including when that is a reply to an earlier workflow message. Do NOT log an issue when they are simply asking a question, and if it is genuinely unclear whether they want one logged, ask one short question first.
-GATHER BEFORE YOU PROPOSE. A report is only useful if someone can act on it weeks later, so do this research first, even if they only said "this is broken":
-- If the turn quotes an earlier message, keep that message's full text; it is the single most useful piece of context.
-- If any episode code (BA-xxxx) or record is named or implied, read that record and note its ID and current field values.
-- Read the System Map, then compare it against what you just read, so you can state which stage should have run and which required fields are empty.
-Then propose ONE create: method POST, path appwcz1Bux9YLcZYm/tblja27Lsn7qXJfZM, body { "records": [ { "fields": { ... } } ] }. Use these EXACT field names, and for the choice fields ONLY these exact values:
-- "Title" - one short line naming the problem, e.g. "Artwork never generated for BA-eObmD9".
-- "Type" - one of: Bug, Improvement, Idea. Something not working = Bug. A request to change how something works = Improvement. A loose suggestion = Idea.
-- "Status" - always "New".
-- "Priority" - one of: Low, Medium, High. Use High only if they say it is blocking or urgent. Otherwise default to Medium for a Bug and Low for an Improvement or Idea.
-- "Reported By" - "Jonny" or "Charlie", read from the [Message from ...] tag at the start of their message. If it says an unknown user, omit this field rather than guessing.
-- "Workflow" - plain text naming the automation involved, using the workflow names from the System Map. Write "Unknown" if you genuinely cannot tell.
-- "Related Record" - the BA-xxxx code or rec... ID the report concerns. Omit the field entirely if there isn't one.
-- "Description" - what is wrong, in THEIR words. Quote their sentence verbatim, then add any clarifying detail they gave in earlier turns. Do not summarise, tidy or paraphrase their wording.
-- "Context" - everything a person needs to reproduce and fix this later, as plain lines: the full quoted message if there was one; the record you read, its ID and its current Status and relevant field values; which fields the System Map says are required for the stage that failed and which of those are empty; and what should have happened versus what actually happened. Stick to what you actually checked - if you checked nothing, say "Not checked" rather than speculating. Never invent an error message or a cause.
-Propose it as a normal write so they can approve it, and say in the summary what you are logging and against which workflow. After approval you are done; Jonny fixes it in his own time. Never mark anything Fixed yourself and never edit an existing row unless explicitly asked to.
-
-== STYLE ==
-Keep messages short, plain text, no markdown tables, under 3500 characters. Use simple lists like "1. ..." on separate lines.
-
-== HOW THE PIPELINE WORKS (System Map) ==
-There is a living reference called the "System Map" that explains how all the Pod21 / Guy's Take automations fit together: what triggers each workflow, the exact Airtable field conditions an episode needs before the next stage runs, the Status ladder, and what each episode Type means. It lives in Airtable so it can be edited without touching n8n. Whenever a turn is about how the workflows work, why something has or hasn't happened, where an episode is in the pipeline, or what an episode still needs before a stage (e.g. artwork) will run: FIRST read the System Map, then answer from it. Read it with airtable_read from base app8Xw9Tq0XLjhmp9, table "Prompts", the record where Name = "System Map" (filterByFormula={Name}="System Map"); treat the long-text "Prompt" field as authoritative. Do not answer pipeline questions from memory. You may still read a specific episode's live field values and compare them against the Map's precondition checklist to say what is missing.
-
-== ARTWORK STATUS RULE ==
-For whether initial thumbnail artwork will generate, the Path 1 preconditions checklist is the rule. The normal lifecycle diagram shows Approved as the usual human handoff, but Approved is NOT a requirement of the artwork trigger. Never say an episode must reach Approved for artwork to run. Report the actual Status rule exactly: Status must not be Awaiting Thumbnail Pick or Generating Artwork. Then check and name the other Path 1 fields that are actually missing.
-
-  == KNOWN CONTEXT (verify with tools, don't assume) ==
-  Main base: Guy's Take (app8Xw9Tq0XLjhmp9) — Episodes (tbl3uYLIvtB9APZp6), plus Stories and Shortlist tables used by a
-  weekly YouTube research run. Authorized users / approvers are Jonny and Charlie.
-
-  {{ $json.recentActionsNote }}`),
-        maxIterations: 15,
-        enableStreaming: false
-      }
-    },
-    subnodes: { model: openRouterModel, memory: conversationMemory, tools: [listAirtableBases, getBaseSchema, airtableRead] },
-    position: [1152, 528]
-  },
-  output: [{ output: '{ "action": "respond", "message": "Here you go." }' }]
-});
-
-// ── Parse + route ────────────────────────────────────────────────────────
-const parseAgentDecision = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Parse Agent Decision',
-    parameters: {
-      jsCode: `const raw = String($input.first().json.output ?? '').trim();
-  const fence = String.fromCharCode(96).repeat(3);
-  const cleaned = raw.replace(new RegExp(fence + '(?:json)?', 'gi'), '').trim();
-  // The agent often wraps its JSON in prose, or trails a stray brace after it. Scan for every
-  // balanced {...} block (ignoring braces inside strings) instead of trusting first-{ / last-}.
-  const blocks = [];
-  let depth = 0, start = -1, inString = false, escaped = false;
-  for (let i = 0; i < cleaned.length; i++) {
-    const c = cleaned[i];
-    if (inString) {
-      if (escaped) { escaped = false; }
-      else if (c === '\\\\') { escaped = true; }
-      else if (c === '"') { inString = false; }
-      continue;
-    }
-    if (c === '"') { inString = true; }
-    else if (c === '{') { if (depth === 0) { start = i; } depth++; }
-    else if (c === '}' && depth > 0) {
-      depth--;
-      if (depth === 0 && start !== -1) { blocks.push(cleaned.slice(start, i + 1)); start = -1; }
-    }
-  }
-  const actions = ['write', 'respond', 'photos'];
-  let parsed = null, anyObject = null;
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    let candidate = null;
-    try { candidate = JSON.parse(blocks[i]); } catch (e) { candidate = null; }
-    if (!candidate || typeof candidate !== 'object') { continue; }
-    if (anyObject === null) { anyObject = candidate; }
-    if (actions.indexOf(candidate.action) !== -1) { parsed = candidate; break; }
-  }
-  if (!parsed) { parsed = anyObject; }
-  if (!parsed || typeof parsed !== 'object') {
-    const looksLikeWrite = /"action"\\s*:\\s*"write"/.test(cleaned);
-    parsed = { action: 'respond', message: looksLikeWrite
-      ? 'I tried to propose a database change but my own instruction came out malformed, so no approval buttons were sent and nothing was changed. Please ask me again.'
-      : (raw || 'I produced no usable answer, please try again.') };
-  }
-  const allowed = ['POST', 'PATCH', 'PUT', 'DELETE'];
-  let out;
-  if (parsed.action === 'write') {
-    const method = String(parsed.method || '').toUpperCase();
-    const path = String(parsed.path || '').replace(/^\\/+/, '');
-    let body = parsed.body && typeof parsed.body === 'object' ? parsed.body : {};
-    if (body.records && !Array.isArray(body.records)) {
-      body.records = [body.records];
-    }
-    // Link fields want plain record-ID strings, but the agent sometimes proposes [{"id":"rec..."}],
-    // which Airtable rejects with INVALID_RECORD_ID and the whole write fails. Unwrap before the
-    // payload is embedded in the approval message, so the message shows what will actually be sent.
-    // Only touches values inside "fields", and only a bare {id} / {id, name} record ref, so
-    // attachment objects ({url, filename}) and the record wrapper itself are left alone.
-    const unwrapFields = (fields) => {
-      if (!fields || typeof fields !== 'object') { return fields; }
-      const copy = {};
-      for (const k of Object.keys(fields)) {
-        const v = fields[k];
-        copy[k] = !Array.isArray(v) ? v : v.map(e => {
-          if (!e || typeof e !== 'object' || Array.isArray(e)) { return e; }
-          const keys = Object.keys(e);
-          const isRecordRef = typeof e.id === 'string' && /^rec[A-Za-z0-9]{10,}$/.test(e.id)
-            && keys.every(x => x === 'id' || x === 'name');
-          return isRecordRef ? e.id : e;
-        });
-      }
-      return copy;
-    };
-    if (Array.isArray(body.records)) {
-      body.records = body.records.map(r => (r && typeof r === 'object' && r.fields)
-        ? Object.assign({}, r, { fields: unwrapFields(r.fields) })
-        : r);
-    }
-    if (body.fields) { body.fields = unwrapFields(body.fields); }
-    if (!allowed.includes(method) || !path) {
-      out = { action: 'respond', message: 'The agent proposed an invalid write request, nothing was changed. Please rephrase your request.', summary: '', method: 'POST', path: '', body: {} };
-    } else {
-      out = { action: 'write', message: '', summary: String(parsed.summary || 'No summary provided'), method: method, path: path, body: body };
-    }
-  } else if (parsed.action === 'photos') {
-    const urls = Array.isArray(parsed.urls) ? parsed.urls.filter(u => typeof u === 'string' && /^https?:\\/\\//i.test(u)).slice(0, 10) : [];
-    if (urls.length === 0) {
-      out = { action: 'respond', message: String(parsed.message || parsed.caption || 'I had no images to send.'), summary: '', method: 'POST', path: '', body: {} };
-    } else {
-      out = { action: 'photos', caption: String(parsed.caption || ''), urls: urls, message: '', summary: '', method: 'POST', path: '', body: {} };
-    }
-  } else {
-    out = { action: 'respond', message: String(parsed.message ?? raw), summary: '', method: 'POST', path: '', body: {} };
-  }
-  return [{ json: out }];`
-    },
-    position: [1680, 528]
-  },
-  output: [{ action: 'photos', urls: ['https://x/1', 'https://x/2'], captions: ['Option 1', 'Option 2'], caption: '', message: '', summary: '', method: 'POST', path: '', body: {} }]
-});
-
-const isWriteRequest = ifElse({
-  version: 2.3,
-  config: {
-    name: 'Is Write Request?',
-    parameters: {
-      conditions: {
-        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 },
-        combinator: 'and',
-        conditions: [{ id: 'is-write-1', leftValue: expr('{{ $json.action }}'), rightValue: 'write', operator: { type: 'string', operation: 'equals' } }]
-      },
-      looseTypeValidation: true,
-      options: {}
-    },
-    position: [1904, 528]
-  }
-});
-
-const stashPendingWrite = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Stash Pending Write',
-    parameters: {
-      jsCode: `const item = $input.first().json;
-  const payload = JSON.stringify({ method: item.method, path: item.path, body: item.body });
-  return [{ json: { summary: item.summary, payload: payload, method: item.method, path: item.path, body: item.body } }];`
-    },
-    position: [2128, 624]
-  },
-  output: [{ summary: 'x', payload: '{}', method: 'POST', path: 'app/tbl', body: {} }]
-});
-
-const sendApprovalButtons = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'Send Approval Buttons',
-    parameters: {
-      chatId: expr("{{ $('Telegram Message Received').item.json.message.chat.id }}"),
-      text: expr("=🛠 Approval needed\n  \n  {{ $json.summary.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}\n  \n  ⟦{{ $json.payload.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}⟧"),
-      replyMarkup: 'inlineKeyboard',
-      inlineKeyboard: { rows: [{ row: { buttons: [{ text: '✅ Approve', additionalFields: { callback_data: 'wa' } }, { text: '❌ Cancel', additionalFields: { callback_data: 'wc' } }] } }] },
-      additionalFields: { appendAttribution: false, parse_mode: 'HTML' }
-    },
-    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
-    position: [2352, 624]
-  },
-  output: [{ ok: true }]
-});
-
-const sendAnswer = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'Send Answer',
-    parameters: {
-      chatId: expr("{{ $('Telegram Message Received').item.json.message.chat.id }}"),
-      text: expr("{{ $json.message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}"),
-      additionalFields: { appendAttribution: false, parse_mode: 'HTML' }
-    },
-    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
-    position: [2352, 432]
-  },
-  output: [{ ok: true }]
-});
-
-// ── NEW: photo reply path ────────────────────────────────────────────────
-const isPhotoReply = ifElse({
-  version: 2.3,
-  config: {
-    name: 'Is Photo Reply?',
-    parameters: {
-      conditions: {
-        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 },
-        combinator: 'and',
-        conditions: [{ id: 'is-photo-1', leftValue: expr('{{ $json.action }}'), rightValue: 'photos', operator: { type: 'string', operation: 'equals' } }]
-      },
-      looseTypeValidation: true,
-      options: {}
-    },
-    position: [2128, 760]
-  }
-});
-
-const buildPhotoAlbum = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Build Photo Album',
-    parameters: {
-      jsCode: `const item = $input.first().json;
-  const chatId = $('Telegram Message Received').first().json.message.chat.id;
-  const urls = (Array.isArray(item.urls) ? item.urls : []).filter(u => typeof u === 'string' && u).slice(0, 4);
-  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const caption = esc(String(item.caption || 'Reply with the option number to pick.'));
-  const idMatch = String(item.caption || '').match(/\\bBA-[A-Za-z0-9]+\\b/);
-  const idTag = '<code>' + esc(idMatch ? idMatch[0] : 'no-id') + '</code>';
-  return urls.map((photoUrl) => ({
-    json: { chatId: chatId, caption: caption, idTag: idTag, urls: urls, count: urls.length, photoUrl: photoUrl },
-    pairedItem: { item: 0 }
-  }));`
-    },
-    position: [2352, 840]
-  },
-  output: [{ chatId: 1512868522, caption: 'BA-xxxx - Options: #1', idTag: '<code>BA-xxxx</code>', urls: ['https://x/1'], count: 1, photoUrl: 'https://x/1' }]
-});
-
-const isFourPhotos = ifElse({
-  version: 2.3,
-  config: {
-    name: 'Four Photos?',
-    parameters: {
-      conditions: {
-        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 },
-        combinator: 'and',
-        conditions: [{ id: 'is-four-photos', leftValue: expr('{{ $json.count }}'), rightValue: 4, operator: { type: 'number', operation: 'equals' } }]
-      },
-      looseTypeValidation: true,
-      options: {}
-    },
-    position: [2576, 840]
-  }
-});
-
-const sendAlbum = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'Send Album',
-    parameters: {
-      resource: 'message',
-      operation: 'sendMediaGroup',
-      chatId: expr("{{ $('Build Photo Album').item.json.chatId }}"),
-      media: { media: [
-        { type: 'photo', media: expr("{{ $('Build Photo Album').item.json.urls[0] }}"), additionalFields: {} },
-        { type: 'photo', media: expr("{{ $('Build Photo Album').item.json.urls[1] }}"), additionalFields: {} },
-        { type: 'photo', media: expr("{{ $('Build Photo Album').item.json.urls[2] }}"), additionalFields: {} },
-        { type: 'photo', media: expr("{{ $('Build Photo Album').item.json.urls[3] }}"), additionalFields: {} }
-      ] }
-    },
-    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
-    executeOnce: true,
-    position: [2800, 776]
-  },
-  output: [{ ok: true, result: [{ message_id: 1 }] }]
-});
-
-const sendRequestedPhoto = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'Send Requested Photo',
-    parameters: {
-      resource: 'message',
-      operation: 'sendPhoto',
-      chatId: expr('{{ $json.chatId }}'),
-      file: expr('{{ $json.photoUrl }}'),
-      additionalFields: { caption: expr('{{ $json.idTag }}'), parse_mode: 'HTML' }
-    },
-    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
-    position: [2800, 904]
-  },
-  output: [{ ok: true, result: { message_id: 1 } }]
-});
-
-const sendAlbumDetails = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'Send Album Details',
-    parameters: {
-      chatId: expr("{{ $('Build Photo Album').item.json.chatId }}"),
-      text: expr("{{ $('Build Photo Album').item.json.caption }}"),
-      additionalFields: { appendAttribution: false, parse_mode: 'HTML' }
-    },
-    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') },
-    executeOnce: true,
-    position: [3024, 840]
-  },
-  output: [{ ok: true }]
-});
-
-const isDuplicate = ifElse({
-  version: 2.3,
-  config: {
-    name: 'Is Duplicate?',
-    parameters: {
-      conditions: {
-        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 },
-        combinator: 'and',
-        conditions: [{ id: 'is-dup-1', leftValue: expr("{{ $('Handle Button Press').item.json.duplicate ? \"yes\" : \"no\" }}"), rightValue: 'yes', operator: { type: 'string', operation: 'equals' } }]
-      },
-      looseTypeValidation: true,
-      options: {}
-    },
-    position: [976, 224]
-  }
-});
-
-// ── Compose ──────────────────────────────────────────────────────────────
-// NOTE: kept on a single line on purpose — the SDK parser mis-handles deeply
-// nested multi-line .onTrue()/.onFalse() chains when both branches are complex.
-export default workflow('telegram-airtable-assistant', 'BA: Telegram Airtable Assistant').add(telegramTrigger).to(isButtonPress.onTrue(handleButtonPress.to(answerButtonTap).to(runApprovedWrite.onTrue(executeAirtableWrite.to(recordExecutedWrite).to(confirmWriteDone)).onFalse(isDuplicate.onFalse(sendOutcomeNotice)))).onFalse(addressedToBot.onTrue(fromJonnyOrCharlie.onTrue(prepAgentInput.to(airtableAgent).to(parseAgentDecision).to(isWriteRequest.onTrue(stashPendingWrite.to(sendApprovalButtons)).onFalse(isPhotoReply.onTrue(buildPhotoAlbum.to(isFourPhotos.onTrue(sendAlbum.to(sendAlbumDetails)).onFalse(sendRequestedPhoto.to(sendAlbumDetails)))).onFalse(sendAnswer)))))));
+export default telegramAirtableAssistant;

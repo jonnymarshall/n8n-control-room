@@ -94,7 +94,6 @@ The scheduled query reads up to 100 rows matching the due criteria. There is no 
 | Error | `fldr0SWXElMD4ACu7` | Cleared on success; readable reason on failure |
 | Raw Error | `fldoGPYlKktedjgdC` | Cleared on success; serialized response on failure, capped at 9,000 characters |
 | Published At | `fldwJ1mUyo9ZJcanr` | Fountain's published value, or the current UTC time as fallback |
-| Retry Requested | `fldKdPeDpYzWcJcmZ` | Unused since 2026-09-29; safe to delete the column |
 
 Rows without both a linked Episode record ID and a `Platform Item ID` are silently filtered out by `Expand Due Fountain Publications` and remain `Scheduled`.
 
@@ -194,10 +193,9 @@ The failure path then writes:
 Finally it sends the team a message that includes the Episode ID and an `Execution:` line in a `<code>` block and asks the operator to:
 
 1. Review and correct the Fountain item.
-2. Set the Publication `Status` back to `Pending`.
-3. Move the Episode back into `Ready for Publishing`.
+2. Move the Episode back into `Ready for Publishing`.
 
-This workflow does not reschedule a failed row. Recovery is handed back to the upstream Fountain scheduling workflow, whose guard starts only when the Publication is missing or `Pending`.
+This workflow does not reschedule a failed row. Recovery is handed back to the upstream Fountain scheduling workflow, whose guard starts when the Publication is missing or its status is `Pending`, `Failed`, or `Needs Attention`.
 
 Failures from nodes other than `Load Fountain Scheduled Item` and `Build Fountain Published Result` use the workflow-level error handler because those nodes do not have local error outputs. A failure while writing failure state can therefore leave Airtable only partly updated. For example, the Publication may be `Failed` while the Episode write or Telegram send failed afterward.
 
