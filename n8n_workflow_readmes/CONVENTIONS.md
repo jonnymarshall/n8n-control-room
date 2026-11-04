@@ -28,6 +28,14 @@ there is no unique anchor telling the Assistant (or Jonny) *which* episode a
 reply like "change the title" or "delete this" refers to. The ID in the message
 is the shared context that makes a reply unambiguous.
 
+**The code is a formula, so it can only be read, never derived.** On the Episodes
+table `ID` is `"BA-" & RIGHT(RECORD_ID(), 6)`, so the code is the last six
+characters of the internal record id. Anything that needs to print or quote a code
+must read that field (or the whole record); a read restricted to a field list that
+leaves `ID` out returns no code, and building one from `rec...` produces a code
+that does not exist. On 2026-11-04 the Assistant said `BA-dOmo4E` for `BA-8yPGl0`
+for exactly this reason, which is why its system prompt now forbids guessing.
+
 **Good (compliant):**
 
 ```

@@ -269,7 +269,7 @@ cover can also have the cover replaced later; the `Read Reversion 1x1` and
 
 | Field | Type | Meaning / who fills it |
 |---|---|---|
-| `ID` | text | `BA-xxxx`. The anchor key in every Telegram message. Not a number. |
+| `ID` | formula | `BA-xxxx`. The anchor key in every Telegram message. Not a number. It is computed as `"BA-" & RIGHT(RECORD_ID(), 6)`, i.e. the last six characters of the record id, so **read it, never build one**. A read that leaves `ID` out of its field list returns no code at all, and guessing from `rec...` produces a code that does not exist. |
 | `Title` | text | Episode title. Human picks it from the AI options. |
 | `Status` | single-select | The state-machine driver (ladder above). |
 | `Type` | single-select | `Take` / `Chat` / `Roundtable` / `Clip`. |
@@ -728,6 +728,10 @@ something new is reported.
 - Every episode-related Telegram message includes the episode `ID` (`BA-xxxx`) so
   replies have a unique anchor. When someone replies "change the title" / "delete
   this", read the `BA-xxxx` out of the message they replied to.
+- **`BA-xxxx` is a formula (`"BA-" & RIGHT(RECORD_ID(), 6)`), not something you can
+  derive.** Read the record with its `ID` field (or read the whole record) before you
+  name it. Never construct a code from the `rec...` id; that is how a reply once said
+  `BA-dOmo4E` for `BA-8yPGl0`.
 - The pipeline is driven by Episode `Status`. When someone asks "where is this
   episode?" or "why hasn't X happened?", locate the episode's `Status` on the
   ladder and compare the next stage's precondition checklist against the row.
