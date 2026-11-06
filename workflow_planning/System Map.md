@@ -352,15 +352,20 @@ Episodes table `tbl3uYLIvtB9APZp6`.
 
 Two workflows since 2026-10-29. The split exists because Frame.io re-delivers `file.ready` events
 (on 2026-10-29 it replayed one for a file unchanged for nineteen hours and re-ran the whole
-pipeline); a webhook cannot be made idempotent, but a `Status` can.
+pipeline); a webhook cannot be made idempotent, but a `Status` can. On 2026-11-06 an **unsigned**
+`curl` replay of that same payload produced a "link refreshed" message on a `Published` episode,
+which is why the webhook now also checks Frame.io's signature and ignores a file the row already has.
 
 **3a. `BA - Frame.io Uploaded > Episode Marked` (`5ZMcCY8WPQ3bFji6`)** — webhook, seconds, no AI.
 - **Fires:** a file becomes ready in the Frame.io project.
+- **Auth:** the request must carry a valid Frame.io HMAC signature and a timestamp under 10 minutes
+  old. Anything else is blocked before Airtable is touched, and reported in Telegram.
 - **Does:** looks the file up, checks it, writes `Frame.io URL`, and sets `Status = Ready for Metadata`
   only when the episode is at `Recorded` or `Edited`.
-- **Never queues:** images/PDFs, a filename with no usable `BA-` prefix, anything over 2 GB,
+- **Never queues:** an unsigned request, a file the row already has while it is past metadata
+  (silent no-op), images/PDFs, a filename with no usable `BA-` prefix, anything over 2 GB,
   a name ending `_Skip` (silent) or `_Bypass` (link refresh only), or any other status.
-  In every one of those cases it says so in one Telegram line.
+  In every one of those cases except the two silent ones it says so in one Telegram line.
 - Re-delivery of an old event is therefore harmless: the row has already left `Ready for Metadata`.
 
 **3b. `BA - Ready for Metadata View Entered > AI Metadata` (`jroXHciDvy0sWlRM`)** — the AI work.
