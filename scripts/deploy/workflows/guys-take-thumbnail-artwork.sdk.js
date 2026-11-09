@@ -1,889 +1,178 @@
-import { workflow, node, trigger, ifElse, newCredential } from '@n8n/workflow-sdk';
+import { workflow, node, trigger } from '@n8n/workflow-sdk';
 
-// ===== NEW REVISION-CHAIN NODES =====
-const revisionRequested = trigger({
-  type: 'n8n-nodes-base.airtableTrigger',
-  version: 1,
-  config: {
-    name: 'Revision Requested',
-    position: [0, 816],
-    parameters: {
-      pollTimes: { item: [{ mode: 'everyMinute' }] },
-      authentication: 'airtableTokenApi',
-      baseId: { __rl: true, mode: 'id', value: 'app8Xw9Tq0XLjhmp9' },
-      tableId: { __rl: true, value: 'tblkcASzE4DXlxokO', mode: 'id' },
-      triggerField: 'Last Modified Time',
-      additionalFields: { viewId: 'viwGVYiheuTD2pPlx' }
-    },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') },
-    retryOnFail: true,
-    maxTries: 5,
-    waitBetweenTries: 5000
-  },
-  output: [{}]
-});
+// Snapshot of live workflow mLAn4ya2AmZoHDUk, fetched 2026-10-30.
+// Parameters and node settings are intentionally kept verbatim from live.
+// Regenerate with: scripts/deploy/workflows/snapshot-sdk.sh mLAn4ya2AmZoHDUk guys-take-thumbnail-artwork
+const liveNodes = [
+  {"id": "2aea58c8-a6c1-4da0-98c1-080ceb75ac78", "name": "Ready for 16X9 Thumbnail", "type": "n8n-nodes-base.airtableTrigger", "typeVersion": 1, "position": [0, -32], "retryOnFail": true, "maxTries": 5, "waitBetweenTries": 5000, "parameters": {"pollTimes": {"item": [{"mode": "everyMinute"}]}, "authentication": "airtableTokenApi", "baseId": {"__rl": true, "mode": "id", "value": "app8Xw9Tq0XLjhmp9"}, "tableId": {"__rl": true, "mode": "id", "value": "tbl3uYLIvtB9APZp6"}, "triggerField": "Last Modified Time", "additionalFields": {"viewId": "viwqgtrry8n6yNgqW"}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "c40438c3-c08f-4f53-9e8f-e8a0e07f833a", "name": "Thumbnail Selected", "type": "n8n-nodes-base.airtableTrigger", "typeVersion": 1, "position": [0, 576], "retryOnFail": true, "maxTries": 5, "waitBetweenTries": 5000, "parameters": {"pollTimes": {"item": [{"mode": "everyMinute"}]}, "authentication": "airtableTokenApi", "baseId": {"__rl": true, "mode": "id", "value": "app8Xw9Tq0XLjhmp9"}, "tableId": {"__rl": true, "value": "tblkcASzE4DXlxokO", "mode": "id"}, "triggerField": "Last Modified Time", "additionalFields": {"viewId": "viw7AHjnX9ZkvIrKo"}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "e49fe55e-bdad-4f42-90cf-b0f50d31c5fa", "name": "Revision Requested", "type": "n8n-nodes-base.airtableTrigger", "typeVersion": 1, "position": [0, 992], "retryOnFail": true, "maxTries": 5, "waitBetweenTries": 5000, "parameters": {"pollTimes": {"item": [{"mode": "everyMinute"}]}, "authentication": "airtableTokenApi", "baseId": {"__rl": true, "mode": "id", "value": "app8Xw9Tq0XLjhmp9"}, "tableId": {"__rl": true, "value": "tblkcASzE4DXlxokO", "mode": "id"}, "triggerField": "Last Modified Time", "additionalFields": {"viewId": "viwGVYiheuTD2pPlx"}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "1bbab8c4-721b-42bd-9fc2-7a37e1a73b82", "name": "Fetch Artwork Settings", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [112, -32], "parameters": {"authentication": "predefinedCredentialType", "method": "GET", "nodeCredentialType": "airtableTokenApi", "options": {}, "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblv9BEEC6BrmBSe8"}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "2ceadf98-df53-4e21-9f03-135fa8cb8d5a", "name": "Fetch Selected Settings", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [112, 576], "parameters": {"authentication": "predefinedCredentialType", "method": "GET", "nodeCredentialType": "airtableTokenApi", "options": {}, "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblv9BEEC6BrmBSe8"}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "1ff8cfa7-1a82-4f52-9d39-eaa3b1fdcd26", "name": "Plan Generate", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [224, -32], "parameters": {"jsCode": "// ── Plan Generate ────────────────────────────────────\n// Reads the episode that entered the \"Ready for 16X9 Thumbnail\" view and\n// derives everything the downstream nodes need: delete query, layout,\n// guest list, Airtable filter formula, and the auto-art flag.\n\n// HTML-escape helper (& < >) for any text that goes into a Telegram HTML message.\nconst esc = s => String(s == null ? '' : s)\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;');\n\n// The triggering episode record. `fields` when nested, else the record itself.\nconst rec = $('Ready for 16X9 Thumbnail').first().json;\nconst f = rec.fields || rec;\n\n// Old thumbnail rows still linked to this episode -> build the batch-delete query\n// so a re-run starts from a clean slate.\nconst oldIds = Array.isArray(f['Thumbnails']) ? f['Thumbnails'] : [];\nconst deleteQuery = oldIds.map(id => 'records[]=' + encodeURIComponent(id)).join('&');\n\n// Content type drives the layout. Missing Type defaults to Take (solo host).\nconst type = f['Type'] || 'Take';\nconst layout = type === 'Take'\n  ? 'solo'\n  : (type === 'Roundtable' ? 'roundtable'\n  : (type === 'Read' ? 'read' : 'duo')); // Chat / Clip / 2 Sats -> duo\n// Auto-art rule comes from the 'Artwork Settings' table (one row per Type), so\n// which types get options is editable in Airtable with no deploy. No row / no\n// checked box => no auto-art (routed to manual artwork).\nconst settingsRecs = ((($('Fetch Artwork Settings').first() || {}).json || {}).records) || [];\nconst settings = {};\nfor (const r of settingsRecs) {\n  const rf = r.fields || {};\n  const k = rf['Episode Type'];\n  if (k) settings[String(k).trim()] = rf;\n}\nconst artSettings = settings[type] || {};\nconst autoArt = artSettings['Generate 16x9'] === true;\n\n// Guests to composite into the frame.\n// The host (Guy) is ALWAYS drawn from the Thumbnail References library, so if\n// he's also sitting in the episode's Guests link he'd be rendered twice\n// (this is exactly what happened in exec #1318: Guy + Guy + Bitcoin Mechanic).\n// Strip his guest record here so he can never be double-added.\n// `.filter` tolerates both shapes n8n may return: bare id strings and { id } objects.\nconst HOST_GUEST_REC_ID = 'recs8srWCoJwDuzLn'; // \"Guy\" — host, never a guest\nconst guestIds = (Array.isArray(f['Guests']) ? f['Guests'] : [])\n  .filter(g => (g && g.id ? g.id : g) !== HOST_GUEST_REC_ID);\n\n// Airtable filterByFormula for \"Fetch Guests\" — only this episode's real guests.\n// FALSE() returns nothing when there are no guests (solo / guestless episode).\nconst guestFilter = guestIds.length\n  ? 'OR(' + guestIds.map(id => \"RECORD_ID()='\" + id + \"'\").join(',') + ')'\n  : 'FALSE()';\n\n// ── Jonny's answers from the metadata workflow's packaging message ──\n// The episode field is \"Moods\": a comma-separated list of mood NAMES he picked\n// off the list Telegram showed him. Resolve Vibes matches these against the\n// Thumbnail References library by name and cycles them across the 4 slots; an\n// empty or unmatched value falls back to the whole library rather than failing.\n// \"Thumbnail Moods\" is kept as a fallback read: the docs, the readmes and the\n// assistant's system prompt all called it that, but the field Jonny actually\n// created on Episodes is \"Moods\", so reading only the documented name threw\n// away every pick and quietly fell back to the whole library.\nconst moods = String(f['Moods'] || f['Thumbnail Moods'] || '')\n  .split(',')\n  .map(s => s.trim())\n  .filter(Boolean);\n\n// \"Custom Image Prompt\" is his free-text art direction for THIS episode. It\n// fills the {{CUSTOM}} token in the Airtable prompt template. The trigger view\n// requires it to be non-empty, so it should never be blank here; \"default\"\n// means \"no extra direction\" and resolves to an empty token.\nlet customPrompt = String(f['Custom Image Prompt'] || '').trim();\nif (/^(default|none|n\\/a|-)$/i.test(customPrompt)) customPrompt = '';\n\n// ── Reads: the supplied book cover ──\n// The front cover image lives on the episode as the single-attachment field\n// 'Book Cover'. It is downloaded and passed to Nano Banana as Image 2. When it is\n// missing we still generate, using the no-cover reading poses, and the pick message\n// says so rather than pretending the book has a cover.\nconst bookAtt = Array.isArray(f['Book Cover']) && f['Book Cover'][0] ? f['Book Cover'][0] : null;\nconst hasBookCover = !!(bookAtt && bookAtt.url);\nconst bookCoverUrl = hasBookCover ? bookAtt.url : '';\nconst bookCoverType = hasBookCover ? (bookAtt.type || 'image/jpeg') : '';\n\nreturn [{\n  json: {\n    episodeId: rec.id,\n    episodeDisplayId: f['ID'] || rec.id,\n    title: f['Title'] || '',\n    titleHtml: esc(f['Title'] || ''),     // pre-escaped for Telegram HTML mode\n    caption: f['Thumbnail Caption'] || f['Title'] || '',\n    summary: f['Summary'] || '',\n    deleteQuery: deleteQuery,\n    hasOld: oldIds.length > 0,\n    type: type,\n    guestIds: guestIds,\n    guestFilter: guestFilter,\n    layout: layout,\n    autoArt: autoArt,\n    moods: moods,\n    customPrompt: customPrompt,\n    hasBookCover: hasBookCover,\n    bookCoverUrl: bookCoverUrl,\n    bookCoverType: bookCoverType\n  }\n}];"}},
+  {"id": "33be3a2b-795f-44f9-b7bc-c6ecc02d8e69", "name": "Resolve Selected", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [224, 480], "parameters": {"jsCode": "// Pick the first Selected row that is actually linked to an episode.\n// Skips orphan rows (Selected but no Episode) instead of bailing on them,\n// so a real pick sitting behind an orphan in the same poll still gets processed.\n// Downstream handles ONE selection, so we still emit at most one item;\n// 'Check Extra Picks' warns about any additional valid picks in the same poll.\nlet rec = null, f = null, ep = null;\nfor (const item of $('Thumbnail Selected').all()) {\n  const cand = item.json;\n  const cf = cand.fields || cand;\n  const cep = Array.isArray(cf['Episode']) ? cf['Episode'][0] : (cf['Episode'] || null);\n  if (cep) { rec = cand; f = cf; ep = cep; break; }\n}\nif (!ep) return [];\n\nconst att = Array.isArray(f['16x9']) && f['16x9'][0] ? f['16x9'][0] : null;\nconst has1x1  = Array.isArray(f['1x1'])  && f['1x1'].length  > 0;\nconst has9x16 = Array.isArray(f['9x16']) && f['9x16'].length > 0;\n\n// 'Episode Type' is a lookup through the Episode link, so it arrives as an array\n// (e.g. ['Clip']).\nconst epTypeRaw = f['Episode Type'];\nconst epType = Array.isArray(epTypeRaw) ? (epTypeRaw[0] || '') : (epTypeRaw || '');\n\n// Which variations a type gets comes from the 'Artwork Settings' table (one row\n// per Type), so it is editable in Airtable with no deploy. This replaces the old\n// hardcoded NO_REVERSION list. No row / no checked box => that ratio is skipped.\nconst settingsRecs = ((($('Fetch Selected Settings').first() || {}).json || {}).records) || [];\nconst settings = {};\nfor (const r of settingsRecs) {\n  const rf = r.fields || {};\n  const k = rf['Episode Type'];\n  if (k) settings[String(k).trim()] = rf;\n}\nconst artSettings = settings[epType] || {};\nconst want1x1 = artSettings['Generate 1x1'] === true;\nconst want9x16 = artSettings['Generate 9x16'] === true;\n\nconst need1x1 = want1x1 && !has1x1;\nconst need9x16 = want9x16 && !has9x16;\nconst reversionOk = want1x1 || want9x16;\nconst reversionNeeded = need1x1 || need9x16;\nconst has16x9 = !!(att && att.url);\n\nlet confirmReversionText;\nif (!reversionOk) {\n  confirmReversionText = 'No 1:1 or 9:16 versions are generated for ' + (epType || 'this') + ' episodes.';\n} else if (reversionNeeded && !has16x9) {\n  confirmReversionText = 'However, the 16:9 source image is missing from the thumbnail row, so the requested versions could not be generated. See the follow-up message for how to regenerate.';\n} else {\n  const parts = [];\n  if (need1x1) parts.push('1:1');\n  if (need9x16) parts.push('9:16');\n  confirmReversionText = parts.length\n    ? ('Generating the ' + parts.join(' and ') + ' version' + (parts.length > 1 ? 's' : '') + ' now.')\n    : 'The requested versions are already in place.';\n}\n\nreturn [{\n  json: {\n    selectedRowId: rec.id,\n    episodeId: ep,\n    episodeType: epType,\n    reversionOk: reversionOk,\n    reversionNeeded: reversionNeeded,\n    want1x1: want1x1,\n    want9x16: want9x16,\n    need1x1: need1x1,\n    need9x16: need9x16,\n    caption: f['Caption'] || '',\n    sixteenUrl: att && att.url ? att.url : '',\n    sixteenType: att && att.type ? att.type : 'image/png',\n    url1x1: has1x1 ? (f['1x1'][0].url || '') : '',\n    url9x16: has9x16 ? (f['9x16'][0].url || '') : '',\n    confirmReversionText: confirmReversionText\n  },\n  pairedItem: { item: 0 }\n}];"}},
+  {"id": "7c2a32bf-fe6f-4630-9812-1b6a3ab2cbe8", "name": "Check Extra Picks", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [224, 768], "parameters": {"jsCode": "// Guardrail for the .first() limitation in Resolve Selected.\n// The Airtable poll can return several rows flipped to \"Selected\" inside one\n// 60s window; Resolve Selected only processes the FIRST. Warn about any extras,\n// which would otherwise be silently dropped and never re-fire (their Last\n// Modified Time won't advance again on its own).\nconst esc = s => String(s == null ? '' : s)\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst rows = $input.all();\nconst valid = rows.filter(r => {\n  const f = (r.json && (r.json.fields || r.json)) || {};\n  const ep = Array.isArray(f['Episode']) ? f['Episode'][0] : f['Episode'];\n  return !!ep;\n});\nif (valid.length <= 1) return [];   // normal case — nothing to warn about\n\nconst nameOf = r => { const j = r.json, f = j.fields || j; return f['Name'] || j.id; };\nconst line   = r => `• <b>${esc(nameOf(r))}</b> (<code>${r.json.id}</code>)`;\n\nconst text =\n  `⚠️ <b>${valid.length} thumbnails were set to Selected in the same poll.</b>\\n\\n` +\n  `Only the first is being processed:\\n${line(valid[0])}\\n\\n` +\n  `<b>NOT processed</b> (won't re-fire on their own — re-flip each to Selected one at a time):\\n` +\n  valid.slice(1).map(line).join('\\n');\n\nreturn [{ json: { text } }];"}},
+  {"id": "31687f11-7a3e-415c-92d1-db93320364c7", "name": "Plan Revision", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [224, 992], "parameters": {"jsCode": "const rec = $input.first().json;\nconst f = rec.fields || rec;\nconst ep = Array.isArray(f['Episode']) ? f['Episode'][0] : (f['Episode'] || null);\nconst caption = f['Caption'] || '';\nconst brief = String(f['Revision Brief'] || '').trim();\nlet targets = f['Revision Targets'] || [];\nif (typeof targets === 'string') targets = targets.split(',').map(s => s.trim());\ntargets = targets.filter(t => ['16x9', '1x1', '9x16'].includes(t));\nif (!ep || !brief || !targets.length) {\n  throw new Error('Revision needs an Episode link, a non-empty Revision Brief, and at least one valid Revision Target (16x9 / 1x1 / 9x16). Got targets=' + JSON.stringify(f['Revision Targets']) + ', brief=' + (brief ? 'present' : 'EMPTY'));\n}\nconst meta = {\n  '16x9': { aspectRatio: '16:9', filename: 'thumbnail-16x9.png' },\n  '1x1':  { aspectRatio: '1:1',  filename: 'thumbnail-1x1.png' },\n  '9x16': { aspectRatio: '9:16', filename: 'thumbnail-9x16.png' }\n};\nconst att = (field) => (Array.isArray(f[field]) && f[field][0]) ? f[field][0] : null;\n// 'Episode Type' is a lookup through the Episode link, so it arrives as an array.\nconst epTypeRaw = f['Episode Type'];\nconst epType = Array.isArray(epTypeRaw) ? (epTypeRaw[0] || '') : (epTypeRaw || '');\nconst isRead = String(epType).toLowerCase() === 'read';\nconst sixteen = att('16x9');\nconst only16x9 = (targets.length === 1 && targets[0] === '16x9');\nreturn targets.map((field) => {\n  const own = att(field);\n  const src = own || sixteen;\n  return {\n    json: {\n      rowId: rec.id,\n      episodeId: ep,\n      caption: caption,\n      brief: brief,\n      field: field,\n      aspectRatio: meta[field].aspectRatio,\n      filename: meta[field].filename,\n      promptRow: isRead ? 'Read Artwork Revision' : 'Artwork Revision',\n      srcUrl: (src && src.url) ? src.url : '',\n      srcType: (src && src.type) ? src.type : 'image/png',\n      targetsCsv: targets.join(','),\n      only16x9: only16x9\n    },\n    pairedItem: { item: 0 }\n  };\n});"}},
+  {"id": "3dbbb204-f994-4356-813b-234b4dcd43e5", "name": "Auto-artable Type?", "type": "n8n-nodes-base.if", "typeVersion": 2.2, "position": [448, -32], "parameters": {"conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2}, "conditions": [{"id": "cond-autoart", "leftValue": "={{ $json.autoArt }}", "rightValue": "", "operator": {"type": "boolean", "operation": "true", "singleValue": true}}], "combinator": "and"}, "options": {}}},
+  {"id": "d8fca0e2-bbea-4292-bd04-e2a524e29874", "name": "Get Episode Thumbnails", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [448, 288], "parameters": {"url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $json.episodeId }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "04e73cf5-476b-4a35-82cb-965b6121b3e8", "name": "Needs Reversion?", "type": "n8n-nodes-base.if", "typeVersion": 2.2, "position": [448, 576], "parameters": {"conditions": {"options": {"version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "loose"}, "conditions": [{"id": "cond-revneed", "leftValue": "={{ $json.reversionNeeded }}", "operator": {"operation": "true", "singleValue": true, "type": "boolean"}, "rightValue": ""}], "combinator": "and"}, "options": {}}},
+  {"id": "cc66d042-62e3-4b44-82a4-32fab759fb04", "name": "Send a text message", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [448, 768], "webhookId": "66df4ebc-5b63-4b15-b6a9-95d665b84cb0", "parameters": {"chatId": "-5254203539", "text": "=={{ $json.text }}", "additionalFields": {"parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "47908870-7e5a-4dfe-b4ea-5daa1f6de33e", "name": "Download Revision Sources", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [448, 992], "retryOnFail": true, "parameters": {"url": "={{ $json.srcUrl }}", "options": {"response": {"response": {"responseFormat": "file"}}, "timeout": 60000}}},
+  {"id": "26610a26-7cd7-4098-83f1-7d178e177d92", "name": "Mark Generating", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [672, -128], "parameters": {"method": "PATCH", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $(\"Plan Generate\").item.json.episodeId }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"fields\": { \"Status\": \"Generating Artwork\" }, \"typecast\": true } }}", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "8d97ef23-fdc4-438b-acf3-d3a5d8cbf808", "name": "Mark Manual Artwork", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [672, 64], "parameters": {"method": "PATCH", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $(\"Plan Generate\").item.json.episodeId }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"fields\": { \"Status\": \"Awaiting Manual Artwork\" }, \"typecast\": true } }}", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "42747bf8-e2a2-4b17-a055-644092b00e72", "name": "Compute Rejects", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [672, 288], "parameters": {"jsCode": "\nconst esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst sel = $('Resolve Selected').first().json;\nconst epRec = $input.first().json;\nconst f = epRec.fields || epRec;\nconst all = Array.isArray(f['Thumbnails']) ? f['Thumbnails'] : [];\nconst records = all.filter(id => id !== sel.selectedRowId).map(id => ({ id: id, fields: { Status: 'Rejected' } }));\nreturn [{\n  json: { episodeId: sel.episodeId, episodeDisplayId: f['ID'] || sel.episodeId, selectedRowId: sel.selectedRowId, title: f['Title'] || '', titleHtml: esc(f['Title'] || ''), hasRejects: records.length > 0, body: { records: records, typecast: false } },\n  pairedItem: { item: 0 }\n}];\n"}},
+  {"id": "0c859e33-9787-4faf-a995-e185403e76af", "name": "16x9 Exists?", "type": "n8n-nodes-base.if", "typeVersion": 2.2, "position": [672, 576], "parameters": {"conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2}, "conditions": [{"id": "cond-sixteen", "leftValue": "={{ $json.sixteenUrl }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty", "singleValue": true}}], "combinator": "and"}, "options": {}}},
+  {"id": "1cabea02-0713-493e-8dab-5ba1bce5bc37", "name": "Revision To Base64", "type": "n8n-nodes-base.extractFromFile", "typeVersion": 1.1, "position": [672, 992], "parameters": {"operation": "binaryToPropery", "destinationKey": "dataB64", "options": {}}},
+  {"id": "e0b1a305-69c7-4532-832b-d17e6f5e35f4", "name": "Delete Old Thumbnails", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [896, -128], "parameters": {"method": "DELETE", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails?{{ $('Plan Generate').item.json.deleteQuery }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {"response": {"response": {"neverError": true}}, "timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "78f80bb4-43b5-4960-acca-ed2a245d4529", "name": "Notify Manual", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [896, 64], "webhookId": "1e46119d-2607-449c-a159-0991f9c3c243", "parameters": {"chatId": "-5254203539", "text": "=Episode \"{{ $(\"Plan Generate\").item.json.titleHtml }}\" ({{ $(\"Plan Generate\").item.json.episodeId || \"no-id\" }}) is type {{ $(\"Plan Generate\").item.json.type }} — skipping auto thumbnails. Please art this one manually.", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "72b82643-24c6-4790-8703-08e3789568cc", "name": "Reject Siblings", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [896, 288], "parameters": {"method": "PATCH", "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json.body }}", "options": {"response": {"response": {"neverError": true}}, "timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "e8d994f6-c550-461f-a503-f37eea25a75d", "name": "Download Selected 16x9", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [896, 480], "retryOnFail": true, "parameters": {"url": "={{ $json.sixteenUrl }}", "options": {"response": {"response": {"responseFormat": "file"}}, "timeout": 60000}}},
+  {"id": "53c02c0d-8d87-4bdd-84bf-8936e0d264ff", "name": "Warn No 16x9 Source", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [896, 672], "webhookId": "d9262810-d45b-4fbd-b85f-b65bf30e389b", "parameters": {"chatId": "-5254203539", "text": "=⚠️ <b>Artwork rebuild skipped.</b> The thumbnail row that was selected (<code>{{ $json.selectedRowId }}</code>) has no 16:9 image on it, so there is nothing to build the 1:1 and 9:16 versions from. This usually means the images were deleted from the row by hand.\n\n<b>To regenerate from scratch:</b> delete that row from the Thumbnails table, then set the episode Status back to Approved. Four fresh options will be generated within a minute.", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "3f3e202e-0cff-4ec5-9ece-9ae20ae1073b", "name": "Aggregate Revision Sources", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [896, 992], "parameters": {"jsCode": "const plans = $('Plan Revision').all();\nconst b64s = $('Revision To Base64').all();\nif (!plans.length) return [];\nconst first = plans[0].json;\nconst tasks = plans.map((p, i) => {\n  const j = p.json;\n  const data = (b64s[i] && b64s[i].json && b64s[i].json.dataB64) || '';\n  if (!data) throw new Error('No base64 captured for revision source \"' + j.field + '\"');\n  return { field: j.field, aspectRatio: j.aspectRatio, filename: j.filename, promptRow: j.promptRow, mime: j.srcType, dataB64: data };\n});\nconst clearFields = {};\nfor (const t of tasks) clearFields[t.field] = [];\nreturn [{\n  json: {\n    rowId: first.rowId,\n    episodeId: first.episodeId,\n    caption: first.caption,\n    brief: first.brief,\n    only16x9: first.only16x9,\n    targetsCsv: first.targetsCsv,\n    tasks: tasks,\n    clearBody: { fields: clearFields, typecast: true }\n  },\n  pairedItem: { item: 0 }\n}];"}},
+  {"id": "68b27f88-b25f-4a41-8ff3-0740e08e5449", "name": "Fetch Mood References", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1120, -128], "parameters": {"url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnail%20References", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "103e0dd6-a453-4325-95bc-7f187d9a0536", "name": "Mark Episode Artwork Ready", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1120, 288], "parameters": {"method": "PATCH", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $(\"Compute Rejects\").item.json.episodeId }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"fields\": { \"Status\": \"Artwork Ready\", \"Thumbnails\": [$(\"Compute Rejects\").item.json.selectedRowId] } } }}", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "74604015-e1a2-4431-a5fa-49ca85ee8dee", "name": "Selected To Base64", "type": "n8n-nodes-base.extractFromFile", "typeVersion": 1.1, "position": [1120, 480], "parameters": {"operation": "binaryToPropery", "destinationKey": "dataB64", "options": {}}},
+  {"id": "a043ccbc-1b01-4d38-9c64-589a65ed54cd", "name": "Fetch Episode For Tag", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1120, 992], "retryOnFail": true, "parameters": {"url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $json.episodeId }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "50625c5c-cb21-4a1b-b1a4-983d6a465464", "name": "Fetch Prompts", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1344, -128], "parameters": {"url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblhG1nw2P1k3CBVU", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "cac50e92-2fa2-4c83-a13f-f927e56a402b", "name": "Mark Selected Final", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1344, 288], "parameters": {"method": "PATCH", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails/{{ $(\"Compute Rejects\").item.json.selectedRowId }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"fields\": { \"Status\": \"Final\" }, \"typecast\": true } }}", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "2179816a-6e76-4b8d-98f3-f9b355334f9d", "name": "Fetch Reversion Prompts", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1344, 480], "parameters": {"url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblhG1nw2P1k3CBVU", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "7855f4a2-26c6-4940-ae9b-7cf1c8a9d2e7", "name": "Clear Target Fields", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1344, 992], "retryOnFail": true, "parameters": {"method": "PATCH", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails/{{ $(\"Aggregate Revision Sources\").first().json.rowId }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $(\"Aggregate Revision Sources\").first().json.clearBody }}", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "64b4e5ff-e498-45ca-af1a-5b3773f99a74", "name": "Fetch Guests", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1568, -128], "parameters": {"url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Guests?filterByFormula={{ encodeURIComponent($(\"Plan Generate\").item.json.guestFilter) }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {"response": {"response": {"neverError": true}}, "timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "ce2bf9b2-0560-4e21-a4f1-3ca4fae07ec4", "name": "Confirm Thumbnail Set", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [1568, 288], "webhookId": "1a4d31c6-514a-4813-a409-a8acfc6a24eb", "parameters": {"chatId": "-5254203539", "text": "=Thumbnail selected for {{ $('Compute Rejects').item.json.titleHtml }} ({{ $('Compute Rejects').item.json.episodeDisplayId || 'no-id' }}). Episode is now Artwork Ready. {{ $('Resolve Selected').first().json.confirmReversionText }}", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "4b8e4b1e-8dc1-47eb-a3b7-1a98ce99355f", "name": "Build Reversion Requests", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1568, 480], "parameters": {"jsCode": "const sel = $('Resolve Selected').first().json;\nconst b64 = $('Selected To Base64').first().json.dataB64;\nif (!b64) throw new Error('No base64 for the selected 16x9 image');\nconst caption = sel.caption || '';\nconst mime = sel.sixteenType || 'image/png';\nconst imagePart = { inline_data: { mime_type: mime, data: b64 } };\n\n// prompt templates from the Thumbnail Prompts Airtable table (field is named \"Prompt\")\nconst promptRecs = (($('Fetch Reversion Prompts').first() || {}).json || {}).records || [];\nconst P = {};\nfor (const r of promptRecs) {\n  const rf = r.fields || {};\n  if (rf.Name) P[rf.Name] = rf.Prompt || '';\n}\nconst render = (t, v) => t.replace(/\\{\\{(\\w+)\\}\\}/g, (_, k) => (v[k] != null ? v[k] : ''));\nfunction tpl(name) {\n  const t = P[name];\n  if (!t) throw new Error('Missing prompt row \"' + name + '\" in Thumbnail Prompts (check the Name and that the Prompt field is filled)');\n  return t;\n}\n\n// only regenerate the aspect ratios that are actually missing on the row\nconst need = { '1x1': sel.need1x1, '9x16': sel.need9x16 };\nconst targets = [\n  { field: '1x1',  aspectRatio: '1:1',  filename: 'thumbnail-1x1.png',  row: String(sel.episodeType || '').toLowerCase() === 'read' ? 'Read Reversion 1x1' : 'Reversion 1x1' },\n  { field: '9x16', aspectRatio: '9:16', filename: 'thumbnail-9x16.png', row: 'Reversion 9x16' }\n].filter(t => need[t.field]);\n\n// both already present -> return nothing -> the rest of the branch (incl. Telegram) is skipped\nif (!targets.length) return [];\n\nreturn targets.map((t) => ({\n  json: {\n    rowId: sel.selectedRowId,\n    field: t.field,\n    filename: t.filename,\n    requestBody: {\n      contents: [{ parts: [{ text: render(tpl(t.row), { HOOK: caption }) }, imagePart] }],\n      generationConfig: {\n        responseModalities: ['TEXT', 'IMAGE'],\n        imageConfig: { aspectRatio: t.aspectRatio, imageSize: '1K' }\n      }\n    }\n  },\n  pairedItem: { item: 0 }\n}));"}},
+  {"id": "828d3d47-c7ea-4e4f-b843-4dfdd44ac55d", "name": "Fetch Revision Prompt", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1568, 992], "parameters": {"url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblhG1nw2P1k3CBVU", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "options": {}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "673265ef-ac2d-4db9-a0ad-05e1f940f470", "name": "Resolve Vibes", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1792, -128], "parameters": {"jsCode": "\nconst refs = (($('Fetch Mood References').first() || {}).json || {}).records || [];\nconst moodMap = {};\nfor (const r of refs) {\n  const m = r.fields && r.fields['Mood'];\n  const photo = r.fields && r.fields['Reference Photo'];\n  const att = Array.isArray(photo) && photo[0] ? photo[0] : null;\n  if (m && att && att.url) moodMap[m] = { url: att.url, type: att.type || 'image/jpeg' };\n}\nconst avail = Object.keys(moodMap);\nif (!avail.length) throw new Error('No vibes with reference photos in the Thumbnail References table');\n\nconst plan = ($('Plan Generate').first() || {}).json || {};\n\n// Match his picks to the library by name, case-insensitively, so \"Confident\"\n// and \"confident\" both resolve. Unknown names are dropped, not fatal.\nconst byLower = {};\nfor (const k of avail) byLower[k.toLowerCase()] = k;\nconst picked = (plan.moods || [])\n  .map(m => byLower[String(m).toLowerCase().trim()])\n  .filter(Boolean);\n\n// No usable picks (field left empty, or every name mistyped) -> NEUTRAL for all\n// four slots, for every type including Reads. An empty mood field means \"neutral\n// portrait\", not \"surprise me with the whole library\". Only if the Neutral row is\n// missing or has no photo do we fall back to the whole library, so a bad table can\n// never fail a run. A Read with picks uses them exactly like any other type: the\n// pick is the facial expression, and the four Read shot lines still carry the\n// composition variation.\nlet pool = picked;\nconst neutralKey = byLower['neutral'];\nif (!pool.length) pool = neutralKey ? [neutralKey] : avail;\n\n// Cycle the pool across the 4 slots: 1 mood -> all four use it, 2 moods -> ABAB.\nconst out = [];\nfor (let i = 0; i < 4; i++) {\n  const vibe = pool[i % pool.length];\n  const ref = moodMap[vibe];\n  out.push({\n    json: {\n      episodeId: plan.episodeId,\n      title: plan.title,\n      caption: plan.caption,\n      summary: plan.summary || '',\n      vibe: vibe,\n      optionIndex: i + 1,\n      photoUrl: ref.url,\n      photoType: ref.type || 'image/jpeg',\n      moodSource: picked.length ? 'picked' : (neutralKey ? 'default-neutral' : 'fallback-all-moods')\n    },\n    pairedItem: { item: 0 }\n  });\n}\nreturn out;\n"}},
+  {"id": "a75022f9-1d85-4320-8897-f3d5b984752e", "name": "Generate Reversions (Nano Banana)", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1792, 480], "retryOnFail": true, "parameters": {"method": "POST", "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json.requestBody }}", "options": {"response": {"response": {"neverError": true}}, "timeout": 120000}}, "credentials": {"httpHeaderAuth": {"id": "e7DNDEIyQRteGveq", "name": "google-ai-studio_[pod21-n8n-temp]"}}},
+  {"id": "047e6052-50fe-46d3-930b-0f68324886e7", "name": "Build Revision Requests", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1792, 992], "parameters": {"jsCode": "const agg = $('Aggregate Revision Sources').first().json;\nconst brief = agg.brief || '';\nconst caption = agg.caption || '';\nconst promptRecs = ((($('Fetch Revision Prompt').first() || {}).json) || {}).records || [];\nconst P = {};\nfor (const r of promptRecs) { const rf = r.fields || {}; if (rf.Name) P[rf.Name] = rf.Prompt || ''; }\nconst render = (t, v) => t.replace(/\\{\\{(\\w+)\\}\\}/g, (_, k) => (v[k] != null ? v[k] : ''));\nfunction tpl(name) { const t = P[name]; if (!t) throw new Error('Missing prompt row \"' + name + '\" in the Prompts table (check the Name and that the Prompt field is filled)'); return t; }\nreturn agg.tasks.map((t) => {\n  const promptText = render(tpl(t.promptRow), { REVISION: brief, HOOK: caption });\n  const imagePart = { inline_data: { mime_type: t.mime || 'image/png', data: t.dataB64 } };\n  return {\n    json: {\n      rowId: agg.rowId,\n      field: t.field,\n      filename: t.filename,\n      requestBody: {\n        contents: [{ parts: [{ text: promptText }, imagePart] }],\n        generationConfig: {\n          responseModalities: ['TEXT', 'IMAGE'],\n          imageConfig: { aspectRatio: t.aspectRatio, imageSize: '1K' }\n        }\n      }\n    },\n    pairedItem: { item: 0 }\n  };\n});"}},
+  {"id": "7e6051b3-1f59-431c-9c28-281464865617", "name": "Plan Downloads", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2016, -128], "parameters": {"jsCode": "\nconst vibes = $('Resolve Vibes').all();\nconst plan = $('Plan Generate').first().json;\nconst tasks = [];\n\nfor (let i = 0; i < vibes.length; i++) {\n  const v = (vibes[i] || {}).json || {};\n  tasks.push({ kind: 'host', slot: i, photoUrl: v.photoUrl, mime: v.photoType || 'image/jpeg' });\n}\n\n// Fetch Guests is already filtered to this episode's guests, so take all of them.\n// Roundtable was missing here until 2026-08-04, so every Roundtable episode\n// silently produced zero guest images and fell back to the solo prompt.\nif (plan.layout === 'duo' || plan.layout === 'roundtable') {\n  const guestRecs = ((($('Fetch Guests').first() || {}).json) || {}).records || [];\n  for (const g of guestRecs) {\n    const photo = g.fields && g.fields['Headshot'];\n    const att = Array.isArray(photo) && photo[0] ? photo[0] : null;\n    if (att && att.url) tasks.push({ kind: 'guest', photoUrl: att.url, mime: att.type || 'image/jpeg' });\n  }\n}\n\n// Reads: one extra download, the supplied book cover, sent to the model as Image 2.\n// Appended last so the host photo for each slot stays at index 0-3.\nif (plan.layout === 'read' && plan.hasBookCover && plan.bookCoverUrl) {\n  tasks.push({ kind: 'book', photoUrl: plan.bookCoverUrl, mime: plan.bookCoverType || 'image/jpeg' });\n}\n\nreturn tasks.map(t => ({ json: t, pairedItem: { item: 0 } }));\n"}},
+  {"id": "fc119490-5584-4ef0-b894-5f9a667e51fb", "name": "Extract Reversions", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2016, 480], "parameters": {"jsCode": "\nconst builds = $('Build Reversion Requests').all();\nconst responses = $input.all();\nconst out = [];\nconst diags = [];\nfor (let i = 0; i < responses.length; i++) {\n  const resp = responses[i].json || {};\n  const b = (builds[i] && builds[i].json) || {};\n  const cand = ((resp.candidates || [])[0]) || {};\n  const parts = ((cand.content) || {}).parts || [];\n  const imgPart = parts.find(p => (p.inline_data && p.inline_data.data) || (p.inlineData && p.inlineData.data));\n  if (!imgPart) {\n    const reason = cand.finishReason || (resp.promptFeedback && resp.promptFeedback.blockReason) || 'NO_IMAGE';\n    const msg = cand.finishMessage || (resp.error && (resp.error.message || JSON.stringify(resp.error))) || 'empty response';\n    diags.push((b.field || ('opt' + (i + 1))) + ' [' + reason + ']: ' + String(msg).slice(0, 220));\n    continue;\n  }\n  const inl = imgPart.inline_data || imgPart.inlineData;\n  out.push({\n    json: {\n      rowId: b.rowId,\n      field: b.field,\n      filename: b.filename,\n      base64: inl.data,\n      contentType: inl.mime_type || inl.mimeType || 'image/png'\n    },\n    pairedItem: { item: i }\n  });\n}\nif (!out.length) throw new Error('Nano Banana returned no reversion image. ' + diags.join(' || '));\nif (diags.length) { console.log('Some reversions failed: ' + diags.join(' || ')); }\nreturn out;\n"}},
+  {"id": "62cdfe04-dcaa-4e31-a52d-275f593a86df", "name": "Generate Revisions (Nano Banana)", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2016, 992], "retryOnFail": true, "parameters": {"method": "POST", "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json.requestBody }}", "options": {"response": {"response": {"neverError": true}}, "timeout": 120000}}, "credentials": {"httpHeaderAuth": {"id": "e7DNDEIyQRteGveq", "name": "google-ai-studio_[pod21-n8n-temp]"}}},
+  {"id": "d4898b59-043a-4c05-a9cb-b9e523d54704", "name": "Download Image", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2240, -128], "retryOnFail": true, "parameters": {"url": "={{ $json.photoUrl }}", "options": {"response": {"response": {"responseFormat": "file"}}}}},
+  {"id": "4c08fe4b-274a-4bc3-8dc7-01d6fc3c05f8", "name": "Upload Reversion", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2240, 480], "retryOnFail": true, "parameters": {"method": "POST", "url": "=https://content.airtable.com/v0/app8Xw9Tq0XLjhmp9/{{ $json.rowId }}/{{ $json.field }}/uploadAttachment", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"contentType\": $json.contentType, \"file\": $json.base64, \"filename\": $json.filename } }}", "options": {"batching": {"batch": {"batchSize": 1, "batchInterval": 300}}, "timeout": 60000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "46e61d93-39eb-4cd8-a695-ef5461254946", "name": "Extract Revisions", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2240, 992], "parameters": {"jsCode": "const builds = $('Build Revision Requests').all();\nconst responses = $input.all();\nconst out = [];\nconst diags = [];\nfor (let i = 0; i < responses.length; i++) {\n  const resp = responses[i].json || {};\n  const b = (builds[i] && builds[i].json) || {};\n  const cand = ((resp.candidates || [])[0]) || {};\n  const parts = ((cand.content) || {}).parts || [];\n  const imgPart = parts.find(p => (p.inline_data && p.inline_data.data) || (p.inlineData && p.inlineData.data));\n  if (!imgPart) {\n    const reason = cand.finishReason || (resp.promptFeedback && resp.promptFeedback.blockReason) || 'NO_IMAGE';\n    const msg = cand.finishMessage || (resp.error && (resp.error.message || JSON.stringify(resp.error))) || 'empty response';\n    diags.push((b.field || ('opt' + (i + 1))) + ' [' + reason + ']: ' + String(msg).slice(0, 220));\n    continue;\n  }\n  const inl = imgPart.inline_data || imgPart.inlineData;\n  out.push({ json: { rowId: b.rowId, field: b.field, filename: b.filename, base64: inl.data, contentType: inl.mime_type || inl.mimeType || 'image/png' }, pairedItem: { item: i } });\n}\nif (!out.length) throw new Error('Nano Banana returned no revision image. ' + diags.join(' || '));\nif (diags.length) { console.log('Some revisions failed: ' + diags.join(' || ')); }\nreturn out;"}},
+  {"id": "7b698dcc-9217-47c9-a4d7-fb889b87bcf3", "name": "Image To Base64", "type": "n8n-nodes-base.extractFromFile", "typeVersion": 1.1, "position": [2464, -128], "parameters": {"operation": "binaryToPropery", "destinationKey": "dataB64", "options": {}}},
+  {"id": "addc6b3b-5990-4e1a-98cc-aa120c1d564f", "name": "Collect Reversions", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2464, 480], "parameters": {"jsCode": "const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst ups = $('Upload Reversion').all();\nconst exs = $('Extract Reversions').all();\n\nlet epId = '';\ntry { epId = $('Compute Rejects').first().json.episodeDisplayId || ''; } catch (e) {}\nconst idTag = epId ? ' <code>' + esc(epId) + '</code>' : '';\n\nconst label = { '1x1': '1:1 square', '9x16': '9:16 vertical' };\nconst out = [];\nfor (let i = 0; i < ups.length; i++) {\n  const fo = (ups[i].json && ups[i].json.fields) || {};\n  const field = (exs[i] && exs[i].json && exs[i].json.field) || null;\n  const wantName = (exs[i] && exs[i].json && exs[i].json.filename) || null;\n  // Airtable's uploadAttachment response keys fields by field ID (not name) and can\n  // include OTHER already-present attachments, so match the file we just uploaded by its filename.\n  let url = null;\n  for (const v of Object.values(fo)) {\n    if (Array.isArray(v)) {\n      const hit = v.find(a => a && a.filename === wantName && a.url);\n      if (hit) { url = hit.url; break; }\n    }\n  }\n  if (field && url) {\n    out.push({\n      json: { photoUrl: url, caption: 'New ' + (label[field] || field) + ' artwork' + idTag },\n      pairedItem: { item: i }\n    });\n  }\n}\nif (!out.length) throw new Error('No new reversion image URLs found to send to Telegram');\nreturn out;"}},
+  {"id": "52b6b9cb-4c4d-4711-ae93-0810bf43232d", "name": "Upload Revision", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2464, 992], "retryOnFail": true, "parameters": {"method": "POST", "url": "=https://content.airtable.com/v0/app8Xw9Tq0XLjhmp9/{{ $json.rowId }}/{{ $json.field }}/uploadAttachment", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"contentType\": $json.contentType, \"file\": $json.base64, \"filename\": $json.filename } }}", "options": {"batching": {"batch": {"batchSize": 1, "batchInterval": 300}}, "timeout": 60000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "67bd92dc-3731-48e3-9b4b-a2b2f1c7f5f5", "name": "Build Image Requests", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2688, -128], "parameters": {"jsCode": "const IMAGE_SIZE = '1K';\nconst tasks  = $('Plan Downloads').all();\nconst files  = $('Image To Base64').all();\nconst vibes  = $('Resolve Vibes').all();\nconst plan   = $('Plan Generate').first().json;\nconst layout = plan.layout || 'solo';   // 'solo' | 'duo' | 'roundtable' | 'read'\n\n// ---- prompt templates pulled from Airtable (Prompts table) ----\nconst promptRecs = (($('Fetch Prompts').first() || {}).json || {}).records || [];\nconst P = {};\nfor (const r of promptRecs) {\n  const rf = r.fields || {};\n  if (rf.Name) P[rf.Name] = rf.Prompt || '';\n}\nconst ROW_BY_LAYOUT = { solo: 'Solo Thumbnail', duo: 'Duo Thumbnail', roundtable: 'Roundtable Thumbnail' };\nfunction row(name) {\n  const t = P[name];\n  if (!t) throw new Error('Missing prompt row \"' + name + '\" in the Prompts table (check the Name and that the Prompt field is filled)');\n  return t;\n}\nfunction tpl(lay) { return row(ROW_BY_LAYOUT[lay]); }\nconst render = (t, v) => t.replace(/\\{\\{(\\w+)\\}\\}/g, (_, k) => (v[k] != null ? v[k] : ''));\n\n// Jonny's per-episode art direction, from the \"Custom Image Prompt\" he gave in\n// reply to the metadata workflow's packaging message. It fills the {{CUSTOM}}\n// token wherever he's positioned it in the Airtable template.\nconst customPrompt = plan.customPrompt || '';\n\n// ── Read layouts (2026-10-22) ──────────────────────────────────────────────\n// Four fixed looks so the options always differ: two rooms crossed with two\n// poses, two looking at the camera and two at the book. The wording lives in\n// Airtable (Read Thumbnail / Read Book * / Read Scene *); only the pairing lives\n// here. Reorder this array to change what options 1-4 mean.\nconst READ_SHOT_CAMERA = 'SHOT\\nLOOKING AT CAMERA. Medium close-up at eye level: the host faces the lens, holding the closed book up at chest height with the front cover square to the camera.';\nconst READ_SHOT_BOOK = 'SHOT\\nLOOKING AT THE BOOK. Medium shot: the host holds the closed book in both hands at chest height, the front cover turned square to the camera and fully visible, his head tilted down and his eyes on the cover. His fingers grip only the outer edges of the boards. We see the front cover, not the back. He is not looking at the lens.';\nconst READ_SHOT_CAMERA_NC = 'SHOT\\nLOOKING AT CAMERA. Medium close-up at eye level: the host faces the lens, holding the closed plain book up at chest height.';\nconst READ_SHOT_READING = 'SHOT\\nREADING. Medium close-up at eye level: the host holds the book open in both hands at chest height, looking down at the pages. The outside of the book faces the camera.';\nconst READ_SHOT_DESK = 'SHOT\\nREADING ON THE DESK. High three-quarter angle looking down: the book lies open on the desk in front of him, he leans over it reading, one hand on the page edge.';\n\nconst READ_LOOKS = [\n  { shot: READ_SHOT_CAMERA, scene: 'Read Scene Study', label: 'Study, camera' },\n  { shot: READ_SHOT_BOOK,   scene: 'Read Scene Study', label: 'Study, book' },\n  { shot: READ_SHOT_CAMERA, scene: 'Read Scene Nook',  label: 'Nook, camera' },\n  { shot: READ_SHOT_BOOK,   scene: 'Read Scene Nook',  label: 'Nook, book' }\n];\nconst READ_LOOKS_NC = [\n  { shot: READ_SHOT_CAMERA_NC, scene: 'Read Scene Study', label: 'Study, camera' },\n  { shot: READ_SHOT_READING,   scene: 'Read Scene Study', label: 'Study, reading' },\n  { shot: READ_SHOT_CAMERA_NC, scene: 'Read Scene Nook',  label: 'Nook, camera' },\n  { shot: READ_SHOT_DESK,      scene: 'Read Scene Nook',  label: 'Nook, reading' }\n];\n\n// Non-Read layouts: each option must be a genuinely different SHOT. Stated as a required,\n// first-class instruction and placed at the TOP of the prompt, because a trailing line\n// labelled \"secondary\" gets ignored whenever the producer's ART DIRECTION is detailed.\n// The reserved caption band is restated AFTER the variant line and BEFORE the\n// template. Before 2026-10-30 only the template carried it, and variant 1's\n// \"subjects fill most of the frame\" won head-on against it: option 1 shipped\n// edge to edge with no caption space (Jonny, first 4 x 16:9 delivery).\nconst SAFE_ZONE = \"CAPTION SAFE ZONE - NON-NEGOTIABLE: the top quarter of the frame height, across the full width, is reserved for a caption added later. It must be clean, low-detail background, with no head, hair, hand, prop, device, logo or bright highlight in it. This applies to every variant and overrides any wording above that implies the subject fills the frame. Do not create it with a bar, band, panel, strip or overlay: get it with the camera, and check it before returning the image.\";\nconst READ_SAFE_ZONE = \"CAPTION SAFE ZONE - NON-NEGOTIABLE: whatever shot is described below, the reserved headline area must be at least one quarter of the frame height, across the full width, and must contain nothing but clean, low-detail background. Do not create it with a bar, band, panel, strip or overlay: get it with the camera, and check it before returning the image.\";\nconst optionVariants = [\n  'Variant 1 of 4 - REQUIRED, DISTINCT SHOT: a tight close-up; camera close in so the faces read large, while the top quarter of the frame stays clear background headroom above them.',\n  'Variant 2 of 4 - REQUIRED, DISTINCT SHOT: a medium shot at eye level; subjects shown from the chest up, straight on, seated below the reserved top quarter.',\n  'Variant 3 of 4 - REQUIRED, DISTINCT SHOT: a wider shot; camera pulled back so more of the setting is visible, with the subjects in the lower three quarters.',\n  'Variant 4 of 4 - REQUIRED, DISTINCT SHOT: an asymmetric, off-centre shot with deliberate negative space, keeping the reserved top quarter clear.'\n];\n\n// zip download tasks with their base64 by position (hosts first, then guests, then the book)\nconst hostBySlot = {};\nconst guestParts = [];\nlet bookPart = null;\nfor (let i = 0; i < tasks.length; i++) {\n  const t = (tasks[i] || {}).json || {};\n  const b64 = ((files[i] || {}).json || {}).dataB64;\n  if (!b64) continue;\n  if (t.kind === 'host') hostBySlot[t.slot] = { mime: t.mime || 'image/jpeg', data: b64 };\n  else if (t.kind === 'guest') guestParts.push({ inline_data: { mime_type: t.mime || 'image/jpeg', data: b64 } });\n  else if (t.kind === 'book') bookPart = { inline_data: { mime_type: t.mime || 'image/jpeg', data: b64 } };\n}\n\nconst useGuests = (layout === 'duo' || layout === 'roundtable') && guestParts.length > 0;\nconst isRead = layout === 'read';\nconst key = isRead ? 'read' : (useGuests ? layout : 'solo');\n\n// A Read with a book cover must not silently fall back to a coverless image: if the\n// cover could not be downloaded, fail loudly instead of shipping the wrong artwork.\nif (isRead && plan.hasBookCover && !bookPart) {\n  throw new Error('The Book Cover image was not downloaded, so it cannot be placed on the book. Nothing was generated.');\n}\n\nconst out = [];\nfor (let i = 0; i < vibes.length; i++) {\n  const m = (vibes[i] || {}).json || {};\n  const host = hostBySlot[i];\n  if (!host) throw new Error('No host image for option ' + (i + 1));\n\n  if (isRead) {\n    const look = (plan.hasBookCover ? READ_LOOKS : READ_LOOKS_NC)[i % 4];\n    const base = render(row('Read Thumbnail'), {\n      BOOK: row(plan.hasBookCover ? 'Read Book Cover' : 'Read Book No Cover'),\n      SCENE: row(look.scene),\n      VIBE: m.vibe || 'Neutral',\n      CUSTOM: customPrompt,\n      HOOK: m.caption,\n      CONTEXT: m.summary || m.caption,\n      VIBE: '',\n      VARIATION: ''\n    });\n    const parts = [{ text: READ_SAFE_ZONE + '\\n\\n' + look.shot + '\\n\\n' + base }, { inline_data: { mime_type: host.mime, data: host.data } }];\n    if (plan.hasBookCover && bookPart) parts.push(bookPart);\n    out.push({\n      json: {\n        episodeId: m.episodeId, title: m.title, caption: m.caption, mood: m.vibe,\n        look: look.label, optionIndex: i + 1, layout: 'read', imageCount: parts.length - 1,\n        requestBody: { contents: [{ parts: parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9', imageSize: IMAGE_SIZE } } }\n      },\n      pairedItem: { item: 0 }\n    });\n    continue;\n  }\n\n  const base = render(tpl(key), {\n    HOOK: m.caption,\n    CONTEXT: m.summary || m.caption,\n    VIBE: m.vibe,\n    CUSTOM: customPrompt,\n    VARIATION: ''\n  });\n  const prompt = optionVariants[i] + '\\n\\n' + SAFE_ZONE + '\\n\\n'\n    + 'This shot must look CLEARLY DIFFERENT from the other three variants of this same episode. '\n    + 'Honour the ART DIRECTION below for subject matter, styling, colour and any specific scene, but the '\n    + 'framing and camera described above are required and are NOT optional, and the CAPTION SAFE ZONE is required too. Keep the subject count unchanged.\\n\\n'\n    + base;\n  const parts = [{ text: prompt }, { inline_data: { mime_type: host.mime, data: host.data } }];\n  if (useGuests) for (let g = 0; g < guestParts.length; g++) parts.push(guestParts[g]);\n  out.push({\n    json: {\n      episodeId: m.episodeId, title: m.title, caption: m.caption, mood: m.vibe,\n      optionIndex: m.optionIndex || (i + 1), layout: key, imageCount: parts.length - 1,\n      requestBody: { contents: [{ parts: parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9', imageSize: IMAGE_SIZE } } }\n    },\n    pairedItem: { item: 0 }\n  });\n}\nreturn out;"}},
+  {"id": "b97098a6-2502-4900-9b63-d5fade7bd6aa", "name": "Send Reversions", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [2688, 480], "webhookId": "4c8e8a69-c92a-43df-b01d-e72f39681f73", "parameters": {"operation": "sendPhoto", "chatId": "-5254203539", "file": "={{ $json.photoUrl }}", "additionalFields": {"caption": "={{ $json.caption }}", "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "a2aa3b57-c5da-4f9b-9cd5-264d092bc6fb", "name": "Collect Revisions", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2688, 992], "parameters": {"jsCode": "const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst ups = $('Upload Revision').all();\nconst exs = $('Extract Revisions').all();\nconst agg = $('Aggregate Revision Sources').first().json;\nlet epId = '';\ntry { const ef = ($('Fetch Episode For Tag').first().json.fields) || {}; epId = ef['ID'] || agg.episodeId || ''; } catch (e) { epId = agg.episodeId || ''; }\nconst idTag = epId ? ' <code>' + esc(epId) + '</code>' : '';\nconst label = { '16x9': '16:9', '1x1': '1:1 square', '9x16': '9:16 vertical' };\nconst staleNote = agg.only16x9 ? '\\n<i>Heads up: the 1:1 and 9:16 still derive from the previous 16:9 - brief those too if you want them matched.</i>' : '';\nconst out = [];\nfor (let i = 0; i < ups.length; i++) {\n  const fo = (ups[i].json && ups[i].json.fields) || {};\n  const field = (exs[i] && exs[i].json && exs[i].json.field) || null;\n  const wantName = (exs[i] && exs[i].json && exs[i].json.filename) || null;\n  let url = null;\n  for (const v of Object.values(fo)) {\n    if (Array.isArray(v)) { const hit = v.find(a => a && a.filename === wantName && a.url); if (hit) { url = hit.url; break; } }\n  }\n  if (field && url) {\n    out.push({ json: { photoUrl: url, caption: 'Revised ' + (label[field] || field) + ' artwork' + idTag + staleNote }, pairedItem: { item: i } });\n  }\n}\nif (!out.length) throw new Error('No revised image URLs found to send to Telegram');\nreturn out;"}},
+  {"id": "fb301d56-875d-405f-bb6c-4a88adad4b66", "name": "Generate Thumbnail (Nano Banana)", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [2912, -128], "parameters": {"method": "POST", "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json.requestBody }}", "options": {"response": {"response": {"neverError": true}}, "timeout": 120000}}, "credentials": {"httpHeaderAuth": {"id": "e7DNDEIyQRteGveq", "name": "google-ai-studio_[pod21-n8n-temp]"}}},
+  {"id": "839c890f-135b-48ab-894c-8e5d75a98ef2", "name": "Send Revisions", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [2912, 992], "webhookId": "1cb80b89-5d9c-4c09-88e4-c792780be3f2", "parameters": {"operation": "sendPhoto", "chatId": "-5254203539", "file": "={{ $json.photoUrl }}", "additionalFields": {"caption": "={{ $json.caption }}", "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "d664b61b-16b3-46ba-82fd-20e12d845588", "name": "Extract Images", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [3136, -128], "parameters": {"jsCode": "\nconst builds = $('Build Image Requests').all();\nconst responses = $input.all();\nconst out = [];\nconst diags = [];\nfor (let i = 0; i < responses.length; i++) {\n  const resp = responses[i].json || {};\n  const b = (builds[i] && builds[i].json) || {};\n  const cand = ((resp.candidates || [])[0]) || {};\n  const parts = ((cand.content) || {}).parts || [];\n  const imgPart = parts.find(p => (p.inline_data && p.inline_data.data) || (p.inlineData && p.inlineData.data));\n  if (!imgPart) {\n    const reason = cand.finishReason || (resp.promptFeedback && resp.promptFeedback.blockReason) || 'NO_IMAGE';\n    const msg = cand.finishMessage || (resp.error && (resp.error.message || JSON.stringify(resp.error))) || ((parts.find(p => p.text) || {}).text) || 'empty response';\n    diags.push('opt' + (i + 1) + ' [' + reason + ']: ' + String(msg).slice(0, 220));\n    continue;\n  }\n  const inl = imgPart.inline_data || imgPart.inlineData;\n  out.push({\n    json: {\n      episodeId: b.episodeId,\n      title: b.title,\n      caption: b.caption,\n      mood: b.mood,\n      look: b.look || '',\n      optionIndex: b.optionIndex || (i + 1),\n      base64: inl.data,\n      contentType: inl.mime_type || inl.mimeType || 'image/png',\n      filename: 'thumbnail-' + (b.look || b.mood || ('opt' + (i + 1))) + '.png'\n    },\n    pairedItem: { item: i }\n  });\n}\nif (!out.length) throw new Error('Nano Banana returned no image for any option. ' + diags.join(' || '));\nif (diags.length) { console.log('Some options failed: ' + diags.join(' || ')); }\nreturn out;\n"}},
+  {"id": "b4d8ed27-f876-4572-8031-6fefbfd24e21", "name": "Mark Row Revised Final", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [3136, 992], "retryOnFail": true, "parameters": {"method": "PATCH", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails/{{ $(\"Aggregate Revision Sources\").first().json.rowId }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"fields\": { \"Status\": \"Final\", \"Revision Brief\": \"\", \"Revision Targets\": [] }, \"typecast\": true } }}", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "1c4630c9-4634-49d5-9001-ad1e3b451995", "name": "Create Thumbnail Row", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [3360, -128], "parameters": {"method": "POST", "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"fields\": { \"Name\": $json.title + \" / \" + ($json.look || $json.mood), \"Episode\": [$json.episodeId], \"Mood\": [$json.mood], \"Caption\": $json.caption, \"Option\": $json.optionIndex, \"Status\": \"Proposed\" }, \"typecast\": true } }}", "options": {"batching": {"batch": {"batchSize": 1, "batchInterval": 300}}, "timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "a2aaa376-dc3d-4b9e-8e33-7f6659fd3ccc", "name": "Upload 16x9", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [3584, -128], "retryOnFail": true, "parameters": {"method": "POST", "url": "=https://content.airtable.com/v0/app8Xw9Tq0XLjhmp9/{{ $json.id }}/16x9/uploadAttachment", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"contentType\": $(\"Extract Images\").item.json.contentType, \"file\": $(\"Extract Images\").item.json.base64, \"filename\": $(\"Extract Images\").item.json.filename } }}", "options": {"batching": {"batch": {"batchSize": 1, "batchInterval": 300}}, "timeout": 60000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}},
+  {"id": "a65e9eed-6049-4f1b-807f-071cc0a0e727", "name": "Collect Thumbnails", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [3808, -128], "parameters": {"jsCode": "const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n  const ups = $('Upload 16x9').all();\n  const exs = $('Extract Images').all();\n  const rows = $('Create Thumbnail Row').all();\n  let urls = ups.map(u => {\n    const fo = (u.json && u.json.fields) || {};\n    const arr = Object.values(fo).find(v => Array.isArray(v)) || [];\n    return arr[0] && arr[0].url;\n  }).filter(Boolean);\n  const ids = rows.map(r => r.json && r.json.id).filter(Boolean);\n  let moods = exs.map(e => e.json.mood);\n  // Reads label their options by look (Study, camera) and append the expression\n  // when it is not Neutral, so a two-expression run stays distinguishable. Other\n  // types label by mood only.\n  let labels = exs.map(e => {\n    const mood = e.json.mood || '';\n    if (e.json.look) return (mood && mood.toLowerCase() !== 'neutral') ? e.json.look + ' - ' + mood : e.json.look;\n    return mood;\n  });\n  const ep = $('Build Image Requests').first().json;\n  if (urls.length < 2) {\n    throw new Error('Only ' + urls.length + ' thumbnail(s) generated - a Telegram album needs at least 2. The Thumbnails rows still exist in Airtable; re-run the episode to try for a full set.');\n  }\n  const realCount = urls.length;\n  // The Telegram album is built from 4 static slots, so pad short sets by repeating the last image\n  // (rare now generation is reliable) to avoid an empty slot, which Telegram rejects.\n  while (urls.length < 4) { urls.push(urls[urls.length - 1]); moods.push(moods[moods.length - 1] || ''); labels.push(labels[labels.length - 1] || ''); }\n  const titleHtml = esc(ep.title || '');\n  const captions = urls.map((u, i) => i === 0\n    ? ('Option 1 (' + esc(labels[0] || '') + '): ' + titleHtml)\n    : ('Option ' + (i + 1) + ': ' + esc(labels[i] || '')));\n  return [{\n    json: { episodeId: ep.episodeId, title: ep.title, titleHtml: titleHtml, urls: urls, ids: ids, moods: moods, labels: labels, captions: captions, realCount: realCount, count: realCount },\n    pairedItem: { item: 0 }\n  }];"}},
+  {"id": "2e441b1c-5f5a-4875-88ca-a1ae71b7f518", "name": "Send Thumbnail Options", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [4032, -128], "retryOnFail": true, "maxTries": 5, "waitBetweenTries": 5000, "webhookId": "1de31df3-8cfb-4bbc-9a64-99e0aad55463", "parameters": {"operation": "sendMediaGroup", "chatId": "-5254203539", "media": {"media": [{"media": "={{ $json.urls[0] }}", "additionalFields": {"caption": "={{ $json.captions[0] }}", "parse_mode": "HTML"}}, {"media": "={{ $json.urls[1] }}", "additionalFields": {"caption": "={{ $json.captions[1] }}", "parse_mode": "HTML"}}, {"media": "={{ $json.urls[2] }}", "additionalFields": {"caption": "={{ $json.captions[2] }}", "parse_mode": "HTML"}}, {"media": "={{ $json.urls[3] }}", "additionalFields": {"caption": "={{ $json.captions[3] }}", "parse_mode": "HTML"}}]}, "additionalFields": {}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "612b3069-56c0-41e8-b51b-4f85b8c17bd6", "name": "Send Pick Instructions", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [4256, -128], "retryOnFail": true, "maxTries": 5, "waitBetweenTries": 5000, "webhookId": "463b9103-a36a-4720-b17f-9b09c7553e0c", "parameters": {"chatId": "-5254203539", "text": "=Reply with 1, 2, 3 or 4 to pick the thumbnail for \"{{ $('Collect Thumbnails').item.json.titleHtml }}\" (<code>{{ $('Plan Generate').first().json.episodeDisplayId || 'no-id' }}</code>) — or set a row's Status to Selected in the Thumbnails table. I'll reject the others and mark the episode Artwork Ready.{{ $('Plan Generate').first().json.layout === 'read' && !$('Plan Generate').first().json.hasBookCover ? ' ⚠️ No Book Cover was attached, so these used the reading poses with a plain book. Add a Book Cover and set the episode back to Approved to regenerate.' : '' }}", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "b6e80a57-463e-4b88-8fc7-70439aa4f94f", "name": "Mark Awaiting Pick", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [4480, -128], "parameters": {"method": "PATCH", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $(\"Collect Thumbnails\").item.json.episodeId }}", "authentication": "predefinedCredentialType", "nodeCredentialType": "airtableTokenApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"fields\": { \"Status\": \"Awaiting Thumbnail Pick\" } } }}", "options": {"timeout": 30000}}, "credentials": {"airtableTokenApi": {"id": "04Sw0cnSlBkB6Y3s", "name": "Airtable [n8n] (PAT)"}}}
+];
 
-const planRevision = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Plan Revision',
-    position: [224, 816],
-    parameters: {
-      jsCode: "const rec = $input.first().json;\nconst f = rec.fields || rec;\nconst ep = Array.isArray(f['Episode']) ? f['Episode'][0] : (f['Episode'] || null);\nconst caption = f['Caption'] || '';\nconst brief = String(f['Revision Brief'] || '').trim();\nlet targets = f['Revision Targets'] || [];\nif (typeof targets === 'string') targets = targets.split(',').map(s => s.trim());\ntargets = targets.filter(t => ['16x9', '1x1', '9x16'].includes(t));\nif (!ep || !brief || !targets.length) {\n  throw new Error('Revision needs an Episode link, a non-empty Revision Brief, and at least one valid Revision Target (16x9 / 1x1 / 9x16). Got targets=' + JSON.stringify(f['Revision Targets']) + ', brief=' + (brief ? 'present' : 'EMPTY'));\n}\nconst meta = {\n  '16x9': { aspectRatio: '16:9', filename: 'thumbnail-16x9.png' },\n  '1x1':  { aspectRatio: '1:1',  filename: 'thumbnail-1x1.png' },\n  '9x16': { aspectRatio: '9:16', filename: 'thumbnail-9x16.png' }\n};\nconst att = (field) => (Array.isArray(f[field]) && f[field][0]) ? f[field][0] : null;\nconst sixteen = att('16x9');\nconst only16x9 = (targets.length === 1 && targets[0] === '16x9');\nreturn targets.map((field) => {\n  const own = att(field);\n  const src = own || sixteen;\n  return {\n    json: {\n      rowId: rec.id,\n      episodeId: ep,\n      caption: caption,\n      brief: brief,\n      field: field,\n      aspectRatio: meta[field].aspectRatio,\n      filename: meta[field].filename,\n      promptRow: 'Artwork Revision',\n      srcUrl: (src && src.url) ? src.url : '',\n      srcType: (src && src.type) ? src.type : 'image/png',\n      targetsCsv: targets.join(','),\n      only16x9: only16x9\n    },\n    pairedItem: { item: 0 }\n  };\n});"
-    }
-  },
-  output: [{}]
-});
+// Node types that start an execution. Everything else is a regular step.
+const TRIGGER_TYPES = new Set([
+  'n8n-nodes-base.scheduleTrigger',
+  'n8n-nodes-base.webhook',
+  'n8n-nodes-base.formTrigger',
+  'n8n-nodes-base.airtableTrigger',
+  'n8n-nodes-base.telegramTrigger',
+  'n8n-nodes-base.gmailTrigger',
+  'n8n-nodes-base.executeWorkflowTrigger'
+]);
 
-const downloadRevisionSources = node({
-  type: 'n8n-nodes-base.httpRequest',
-  version: 4.4,
-  config: {
-    name: 'Download Revision Sources',
-    position: [448, 816],
-    parameters: {
-      url: '={{ $json.srcUrl }}',
-      options: { response: { response: { responseFormat: 'file' } }, timeout: 60000 }
-    },
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-const revisionToBase64 = node({
-  type: 'n8n-nodes-base.extractFromFile',
-  version: 1.1,
-  config: {
-    name: 'Revision To Base64',
-    position: [672, 816],
-    parameters: { operation: 'binaryToPropery', destinationKey: 'dataB64', options: {} }
-  },
-  output: [{}]
-});
-
-const aggregateRevisionSources = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Aggregate Revision Sources',
-    position: [896, 816],
-    parameters: {
-      jsCode: "const plans = $('Plan Revision').all();\nconst b64s = $('Revision To Base64').all();\nif (!plans.length) return [];\nconst first = plans[0].json;\nconst tasks = plans.map((p, i) => {\n  const j = p.json;\n  const data = (b64s[i] && b64s[i].json && b64s[i].json.dataB64) || '';\n  if (!data) throw new Error('No base64 captured for revision source \"' + j.field + '\"');\n  return { field: j.field, aspectRatio: j.aspectRatio, filename: j.filename, promptRow: j.promptRow, mime: j.srcType, dataB64: data };\n});\nconst clearFields = {};\nfor (const t of tasks) clearFields[t.field] = [];\nreturn [{\n  json: {\n    rowId: first.rowId,\n    episodeId: first.episodeId,\n    caption: first.caption,\n    brief: first.brief,\n    only16x9: first.only16x9,\n    targetsCsv: first.targetsCsv,\n    tasks: tasks,\n    clearBody: { fields: clearFields, typecast: true }\n  },\n  pairedItem: { item: 0 }\n}];"
-    }
-  },
-  output: [{}]
-});
-
-const fetchEpisodeForTag = node({
-  type: 'n8n-nodes-base.httpRequest',
-  version: 4.4,
-  config: {
-    name: 'Fetch Episode For Tag',
-    position: [1120, 816],
-    parameters: {
-      url: '=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $json.episodeId }}',
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'airtableTokenApi',
-      options: { timeout: 30000 }
-    },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') },
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-const clearTargetFields = node({
-  type: 'n8n-nodes-base.httpRequest',
-  version: 4.4,
-  config: {
-    name: 'Clear Target Fields',
-    position: [1344, 816],
-    parameters: {
-      method: 'PATCH',
-      url: '=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails/{{ $(\"Aggregate Revision Sources\").first().json.rowId }}',
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'airtableTokenApi',
-      sendBody: true,
-      specifyBody: 'json',
-      jsonBody: '={{ $(\"Aggregate Revision Sources\").first().json.clearBody }}',
-      options: { timeout: 30000 }
-    },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') },
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-const fetchRevisionPrompt = node({
-  type: 'n8n-nodes-base.httpRequest',
-  version: 4.4,
-  config: {
-    name: 'Fetch Revision Prompt',
-    position: [1568, 816],
-    parameters: {
-      url: 'https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblhG1nw2P1k3CBVU',
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'airtableTokenApi',
-      options: {}
-    },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') }
-  },
-  output: [{}]
-});
-
-const buildRevisionRequests = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Build Revision Requests',
-    position: [1792, 816],
-    parameters: {
-      jsCode: "const agg = $('Aggregate Revision Sources').first().json;\nconst brief = agg.brief || '';\nconst caption = agg.caption || '';\nconst promptRecs = ((($('Fetch Revision Prompt').first() || {}).json) || {}).records || [];\nconst P = {};\nfor (const r of promptRecs) { const rf = r.fields || {}; if (rf.Name) P[rf.Name] = rf.Prompt || ''; }\nconst render = (t, v) => t.replace(/\\{\\{(\\w+)\\}\\}/g, (_, k) => (v[k] != null ? v[k] : ''));\nfunction tpl(name) { const t = P[name]; if (!t) throw new Error('Missing prompt row \"' + name + '\" in the Prompts table (check the Name and that the Prompt field is filled)'); return t; }\nreturn agg.tasks.map((t) => {\n  const promptText = render(tpl(t.promptRow), { REVISION: brief, HOOK: caption });\n  const imagePart = { inline_data: { mime_type: t.mime || 'image/png', data: t.dataB64 } };\n  return {\n    json: {\n      rowId: agg.rowId,\n      field: t.field,\n      filename: t.filename,\n      requestBody: {\n        contents: [{ parts: [{ text: promptText }, imagePart] }],\n        generationConfig: {\n          responseModalities: ['TEXT', 'IMAGE'],\n          imageConfig: { aspectRatio: t.aspectRatio, imageSize: '1K' }\n        }\n      }\n    },\n    pairedItem: { item: 0 }\n  };\n});"
-    }
-  },
-  output: [{}]
-});
-
-const generateRevisionsNanoBanana = node({
-  type: 'n8n-nodes-base.httpRequest',
-  version: 4.4,
-  config: {
-    name: 'Generate Revisions (Nano Banana)',
-    position: [2016, 816],
-    parameters: {
-      method: 'POST',
-      url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent',
-      authentication: 'genericCredentialType',
-      genericAuthType: 'httpHeaderAuth',
-      sendBody: true,
-      specifyBody: 'json',
-      jsonBody: '={{ $json.requestBody }}',
-      options: { response: { response: { neverError: true } }, timeout: 120000 }
-    },
-    credentials: { httpHeaderAuth: newCredential('google-ai-studio_[pod21-n8n-temp]') },
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-const extractRevisions = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Extract Revisions',
-    position: [2240, 816],
-    parameters: {
-      jsCode: "const builds = $('Build Revision Requests').all();\nconst responses = $input.all();\nconst out = [];\nconst diags = [];\nfor (let i = 0; i < responses.length; i++) {\n  const resp = responses[i].json || {};\n  const b = (builds[i] && builds[i].json) || {};\n  const cand = ((resp.candidates || [])[0]) || {};\n  const parts = ((cand.content) || {}).parts || [];\n  const imgPart = parts.find(p => (p.inline_data && p.inline_data.data) || (p.inlineData && p.inlineData.data));\n  if (!imgPart) {\n    const reason = cand.finishReason || (resp.promptFeedback && resp.promptFeedback.blockReason) || 'NO_IMAGE';\n    const msg = cand.finishMessage || (resp.error && (resp.error.message || JSON.stringify(resp.error))) || 'empty response';\n    diags.push((b.field || ('opt' + (i + 1))) + ' [' + reason + ']: ' + String(msg).slice(0, 220));\n    continue;\n  }\n  const inl = imgPart.inline_data || imgPart.inlineData;\n  out.push({ json: { rowId: b.rowId, field: b.field, filename: b.filename, base64: inl.data, contentType: inl.mime_type || inl.mimeType || 'image/png' }, pairedItem: { item: i } });\n}\nif (!out.length) throw new Error('Nano Banana returned no revision image. ' + diags.join(' || '));\nif (diags.length) { console.log('Some revisions failed: ' + diags.join(' || ')); }\nreturn out;"
-    }
-  },
-  output: [{}]
-});
-
-const uploadRevision = node({
-  type: 'n8n-nodes-base.httpRequest',
-  version: 4.4,
-  config: {
-    name: 'Upload Revision',
-    position: [2464, 816],
-    parameters: {
-      method: 'POST',
-      url: '=https://content.airtable.com/v0/app8Xw9Tq0XLjhmp9/{{ $json.rowId }}/{{ $json.field }}/uploadAttachment',
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'airtableTokenApi',
-      sendBody: true,
-      specifyBody: 'json',
-      jsonBody: '={{ { "contentType": $json.contentType, "file": $json.base64, "filename": $json.filename } }}',
-      options: { batching: { batch: { batchSize: 1, batchInterval: 300 } }, timeout: 60000 }
-    },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') },
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-const collectRevisions = node({
-  type: 'n8n-nodes-base.code',
-  version: 2,
-  config: {
-    name: 'Collect Revisions',
-    position: [2688, 816],
-    parameters: {
-      jsCode: "const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst ups = $('Upload Revision').all();\nconst exs = $('Extract Revisions').all();\nconst agg = $('Aggregate Revision Sources').first().json;\nlet epId = '';\ntry { const ef = ($('Fetch Episode For Tag').first().json.fields) || {}; epId = ef['ID'] || agg.episodeId || ''; } catch (e) { epId = agg.episodeId || ''; }\nconst idTag = epId ? ' <code>' + esc(epId) + '</code>' : '';\nconst label = { '16x9': '16:9', '1x1': '1:1 square', '9x16': '9:16 vertical' };\nconst staleNote = agg.only16x9 ? '\\n<i>Heads up: the 1:1 and 9:16 still derive from the previous 16:9 - brief those too if you want them matched.</i>' : '';\nconst out = [];\nfor (let i = 0; i < ups.length; i++) {\n  const fo = (ups[i].json && ups[i].json.fields) || {};\n  const field = (exs[i] && exs[i].json && exs[i].json.field) || null;\n  const wantName = (exs[i] && exs[i].json && exs[i].json.filename) || null;\n  let url = null;\n  for (const v of Object.values(fo)) {\n    if (Array.isArray(v)) { const hit = v.find(a => a && a.filename === wantName && a.url); if (hit) { url = hit.url; break; } }\n  }\n  if (field && url) {\n    out.push({ json: { photoUrl: url, caption: 'Revised ' + (label[field] || field) + ' artwork' + idTag + staleNote }, pairedItem: { item: i } });\n  }\n}\nif (!out.length) throw new Error('No revised image URLs found to send to Telegram');\nreturn out;"
-    }
-  },
-  output: [{}]
-});
-
-const sendRevisions = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'Send Revisions',
-    position: [2912, 816],
-    parameters: {
-      operation: 'sendPhoto',
-      chatId: '-5254203539',
-      file: '={{ $json.photoUrl }}',
-      additionalFields: { caption: '={{ $json.caption }}', parse_mode: 'HTML' }
-    },
-    credentials: { telegramApi: newCredential('Telegram [pod21_n8n_agent_bot]') }
-  },
-  output: [{}]
-});
-
-const markRowRevised = node({
-  type: 'n8n-nodes-base.httpRequest',
-  version: 4.4,
-  config: {
-    name: 'Mark Row Revised Final',
-    position: [3136, 816],
-    parameters: {
-      method: 'PATCH',
-      url: '=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails/{{ $(\"Aggregate Revision Sources\").first().json.rowId }}',
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'airtableTokenApi',
-      sendBody: true,
-      specifyBody: 'json',
-      jsonBody: '={{ { "fields": { "Status": "Final", "Revision Brief": "", "Revision Targets": [] }, "typecast": true } }}',
-      options: { timeout: 30000 }
-    },
-    credentials: { airtableTokenApi: newCredential('Airtable [n8n] (PAT)') },
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-// ===== REBUILT EXISTING NODES (verbatim params) =====
-const planGenerate = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Plan Generate",
-    position: [224,-32],
-    parameters: {"jsCode":"// ── Plan Generate ────────────────────────────────────\n// Reads the episode that entered the \"Ready for 16X9 Thumbnail\" view and\n// derives everything the downstream nodes need: delete query, layout,\n// guest list, Airtable filter formula, and the auto-art flag.\n\n// HTML-escape helper (& < >) for any text that goes into a Telegram HTML message.\nconst esc = s => String(s == null ? '' : s)\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;');\n\n// The triggering episode record. `fields` when nested, else the record itself.\nconst rec = $('Ready for 16X9 Thumbnail').first().json;\nconst f = rec.fields || rec;\n\n// Old thumbnail rows still linked to this episode -> build the batch-delete query\n// so a re-run starts from a clean slate.\nconst oldIds = Array.isArray(f['Thumbnails']) ? f['Thumbnails'] : [];\nconst deleteQuery = oldIds.map(id => 'records[]=' + encodeURIComponent(id)).join('&');\n\n// Content type drives the layout. Missing Type defaults to Take (solo host).\nconst type = f['Type'] || 'Take';\nconst layout = type === 'Take'\n  ? 'solo'\n  : (type === 'Roundtable' ? 'roundtable' : 'duo'); // Chat / Clip -> duo\nconst autoArt = ['Take', 'Chat', 'Clip', 'Roundtable'].indexOf(type) !== -1;\n\n// Guests to composite into the frame.\n// The host (Guy) is ALWAYS drawn from the Thumbnail References library, so if\n// he's also sitting in the episode's Guests link he'd be rendered twice\n// (this is exactly what happened in exec #1318: Guy + Guy + Bitcoin Mechanic).\n// Strip his guest record here so he can never be double-added.\n// `.filter` tolerates both shapes n8n may return: bare id strings and { id } objects.\nconst HOST_GUEST_REC_ID = 'recs8srWCoJwDuzLn'; // \"Guy\" — host, never a guest\nconst guestIds = (Array.isArray(f['Guests']) ? f['Guests'] : [])\n  .filter(g => (g && g.id ? g.id : g) !== HOST_GUEST_REC_ID);\n\n// Airtable filterByFormula for \"Fetch Guests\" — only this episode's real guests.\n// FALSE() returns nothing when there are no guests (solo / guestless episode).\nconst guestFilter = guestIds.length\n  ? 'OR(' + guestIds.map(id => \"RECORD_ID()='\" + id + \"'\").join(',') + ')'\n  : 'FALSE()';\n\n// ── Jonny's answers from the metadata workflow's packaging message ──\n// The episode field is \"Moods\": a comma-separated list of mood NAMES he picked\n// off the list Telegram showed him. Resolve Vibes matches these against the\n// Thumbnail References library by name and cycles them across the 4 slots; an\n// empty or unmatched value falls back to the whole library rather than failing.\n// \"Thumbnail Moods\" is kept as a fallback read: the docs, the readmes and the\n// assistant's system prompt all called it that, but the field Jonny actually\n// created on Episodes is \"Moods\", so reading only the documented name threw\n// away every pick and quietly fell back to the whole library.\nconst moods = String(f['Moods'] || f['Thumbnail Moods'] || '')\n  .split(',')\n  .map(s => s.trim())\n  .filter(Boolean);\n\n// \"Custom Image Prompt\" is his free-text art direction for THIS episode. It\n// fills the {{CUSTOM}} token in the Airtable prompt template. The trigger view\n// requires it to be non-empty, so it should never be blank here; \"default\"\n// means \"no extra direction\" and resolves to an empty token.\nlet customPrompt = String(f['Custom Image Prompt'] || '').trim();\nif (/^(default|none|n\\/a|-)$/i.test(customPrompt)) customPrompt = '';\n\nreturn [{\n  json: {\n    episodeId: rec.id,\n    episodeDisplayId: f['ID'] || rec.id,\n    title: f['Title'] || '',\n    titleHtml: esc(f['Title'] || ''),     // pre-escaped for Telegram HTML mode\n    caption: f['Thumbnail Caption'] || f['Title'] || '',\n    summary: f['Summary'] || '',\n    deleteQuery: deleteQuery,\n    hasOld: oldIds.length > 0,\n    type: type,\n    guestIds: guestIds,\n    guestFilter: guestFilter,\n    layout: layout,\n    autoArt: autoArt,\n    moods: moods,\n    customPrompt: customPrompt\n  }\n}];"}
-  },
-  output: [{}]
-});
-
-const autoArtableType = ifElse({
-  type: "n8n-nodes-base.if",
-  version: 2.2,
-  config: {
-    name: "Auto-artable Type?",
-    position: [448,-32],
-    parameters: {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"cond-autoart","leftValue":"={{ $json.autoArt }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
-  },
-  output: [{}]
-});
-
-const markGenerating = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Mark Generating",
-    position: [672,-128],
-    parameters: {"method":"PATCH","url":"=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $(\"Plan Generate\").item.json.episodeId }}","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","sendBody":true,"specifyBody":"json","jsonBody":"={{ { \"fields\": { \"Status\": \"Generating Artwork\" }, \"typecast\": true } }}","options":{"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const deleteOldThumbnails = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Delete Old Thumbnails",
-    position: [896,-128],
-    parameters: {"method":"DELETE","url":"=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails?{{ $('Plan Generate').item.json.deleteQuery }}","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","options":{"response":{"response":{"neverError":true}},"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const fetchMoodReferences = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Fetch Mood References",
-    position: [1120,-128],
-    parameters: {"url":"https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnail%20References","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","options":{"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const fetchGuests = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Fetch Guests",
-    position: [1568,-128],
-    parameters: {"url":"=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Guests?filterByFormula={{ encodeURIComponent($(\"Plan Generate\").item.json.guestFilter) }}","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","options":{"response":{"response":{"neverError":true}},"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-// The moods are now PICKED BY JONNY, not by Gemini. The metadata workflow lists
-// the Thumbnail References library in its Telegram packaging message; his reply
-// is stored on the episode as "Moods" (comma-separated names). The two
-// nodes that used to do this — "Build Mood Prompt" and "Pick Moods (Gemini)" —
-// were removed on 2026-08-04, which also drops one Gemini call per run.
-const resolveVibesCode = `
-const refs = (($('Fetch Mood References').first() || {}).json || {}).records || [];
-const moodMap = {};
-for (const r of refs) {
-  const m = r.fields && r.fields['Mood'];
-  const photo = r.fields && r.fields['Reference Photo'];
-  const att = Array.isArray(photo) && photo[0] ? photo[0] : null;
-  if (m && att && att.url) moodMap[m] = { url: att.url, type: att.type || 'image/jpeg' };
-}
-const avail = Object.keys(moodMap);
-if (!avail.length) throw new Error('No vibes with reference photos in the Thumbnail References table');
-
-const plan = ($('Plan Generate').first() || {}).json || {};
-
-// Match his picks to the library by name, case-insensitively, so "Confident"
-// and "confident" both resolve. Unknown names are dropped, not fatal.
-const byLower = {};
-for (const k of avail) byLower[k.toLowerCase()] = k;
-const picked = (plan.moods || [])
-  .map(m => byLower[String(m).toLowerCase().trim()])
-  .filter(Boolean);
-
-// Nothing usable (field left empty, or every name mistyped) -> fall back to the
-// whole library. A typo should cost variety, never the run.
-const pool = picked.length ? picked : avail;
-
-// Cycle the pool across the 4 slots: 1 mood -> all four use it, 2 moods -> ABAB.
-const out = [];
-for (let i = 0; i < 4; i++) {
-  const vibe = pool[i % pool.length];
-  const ref = moodMap[vibe];
-  out.push({
-    json: {
-      episodeId: plan.episodeId,
-      title: plan.title,
-      caption: plan.caption,
-      summary: plan.summary || '',
-      vibe: vibe,
-      optionIndex: i + 1,
-      photoUrl: ref.url,
-      photoType: ref.type || 'image/jpeg',
-      moodSource: picked.length ? 'picked' : 'fallback-all-moods'
-    },
-    pairedItem: { item: 0 }
+const nodesByName = {};
+for (const live of liveNodes) {
+  const { type, typeVersion, credentials, ...config } = live;
+  if (credentials) {
+    config.credentials = Object.fromEntries(
+      Object.entries(credentials).map(([credentialType, reference]) => [credentialType, { id: reference.id, name: reference.name }])
+    );
+  }
+  nodesByName[live.name] = (TRIGGER_TYPES.has(type) ? trigger : node)({
+    type,
+    version: typeVersion,
+    config,
+    output: [{}]
   });
 }
-return out;
-`;
 
-const resolveVibes = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Resolve Vibes",
-    position: [1792,-128],
-    parameters: { jsCode: resolveVibesCode }
-  },
-  output: [{}]
+// [source, sourceOutputIndex, target, targetInputIndex?]
+const connections = [
+  ['Plan Generate', 0, 'Auto-artable Type?'],
+  ['Auto-artable Type?', 0, 'Mark Generating'],
+  ['Auto-artable Type?', 1, 'Mark Manual Artwork'],
+  ['Mark Generating', 0, 'Delete Old Thumbnails'],
+  ['Delete Old Thumbnails', 0, 'Fetch Mood References'],
+  ['Fetch Mood References', 0, 'Fetch Prompts'],
+  ['Fetch Prompts', 0, 'Fetch Guests'],
+  ['Resolve Vibes', 0, 'Plan Downloads'],
+  ['Plan Downloads', 0, 'Download Image'],
+  ['Download Image', 0, 'Image To Base64'],
+  ['Image To Base64', 0, 'Build Image Requests'],
+  ['Build Image Requests', 0, 'Generate Thumbnail (Nano Banana)'],
+  ['Generate Thumbnail (Nano Banana)', 0, 'Extract Images'],
+  ['Extract Images', 0, 'Create Thumbnail Row'],
+  ['Create Thumbnail Row', 0, 'Upload 16x9'],
+  ['Upload 16x9', 0, 'Collect Thumbnails'],
+  ['Collect Thumbnails', 0, 'Send Thumbnail Options'],
+  ['Send Thumbnail Options', 0, 'Send Pick Instructions'],
+  ['Send Pick Instructions', 0, 'Mark Awaiting Pick'],
+  ['Mark Manual Artwork', 0, 'Notify Manual'],
+  ['Thumbnail Selected', 0, 'Check Extra Picks'],
+  ['Thumbnail Selected', 0, 'Fetch Selected Settings'],
+  ['Resolve Selected', 0, 'Get Episode Thumbnails'],
+  ['Resolve Selected', 0, 'Needs Reversion?'],
+  ['Get Episode Thumbnails', 0, 'Compute Rejects'],
+  ['Compute Rejects', 0, 'Reject Siblings'],
+  ['Reject Siblings', 0, 'Mark Episode Artwork Ready'],
+  ['Mark Episode Artwork Ready', 0, 'Mark Selected Final'],
+  ['Mark Selected Final', 0, 'Confirm Thumbnail Set'],
+  ['Needs Reversion?', 0, '16x9 Exists?'],
+  ['Download Selected 16x9', 0, 'Selected To Base64'],
+  ['Selected To Base64', 0, 'Fetch Reversion Prompts'],
+  ['Fetch Reversion Prompts', 0, 'Build Reversion Requests'],
+  ['Build Reversion Requests', 0, 'Generate Reversions (Nano Banana)'],
+  ['Generate Reversions (Nano Banana)', 0, 'Extract Reversions'],
+  ['Extract Reversions', 0, 'Upload Reversion'],
+  ['Upload Reversion', 0, 'Collect Reversions'],
+  ['Collect Reversions', 0, 'Send Reversions'],
+  ['Check Extra Picks', 0, 'Send a text message'],
+  ['Revision Requested', 0, 'Plan Revision'],
+  ['Plan Revision', 0, 'Download Revision Sources'],
+  ['Download Revision Sources', 0, 'Revision To Base64'],
+  ['Revision To Base64', 0, 'Aggregate Revision Sources'],
+  ['Aggregate Revision Sources', 0, 'Fetch Episode For Tag'],
+  ['Fetch Episode For Tag', 0, 'Clear Target Fields'],
+  ['Clear Target Fields', 0, 'Fetch Revision Prompt'],
+  ['Fetch Revision Prompt', 0, 'Build Revision Requests'],
+  ['Build Revision Requests', 0, 'Generate Revisions (Nano Banana)'],
+  ['Generate Revisions (Nano Banana)', 0, 'Extract Revisions'],
+  ['Extract Revisions', 0, 'Upload Revision'],
+  ['Upload Revision', 0, 'Collect Revisions'],
+  ['Collect Revisions', 0, 'Send Revisions'],
+  ['Send Revisions', 0, 'Mark Row Revised Final'],
+  ['Fetch Guests', 0, 'Resolve Vibes'],
+  ['16x9 Exists?', 0, 'Download Selected 16x9'],
+  ['16x9 Exists?', 1, 'Warn No 16x9 Source'],
+  ['Ready for 16X9 Thumbnail', 0, 'Fetch Artwork Settings'],
+  ['Fetch Artwork Settings', 0, 'Plan Generate'],
+  ['Fetch Selected Settings', 0, 'Resolve Selected']
+];
+
+const guysTakeThumbnailArtwork = workflow(
+  "mLAn4ya2AmZoHDUk",
+  "BA: Guy's Take Thumbnail Artwork"
+).settings({
+  executionOrder: "v1",
+  availableInMCP: true,
+  binaryMode: "separate",
+  timeSavedMode: "fixed",
+  errorWorkflow: "9PMI1kuBjLW2YHwb",
+  callerPolicy: "workflowsFromSameOwner"
 });
 
-const planDownloads = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Plan Downloads",
-    position: [2464,-128],
-    parameters: {"jsCode":"\nconst vibes = $('Resolve Vibes').all();\nconst plan = $('Plan Generate').first().json;\nconst tasks = [];\n\nfor (let i = 0; i < vibes.length; i++) {\n  const v = (vibes[i] || {}).json || {};\n  tasks.push({ kind: 'host', slot: i, photoUrl: v.photoUrl, mime: v.photoType || 'image/jpeg' });\n}\n\n// Fetch Guests is already filtered to this episode's guests, so take all of them.\n// Roundtable was missing here until 2026-08-04, so every Roundtable episode\n// silently produced zero guest images and fell back to the solo prompt.\nif (plan.layout === 'duo' || plan.layout === 'roundtable') {\n  const guestRecs = ((($('Fetch Guests').first() || {}).json) || {}).records || [];\n  for (const g of guestRecs) {\n    const photo = g.fields && g.fields['Headshot'];\n    const att = Array.isArray(photo) && photo[0] ? photo[0] : null;\n    if (att && att.url) tasks.push({ kind: 'guest', photoUrl: att.url, mime: att.type || 'image/jpeg' });\n  }\n}\n\nreturn tasks.map(t => ({ json: t, pairedItem: { item: 0 } }));\n"}
-  },
-  output: [{}]
-});
+for (const live of liveNodes) guysTakeThumbnailArtwork.add(nodesByName[live.name]);
+for (const [source, output, target, targetIndex = 0] of connections) {
+  guysTakeThumbnailArtwork.connect(nodesByName[source], output, nodesByName[target], targetIndex);
+}
 
-const downloadImage = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Download Image",
-    position: [2688,-128],
-    parameters: {"url":"={{ $json.photoUrl }}","options":{"response":{"response":{"responseFormat":"file"}}}},
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-const imageToBase64 = node({
-  type: "n8n-nodes-base.extractFromFile",
-  version: 1.1,
-  config: {
-    name: "Image To Base64",
-    position: [2912,-128],
-    parameters: {"operation":"binaryToPropery","destinationKey":"dataB64","options":{}}
-  },
-  output: [{}]
-});
-
-const buildImageRequests = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Build Image Requests",
-    position: [3136,-128],
-    parameters: {"jsCode":"const IMAGE_SIZE = '1K';\nconst tasks  = $('Plan Downloads').all();\nconst files  = $('Image To Base64').all();\nconst vibes  = $('Resolve Vibes').all();\nconst plan   = $('Plan Generate').first().json;\nconst layout = plan.layout || 'solo';   // 'solo' | 'duo' | 'roundtable'\n\n// ---- prompt templates pulled from Airtable (Thumbnail Prompts table) ----\nconst promptRecs = (($('Fetch Prompts').first() || {}).json || {}).records || [];\nconst P = {};\nfor (const r of promptRecs) {\n  const rf = r.fields || {};\n  if (rf.Name) P[rf.Name] = rf.Prompt || '';\n}\nconst ROW_BY_LAYOUT = { solo: 'Solo Thumbnail', duo: 'Duo Thumbnail', roundtable: 'Roundtable Thumbnail' };\nfunction tpl(lay) {\n  const rowName = ROW_BY_LAYOUT[lay];\n  const t = P[rowName];\n  if (!t) throw new Error('Missing prompt row \"' + rowName + '\" in Thumbnail Prompts (layout: ' + lay + ')');\n  return t;\n}\nconst render = (t, v) => t.replace(/\\{\\{(\\w+)\\}\\}/g, (_, k) => (v[k] != null ? v[k] : ''));\n\n// Jonny's per-episode art direction, from the \"Custom Image Prompt\" he gave in\n// reply to the metadata workflow's packaging message. It fills the {{CUSTOM}}\n// token wherever he's positioned it in the Airtable template. \"default\" was\n// already normalised to '' in Plan Generate, so the token just disappears.\nconst customPrompt = plan.customPrompt || '';\n\n// Without per-option framing, one-mood runs otherwise send four identical requests.\nconst optionVariants = [\n  'Secondary to explicit producer instructions: create a visibly different composition with a restrained tight crop and close camera framing, without changing the subject count.',\n  'Secondary to explicit producer instructions: create a visibly different composition with a restrained medium crop from an eye-level camera, without changing the subject count.',\n  'Secondary to explicit producer instructions: create a visibly different composition with restrained wider environmental framing, without changing the subject count.',\n  'Secondary to explicit producer instructions: create a visibly different composition with a restrained asymmetric crop, without changing the subject count.'\n];\n\n// zip download tasks with their base64 by position (hosts first, then guests)\nconst hostBySlot = {};\nconst guestParts = [];\nfor (let i = 0; i < tasks.length; i++) {\n  const t = (tasks[i] || {}).json || {};\n  const b64 = ((files[i] || {}).json || {}).dataB64;\n  if (!b64) continue;\n  if (t.kind === 'host') hostBySlot[t.slot] = { mime: t.mime || 'image/jpeg', data: b64 };\n  else if (t.kind === 'guest') guestParts.push({ inline_data: { mime_type: t.mime || 'image/jpeg', data: b64 } });\n}\n\nconst useGuests = layout !== 'solo' && guestParts.length > 0;\nconst key = useGuests ? layout : 'solo';   // duo/roundtable with no guest images fall back to solo\n\nconst out = [];\nfor (let i = 0; i < vibes.length; i++) {\n  const m = (vibes[i] || {}).json || {};\n  const host = hostBySlot[i];\n  if (!host) throw new Error('No host image for option ' + (i + 1));\n  const prompt = render(tpl(key), {\n    HOOK: m.caption,\n    CONTEXT: m.summary || m.caption,\n    VIBE: m.vibe,\n    CUSTOM: customPrompt,\n    VARIATION: ''\n  }) + '\\n\\nOPTION-SPECIFIC COMPOSITION DIRECTIVE:\\n' + optionVariants[i];\n  const parts = [{ text: prompt }, { inline_data: { mime_type: host.mime, data: host.data } }];\n  if (useGuests) for (let g = 0; g < guestParts.length; g++) parts.push(guestParts[g]);\n  out.push({\n    json: {\n      episodeId: m.episodeId, title: m.title, caption: m.caption, mood: m.vibe,\n      optionIndex: m.optionIndex || (i + 1), layout: key, imageCount: parts.length - 1,\n      requestBody: { contents: [{ parts: parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '16:9', imageSize: IMAGE_SIZE } } }\n    },\n    pairedItem: { item: 0 }\n  });\n}\nreturn out;"}
-  },
-  output: [{}]
-});
-
-const generateThumbnailNanoBanana = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Generate Thumbnail (Nano Banana)",
-    position: [3360,-128],
-    parameters: {"method":"POST","url":"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ $json.requestBody }}","options":{"response":{"response":{"neverError":true}},"timeout":120000}},
-    credentials: { httpHeaderAuth: newCredential("google-ai-studio_[pod21-n8n-temp]") }
-  },
-  output: [{}]
-});
-
-const extractImages = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Extract Images",
-    position: [3584,-128],
-    parameters: {"jsCode":"\nconst builds = $('Build Image Requests').all();\nconst responses = $input.all();\nconst out = [];\nconst diags = [];\nfor (let i = 0; i < responses.length; i++) {\n  const resp = responses[i].json || {};\n  const b = (builds[i] && builds[i].json) || {};\n  const cand = ((resp.candidates || [])[0]) || {};\n  const parts = ((cand.content) || {}).parts || [];\n  const imgPart = parts.find(p => (p.inline_data && p.inline_data.data) || (p.inlineData && p.inlineData.data));\n  if (!imgPart) {\n    const reason = cand.finishReason || (resp.promptFeedback && resp.promptFeedback.blockReason) || 'NO_IMAGE';\n    const msg = cand.finishMessage || (resp.error && (resp.error.message || JSON.stringify(resp.error))) || ((parts.find(p => p.text) || {}).text) || 'empty response';\n    diags.push('opt' + (i + 1) + ' [' + reason + ']: ' + String(msg).slice(0, 220));\n    continue;\n  }\n  const inl = imgPart.inline_data || imgPart.inlineData;\n  out.push({\n    json: {\n      episodeId: b.episodeId,\n      title: b.title,\n      caption: b.caption,\n      mood: b.mood,\n      optionIndex: b.optionIndex || (i + 1),\n      base64: inl.data,\n      contentType: inl.mime_type || inl.mimeType || 'image/png',\n      filename: 'thumbnail-' + (b.mood || ('opt' + (i + 1))) + '.png'\n    },\n    pairedItem: { item: i }\n  });\n}\nif (!out.length) throw new Error('Nano Banana returned no image for any option. ' + diags.join(' || '));\nif (diags.length) { console.log('Some options failed: ' + diags.join(' || ')); }\nreturn out;\n"}
-  },
-  output: [{}]
-});
-
-const createThumbnailRow = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Create Thumbnail Row",
-    position: [3808,-128],
-    parameters: {"method":"POST","url":"https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","sendBody":true,"specifyBody":"json","jsonBody":"={{ { \"fields\": { \"Name\": $json.title + \" / \" + $json.mood, \"Episode\": [$json.episodeId], \"Mood\": [$json.mood], \"Caption\": $json.caption, \"Option\": $json.optionIndex, \"Status\": \"Proposed\" }, \"typecast\": true } }}","options":{"batching":{"batch":{"batchSize":1,"batchInterval":300}},"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const upload16x9 = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Upload 16x9",
-    position: [4032,-128],
-    parameters: {"method":"POST","url":"=https://content.airtable.com/v0/app8Xw9Tq0XLjhmp9/{{ $json.id }}/16x9/uploadAttachment","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","sendBody":true,"specifyBody":"json","jsonBody":"={{ { \"contentType\": $(\"Extract Images\").item.json.contentType, \"file\": $(\"Extract Images\").item.json.base64, \"filename\": $(\"Extract Images\").item.json.filename } }}","options":{"batching":{"batch":{"batchSize":1,"batchInterval":300}},"timeout":60000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") },
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-const collectThumbnails = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Collect Thumbnails",
-    position: [4256,-128],
-    parameters: {"jsCode":"const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n  const ups = $('Upload 16x9').all();\n  const exs = $('Extract Images').all();\n  const rows = $('Create Thumbnail Row').all();\n  let urls = ups.map(u => {\n    const fo = (u.json && u.json.fields) || {};\n    const arr = Object.values(fo).find(v => Array.isArray(v)) || [];\n    return arr[0] && arr[0].url;\n  }).filter(Boolean);\n  const ids = rows.map(r => r.json && r.json.id).filter(Boolean);\n  let moods = exs.map(e => e.json.mood);\n  const ep = $('Build Image Requests').first().json;\n  if (urls.length < 2) {\n    throw new Error('Only ' + urls.length + ' thumbnail(s) generated - a Telegram album needs at least 2. The Thumbnails rows still exist in Airtable; re-run the episode to try for a full set.');\n  }\n  const realCount = urls.length;\n  // The Telegram album is built from 4 static slots, so pad short sets by repeating the last image\n  // (rare now generation is reliable) to avoid an empty slot, which Telegram rejects.\n  while (urls.length < 4) { urls.push(urls[urls.length - 1]); moods.push(moods[moods.length - 1] || ''); }\n  const titleHtml = esc(ep.title || '');\n  const captions = urls.map((u, i) => i === 0\n    ? ('Option 1 (' + esc(moods[0] || '') + '): ' + titleHtml)\n    : ('Option ' + (i + 1) + ': ' + esc(moods[i] || '')));\n  return [{\n    json: { episodeId: ep.episodeId, title: ep.title, titleHtml: titleHtml, urls: urls, ids: ids, moods: moods, captions: captions, realCount: realCount, count: realCount },\n    pairedItem: { item: 0 }\n  }];"}
-  },
-  output: [{}]
-});
-
-const sendThumbnailOptions = node({
-  type: "n8n-nodes-base.telegram",
-  version: 1.2,
-  config: {
-    name: "Send Thumbnail Options",
-    position: [4480,-128],
-    parameters: {"operation":"sendMediaGroup","chatId":"-5254203539","media":{"media":[{"media":"={{ $json.urls[0] }}","additionalFields":{"caption":"={{ $json.captions[0] }}","parse_mode":"HTML"}},{"media":"={{ $json.urls[1] }}","additionalFields":{"caption":"={{ $json.captions[1] }}","parse_mode":"HTML"}},{"media":"={{ $json.urls[2] }}","additionalFields":{"caption":"={{ $json.captions[2] }}","parse_mode":"HTML"}},{"media":"={{ $json.urls[3] }}","additionalFields":{"caption":"={{ $json.captions[3] }}","parse_mode":"HTML"}}]},"additionalFields":{}},
-    credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
-    retryOnFail: true,
-    maxTries: 5,
-    waitBetweenTries: 5000,
-    webhookId: "e0ebe366-cb60-4698-b35c-bea31acca5e2"
-  },
-  output: [{}]
-});
-
-const sendPickInstructions = node({
-  type: "n8n-nodes-base.telegram",
-  version: 1.2,
-  config: {
-    name: "Send Pick Instructions",
-    position: [4704,-128],
-    parameters: {"chatId":"-5254203539","text":"=Reply with 1, 2, 3 or 4 to pick the thumbnail for \"{{ $('Collect Thumbnails').item.json.titleHtml }}\" ({{ $('Plan Generate').first().json.episodeDisplayId || 'no-id' }}) — or set a row's Status to Selected in the Thumbnails table. I'll reject the others and mark the episode Artwork Ready.","additionalFields":{"appendAttribution":false,"parse_mode":"HTML"}},
-    credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
-    retryOnFail: true,
-    maxTries: 5,
-    waitBetweenTries: 5000,
-    webhookId: "c8d18396-8119-4b1b-b208-99207bf47c9b"
-  },
-  output: [{}]
-});
-
-const markAwaitingPick = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Mark Awaiting Pick",
-    position: [4928,-128],
-    parameters: {"method":"PATCH","url":"=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $(\"Collect Thumbnails\").item.json.episodeId }}","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","sendBody":true,"specifyBody":"json","jsonBody":"={{ { \"fields\": { \"Status\": \"Awaiting Thumbnail Pick\" } } }}","options":{"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const markManualArtwork = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Mark Manual Artwork",
-    position: [672,64],
-    parameters: {"method":"PATCH","url":"=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $(\"Plan Generate\").item.json.episodeId }}","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","sendBody":true,"specifyBody":"json","jsonBody":"={{ { \"fields\": { \"Status\": \"Awaiting Manual Artwork\" }, \"typecast\": true } }}","options":{"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const notifyManual = node({
-  type: "n8n-nodes-base.telegram",
-  version: 1.2,
-  config: {
-    name: "Notify Manual",
-    position: [896,64],
-    parameters: {"chatId":"-5254203539","text":"=Episode \"{{ $(\"Plan Generate\").item.json.titleHtml }}\" ({{ $(\"Plan Generate\").item.json.episodeId || \"no-id\" }}) is type {{ $(\"Plan Generate\").item.json.type }} — skipping auto thumbnails. Please art this one manually.","additionalFields":{"appendAttribution":false,"parse_mode":"HTML"}},
-    credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
-    webhookId: "9c191313-ea57-405a-bfa2-db3e8fe7070d"
-  },
-  output: [{}]
-});
-
-const thumbnailSelected = trigger({
-  type: "n8n-nodes-base.airtableTrigger",
-  version: 1,
-  config: {
-    name: "Thumbnail Selected",
-    position: [0,384],
-    parameters: {"pollTimes":{"item":[{"mode":"everyMinute"}]},"authentication":"airtableTokenApi","baseId":{"__rl":true,"mode":"id","value":"app8Xw9Tq0XLjhmp9"},"tableId":{"__rl":true,"value":"tblkcASzE4DXlxokO","mode":"id"},"triggerField":"Last Modified Time","additionalFields":{"viewId":"viw7AHjnX9ZkvIrKo"}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") },
-    retryOnFail: true,
-    maxTries: 5,
-    waitBetweenTries: 5000
-  },
-  output: [{}]
-});
-
-const resolveSelected = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Resolve Selected",
-    position: [432,384],
-    parameters: {"jsCode":"// Pick the first Selected row that is actually linked to an episode.\n// Skips orphan rows (Selected but no Episode) instead of bailing on them,\n// so a real pick sitting behind an orphan in the same poll still gets processed.\n// Downstream handles ONE selection, so we still emit at most one item;\n// \"Check Extra Picks\" warns about any additional valid picks in the same poll.\nlet rec = null, f = null, ep = null;\nfor (const item of $input.all()) {\n  const cand = item.json;\n  const cf = cand.fields || cand;\n  const cep = Array.isArray(cf['Episode']) ? cf['Episode'][0] : (cf['Episode'] || null);\n  if (cep) { rec = cand; f = cf; ep = cep; break; }\n}\nif (!ep) return [];\n\nconst att = Array.isArray(f['16x9']) && f['16x9'][0] ? f['16x9'][0] : null;\nconst has1x1  = Array.isArray(f['1x1'])  && f['1x1'].length  > 0;\nconst has9x16 = Array.isArray(f['9x16']) && f['9x16'].length > 0;\n\n// \"Episode Type\" is a lookup through the Episode link, so it arrives as an array\n// (e.g. [\"Clip\"]). The 1:1 / 9:16 reversions are skipped for these types: a Clip\n// is cut from an episode that already has its own artwork, and Read / Audionauts\n// never get auto-generated artwork in the first place.\nconst NO_REVERSION = ['Read', 'Clip', 'Audionauts'];\nconst epTypeRaw = f['Episode Type'];\nconst epType = Array.isArray(epTypeRaw) ? (epTypeRaw[0] || '') : (epTypeRaw || '');\n\nreturn [{\n  json: {\n    selectedRowId: rec.id,\n    episodeId: ep,\n    episodeType: epType,\n    reversionOk: NO_REVERSION.indexOf(epType) === -1,\n    caption: f['Caption'] || '',\n    sixteenUrl: att && att.url ? att.url : '',\n    sixteenType: att && att.type ? att.type : 'image/png',\n    need1x1: !has1x1,\n    need9x16: !has9x16,\n    url1x1: has1x1 ? (f['1x1'][0].url || '') : '',\n    url9x16: has9x16 ? (f['9x16'][0].url || '') : ''\n  },\n  pairedItem: { item: 0 }\n}];"}
-  },
-  output: [{}]
-});
-
-const getEpisodeThumbnails = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Get Episode Thumbnails",
-    position: [656,288],
-    parameters: {"url":"=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $json.episodeId }}","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","options":{"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const computeRejects = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Compute Rejects",
-    position: [880,288],
-    parameters: {"jsCode":"\nconst esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst sel = $('Resolve Selected').first().json;\nconst epRec = $input.first().json;\nconst f = epRec.fields || epRec;\nconst all = Array.isArray(f['Thumbnails']) ? f['Thumbnails'] : [];\nconst records = all.filter(id => id !== sel.selectedRowId).map(id => ({ id: id, fields: { Status: 'Rejected' } }));\nreturn [{\n  json: { episodeId: sel.episodeId, episodeDisplayId: f['ID'] || sel.episodeId, selectedRowId: sel.selectedRowId, title: f['Title'] || '', titleHtml: esc(f['Title'] || ''), hasRejects: records.length > 0, body: { records: records, typecast: false } },\n  pairedItem: { item: 0 }\n}];\n"}
-  },
-  output: [{}]
-});
-
-const rejectSiblings = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Reject Siblings",
-    position: [1104,288],
-    parameters: {"method":"PATCH","url":"https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","sendBody":true,"specifyBody":"json","jsonBody":"={{ $json.body }}","options":{"response":{"response":{"neverError":true}},"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const markEpisodeArtworkReady = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Mark Episode Artwork Ready",
-    position: [1328,288],
-    parameters: {"method":"PATCH","url":"=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $(\"Compute Rejects\").item.json.episodeId }}","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","sendBody":true,"specifyBody":"json","jsonBody":"={{ { \"fields\": { \"Status\": \"Artwork Ready\", \"Thumbnails\": [$(\"Compute Rejects\").item.json.selectedRowId] } } }}","options":{"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const markSelectedFinal = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Mark Selected Final",
-    position: [1552,288],
-    parameters: {"method":"PATCH","url":"=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/Thumbnails/{{ $(\"Compute Rejects\").item.json.selectedRowId }}","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","sendBody":true,"specifyBody":"json","jsonBody":"={{ { \"fields\": { \"Status\": \"Final\" }, \"typecast\": true } }}","options":{"timeout":30000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const confirmThumbnailSet = node({
-  type: "n8n-nodes-base.telegram",
-  version: 1.2,
-  config: {
-    name: "Confirm Thumbnail Set",
-    position: [1776,288],
-    parameters: {"chatId":"-5254203539","text":"=Thumbnail selected for \"{{ $(\"Compute Rejects\").item.json.titleHtml }}\" ({{ $(\"Compute Rejects\").item.json.episodeDisplayId || \"no-id\" }}). Episode is now Artwork Ready. {{ !$(\"Resolve Selected\").first().json.reversionOk ? (\"No 1:1 or 9:16 versions are generated for \" + ($(\"Resolve Selected\").first().json.episodeType || \"this\") + \" episodes.\") : ( (($(\"Resolve Selected\").first().json.need1x1 || $(\"Resolve Selected\").first().json.need9x16) && !$(\"Resolve Selected\").first().json.sixteenUrl) ? \"However, the 16:9 source image is missing from the thumbnail row, so the 1:1 and 9:16 versions could not be generated. See the follow-up message for how to regenerate.\" : ( ($(\"Resolve Selected\").first().json.need1x1 && $(\"Resolve Selected\").first().json.need9x16) ? \"Generating 1:1 and 9:16 versions now.\" : ($(\"Resolve Selected\").first().json.need1x1 ? \"Generating the 1:1 version now.\" : ($(\"Resolve Selected\").first().json.need9x16 ? \"Generating the 9:16 version now.\" : \"Both 1:1 and 9:16 versions are already in place.\")) ) ) }}","additionalFields":{"appendAttribution":false,"parse_mode":"HTML"}},
-    credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
-    webhookId: "9ea34dee-3ad3-4f8a-b294-2cd7a853dabd"
-  },
-  output: [{}]
-});
-
-const downloadSelected16x9 = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Download Selected 16x9",
-    position: [880,480],
-    parameters: {"url":"={{ $json.sixteenUrl }}","options":{"response":{"response":{"responseFormat":"file"}},"timeout":60000}},
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-const selectedToBase64 = node({
-  type: "n8n-nodes-base.extractFromFile",
-  version: 1.1,
-  config: {
-    name: "Selected To Base64",
-    position: [1104,480],
-    parameters: {"operation":"binaryToPropery","destinationKey":"dataB64","options":{}}
-  },
-  output: [{}]
-});
-
-const buildReversionRequests = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Build Reversion Requests",
-    position: [1552,480],
-    parameters: {"jsCode":"const sel = $('Resolve Selected').first().json;\nconst b64 = $('Selected To Base64').first().json.dataB64;\nif (!b64) throw new Error('No base64 for the selected 16x9 image');\nconst caption = sel.caption || '';\nconst mime = sel.sixteenType || 'image/png';\nconst imagePart = { inline_data: { mime_type: mime, data: b64 } };\n\n// prompt templates from the Thumbnail Prompts Airtable table (field is named \"Prompt\")\nconst promptRecs = (($('Fetch Reversion Prompts').first() || {}).json || {}).records || [];\nconst P = {};\nfor (const r of promptRecs) {\n  const rf = r.fields || {};\n  if (rf.Name) P[rf.Name] = rf.Prompt || '';\n}\nconst render = (t, v) => t.replace(/\\{\\{(\\w+)\\}\\}/g, (_, k) => (v[k] != null ? v[k] : ''));\nfunction tpl(name) {\n  const t = P[name];\n  if (!t) throw new Error('Missing prompt row \"' + name + '\" in Thumbnail Prompts (check the Name and that the Prompt field is filled)');\n  return t;\n}\n\n// only regenerate the aspect ratios that are actually missing on the row\nconst need = { '1x1': sel.need1x1, '9x16': sel.need9x16 };\nconst targets = [\n  { field: '1x1',  aspectRatio: '1:1',  filename: 'thumbnail-1x1.png',  row: 'Reversion 1x1' },\n  { field: '9x16', aspectRatio: '9:16', filename: 'thumbnail-9x16.png', row: 'Reversion 9x16' }\n].filter(t => need[t.field]);\n\n// both already present -> return nothing -> the rest of the branch (incl. Telegram) is skipped\nif (!targets.length) return [];\n\nreturn targets.map((t) => ({\n  json: {\n    rowId: sel.selectedRowId,\n    field: t.field,\n    filename: t.filename,\n    requestBody: {\n      contents: [{ parts: [{ text: render(tpl(t.row), { HOOK: caption }) }, imagePart] }],\n      generationConfig: {\n        responseModalities: ['TEXT', 'IMAGE'],\n        imageConfig: { aspectRatio: t.aspectRatio, imageSize: '1K' }\n      }\n    }\n  },\n  pairedItem: { item: 0 }\n}));"}
-  },
-  output: [{}]
-});
-
-const generateReversionsNanoBanana = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Generate Reversions (Nano Banana)",
-    position: [1776,480],
-    parameters: {"method":"POST","url":"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ $json.requestBody }}","options":{"response":{"response":{"neverError":true}},"timeout":120000}},
-    credentials: { httpHeaderAuth: newCredential("google-ai-studio_[pod21-n8n-temp]") },
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-const extractReversions = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Extract Reversions",
-    position: [2000,480],
-    parameters: {"jsCode":"\nconst builds = $('Build Reversion Requests').all();\nconst responses = $input.all();\nconst out = [];\nconst diags = [];\nfor (let i = 0; i < responses.length; i++) {\n  const resp = responses[i].json || {};\n  const b = (builds[i] && builds[i].json) || {};\n  const cand = ((resp.candidates || [])[0]) || {};\n  const parts = ((cand.content) || {}).parts || [];\n  const imgPart = parts.find(p => (p.inline_data && p.inline_data.data) || (p.inlineData && p.inlineData.data));\n  if (!imgPart) {\n    const reason = cand.finishReason || (resp.promptFeedback && resp.promptFeedback.blockReason) || 'NO_IMAGE';\n    const msg = cand.finishMessage || (resp.error && (resp.error.message || JSON.stringify(resp.error))) || 'empty response';\n    diags.push((b.field || ('opt' + (i + 1))) + ' [' + reason + ']: ' + String(msg).slice(0, 220));\n    continue;\n  }\n  const inl = imgPart.inline_data || imgPart.inlineData;\n  out.push({\n    json: {\n      rowId: b.rowId,\n      field: b.field,\n      filename: b.filename,\n      base64: inl.data,\n      contentType: inl.mime_type || inl.mimeType || 'image/png'\n    },\n    pairedItem: { item: i }\n  });\n}\nif (!out.length) throw new Error('Nano Banana returned no reversion image. ' + diags.join(' || '));\nif (diags.length) { console.log('Some reversions failed: ' + diags.join(' || ')); }\nreturn out;\n"}
-  },
-  output: [{}]
-});
-
-const uploadReversion = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Upload Reversion",
-    position: [2224,480],
-    parameters: {"method":"POST","url":"=https://content.airtable.com/v0/app8Xw9Tq0XLjhmp9/{{ $json.rowId }}/{{ $json.field }}/uploadAttachment","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","sendBody":true,"specifyBody":"json","jsonBody":"={{ { \"contentType\": $json.contentType, \"file\": $json.base64, \"filename\": $json.filename } }}","options":{"batching":{"batch":{"batchSize":1,"batchInterval":300}},"timeout":60000}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") },
-    retryOnFail: true
-  },
-  output: [{}]
-});
-
-const readyFor16x9Thumbnail = trigger({
-  type: "n8n-nodes-base.airtableTrigger",
-  version: 1,
-  config: {
-    name: "Ready for 16X9 Thumbnail",
-    position: [0,-32],
-    parameters: {"pollTimes":{"item":[{"mode":"everyMinute"}]},"authentication":"airtableTokenApi","baseId":{"__rl":true,"mode":"id","value":"app8Xw9Tq0XLjhmp9"},"tableId":{"__rl":true,"mode":"id","value":"tbl3uYLIvtB9APZp6"},"triggerField":"Last Modified Time","additionalFields":{"viewId":"viwqgtrry8n6yNgqW"}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") },
-    retryOnFail: true,
-    maxTries: 5,
-    waitBetweenTries: 5000
-  },
-  output: [{}]
-});
-
-const fetchPrompts = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Fetch Prompts",
-    position: [1344,-128],
-    parameters: {"url":"https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblhG1nw2P1k3CBVU","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","options":{}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const fetchReversionPrompts = node({
-  type: "n8n-nodes-base.httpRequest",
-  version: 4.4,
-  config: {
-    name: "Fetch Reversion Prompts",
-    position: [1328,480],
-    parameters: {"url":"https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblhG1nw2P1k3CBVU","authentication":"predefinedCredentialType","nodeCredentialType":"airtableTokenApi","options":{}},
-    credentials: { airtableTokenApi: newCredential("Airtable [n8n] (PAT)") }
-  },
-  output: [{}]
-});
-
-const collectReversions = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Collect Reversions",
-    position: [2448,480],
-    parameters: {"jsCode":"const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst ups = $('Upload Reversion').all();\nconst exs = $('Extract Reversions').all();\n\nlet epId = '';\ntry { epId = $('Compute Rejects').first().json.episodeDisplayId || ''; } catch (e) {}\nconst idTag = epId ? ' <code>' + esc(epId) + '</code>' : '';\n\nconst label = { '1x1': '1:1 square', '9x16': '9:16 vertical' };\nconst out = [];\nfor (let i = 0; i < ups.length; i++) {\n  const fo = (ups[i].json && ups[i].json.fields) || {};\n  const field = (exs[i] && exs[i].json && exs[i].json.field) || null;\n  const wantName = (exs[i] && exs[i].json && exs[i].json.filename) || null;\n  // Airtable's uploadAttachment response keys fields by field ID (not name) and can\n  // include OTHER already-present attachments, so match the file we just uploaded by its filename.\n  let url = null;\n  for (const v of Object.values(fo)) {\n    if (Array.isArray(v)) {\n      const hit = v.find(a => a && a.filename === wantName && a.url);\n      if (hit) { url = hit.url; break; }\n    }\n  }\n  if (field && url) {\n    out.push({\n      json: { photoUrl: url, caption: 'New ' + (label[field] || field) + ' artwork' + idTag },\n      pairedItem: { item: i }\n    });\n  }\n}\nif (!out.length) throw new Error('No new reversion image URLs found to send to Telegram');\nreturn out;"}
-  },
-  output: [{}]
-});
-
-const sendReversions = node({
-  type: "n8n-nodes-base.telegram",
-  version: 1.2,
-  config: {
-    name: "Send Reversions",
-    position: [2672,480],
-    parameters: {"operation":"sendPhoto","chatId":"-5254203539","file":"={{ $json.photoUrl }}","additionalFields":{"caption":"={{ $json.caption }}","parse_mode":"HTML"}},
-    credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
-    webhookId: "fc404d49-bdb1-4369-b828-9d00144cac20"
-  },
-  output: [{}]
-});
-
-const needsReversion = ifElse({
-  type: "n8n-nodes-base.if",
-  version: 2.2,
-  config: {
-    name: "Needs Reversion?",
-    position: [656,480],
-    parameters: {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"cond-needrev","leftValue":"={{ $json.need1x1 || $json.need9x16 }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}},{"id":"cond-revtype","leftValue":"={{ $json.reversionOk }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
-  },
-  output: [{}]
-});
-
-const sixteenExists = ifElse({
-  type: "n8n-nodes-base.if",
-  version: 2.2,
-  config: {
-    name: "16x9 Exists?",
-    position: [768,480],
-    parameters: {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"cond-sixteen","leftValue":"={{ $json.sixteenUrl }}","rightValue":"","operator":{"type":"string","operation":"notEmpty","singleValue":true}}],"combinator":"and"},"options":{}}
-  },
-  output: [{}]
-});
-
-const warnNo16x9Source = node({
-  type: "n8n-nodes-base.telegram",
-  version: 1.2,
-  config: {
-    name: "Warn No 16x9 Source",
-    position: [768,656],
-    parameters: {"chatId":"-5254203539","text":"=⚠️ <b>Artwork rebuild skipped.</b> The thumbnail row that was selected (<code>{{ $json.selectedRowId }}</code>) has no 16:9 image on it, so there is nothing to build the 1:1 and 9:16 versions from. This usually means the images were deleted from the row by hand.\n\n<b>To regenerate from scratch:</b> delete that row from the Thumbnails table, then set the episode Status back to Approved. Four fresh options will be generated within a minute.","additionalFields":{"appendAttribution":false,"parse_mode":"HTML"}},
-    credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
-    webhookId: "d9262810-d45b-4fbd-b85f-b65bf30e389b"
-  },
-  output: [{}]
-});
-
-const checkExtraPicks = node({
-  type: "n8n-nodes-base.code",
-  version: 2,
-  config: {
-    name: "Check Extra Picks",
-    position: [224,544],
-    parameters: {"jsCode":"// Guardrail for the .first() limitation in Resolve Selected.\n// The Airtable poll can return several rows flipped to \"Selected\" inside one\n// 60s window; Resolve Selected only processes the FIRST. Warn about any extras,\n// which would otherwise be silently dropped and never re-fire (their Last\n// Modified Time won't advance again on its own).\nconst esc = s => String(s == null ? '' : s)\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst rows = $input.all();\nconst valid = rows.filter(r => {\n  const f = (r.json && (r.json.fields || r.json)) || {};\n  const ep = Array.isArray(f['Episode']) ? f['Episode'][0] : f['Episode'];\n  return !!ep;\n});\nif (valid.length <= 1) return [];   // normal case — nothing to warn about\n\nconst nameOf = r => { const j = r.json, f = j.fields || j; return f['Name'] || j.id; };\nconst line   = r => `• <b>${esc(nameOf(r))}</b> (<code>${r.json.id}</code>)`;\n\nconst text =\n  `⚠️ <b>${valid.length} thumbnails were set to Selected in the same poll.</b>\\n\\n` +\n  `Only the first is being processed:\\n${line(valid[0])}\\n\\n` +\n  `<b>NOT processed</b> (won't re-fire on their own — re-flip each to Selected one at a time):\\n` +\n  valid.slice(1).map(line).join('\\n');\n\nreturn [{ json: { text } }];"}
-  },
-  output: [{}]
-});
-
-const sendATextMessage = node({
-  type: "n8n-nodes-base.telegram",
-  version: 1.2,
-  config: {
-    name: "Send a text message",
-    position: [432,608],
-    parameters: {"chatId":"-5254203539","text":"=={{ $json.text }}","additionalFields":{"parse_mode":"HTML"}},
-    credentials: { telegramApi: newCredential("Telegram [pod21_n8n_agent_bot]") },
-    webhookId: "dd7413d6-e6af-4f25-994e-8b4e9d0d4264"
-  },
-  output: [{}]
-});
-// ===== ASSEMBLY =====
-
-export default workflow('guys-take-thumbnail-artwork', "BA: Guy's Take Thumbnail Artwork")
-  // ---- Path 1: Generate (Episode enters "Ready for 16X9 Thumbnail") ----
-  .add(readyFor16x9Thumbnail)
-  .to(planGenerate)
-  .to(autoArtableType
-    .onTrue(markGenerating
-      .to(deleteOldThumbnails).to(fetchMoodReferences).to(fetchPrompts).to(fetchGuests)
-      .to(resolveVibes).to(planDownloads)
-      .to(downloadImage).to(imageToBase64).to(buildImageRequests).to(generateThumbnailNanoBanana)
-      .to(extractImages).to(createThumbnailRow).to(upload16x9).to(collectThumbnails)
-      .to(sendThumbnailOptions).to(sendPickInstructions).to(markAwaitingPick))
-    .onFalse(markManualArtwork.to(notifyManual)))
-  // ---- Path 2: Select (Thumbnails row enters "Selected") ----
-  .add(thumbnailSelected)
-  .to(resolveSelected
-    .to(getEpisodeThumbnails).to(computeRejects).to(rejectSiblings)
-    .to(markEpisodeArtworkReady).to(markSelectedFinal).to(confirmThumbnailSet))
-  .add(resolveSelected)
-  .to(needsReversion
-    .onTrue(sixteenExists
-      .onTrue(downloadSelected16x9.to(selectedToBase64).to(fetchReversionPrompts)
-        .to(buildReversionRequests).to(generateReversionsNanoBanana).to(extractReversions)
-        .to(uploadReversion).to(collectReversions).to(sendReversions))
-      .onFalse(warnNo16x9Source)))
-  .add(thumbnailSelected)
-  .to(checkExtraPicks.to(sendATextMessage))
-  // ---- Path 3: Revision (Thumbnails row enters "Revision Requested") ----
-  .add(revisionRequested)
-  .to(planRevision).to(downloadRevisionSources).to(revisionToBase64).to(aggregateRevisionSources)
-  .to(fetchEpisodeForTag).to(clearTargetFields).to(fetchRevisionPrompt).to(buildRevisionRequests)
-  .to(generateRevisionsNanoBanana).to(extractRevisions).to(uploadRevision).to(collectRevisions)
-  .to(sendRevisions).to(markRowRevised);
+export default guysTakeThumbnailArtwork;

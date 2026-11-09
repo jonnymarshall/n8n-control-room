@@ -24,10 +24,15 @@ Before changing any `.sdk.js` file, pull the live workflow (`get_workflow_detail
 2. **Confirm Active** and `availableInMCP` are still set.
 3. **Check every HTTP-node credential is still bound** rather than rebinding by default. MCP pushes now bind credentials passed inline and a partial update leaves existing bindings alone, so the old blanket rebind is no longer needed. Verify via REST `GET /api/v1/workflows/<id>` (it returns `credentials`; the MCP read strips them).
 4. **Fresh-flip test any polling trigger** (Airtable pollers re-baseline their cursor to ~now on publish; a row already in the trigger view won't fire).
+5. **Confirm the `.sdk.js` snapshot matches live.** This is automatic now: `.opencode/plugins/n8n-sdk-snapshot.js` and `.claude/hooks/sdk-snapshot.py` re-run `snapshot-sdk.sh` after every successful push. Verify with `./scripts/query/sdk-drift.sh`, which exits non-zero if any snapshot has drifted. A push made outside the harness (hand edit in the n8n UI, another machine) still needs the script run by hand.
 
 ## Shell scripts
 
 `scripts/query/*` are read-only inspections; `scripts/deploy/*` mutate the server. All read `N8N_API_KEY` (and friends) from the root `.env`; each script's header lists the env vars it needs. Find-by-name lives in `scripts/`.
+
+## Talking to Jonny
+
+- **Address Airtable records by their `BA-` ID, never the internal `rec…` ID.** The `BA-` ID is the Episodes `ID` field (e.g. `BA-0CH3H6`); for a Publication, use its `Publication` name (`<BA-…> - <Platform>`). Internal record IDs mean nothing to him and must never be used in chat.
 
 ## Guardrails under opencode
 
@@ -37,7 +42,8 @@ The `.claude/hooks/` Python hooks only run inside Claude Code. Under opencode:
 - **Telegram record-ID lint**: every Telegram message about a record must include its ID (`BA-xxxx`) in a `<code>` block. (No plugin; do by hand.)
 - **Airtable trigger-fields lint**: leave the Fields list empty (whole record); if restricting, include the trigger field and use commas with no spaces. (No plugin; do by hand.)
 - **Readme reminder**: when a workflow is created/updated, write or update its readme in `n8n_workflow_readmes/` (filename = workflow display name, colon → hyphen). (No plugin; do by hand.)
-- **`.sdk.js` snapshot reminder**: **every non-archived workflow has a snapshot in `scripts/deploy/workflows/`.** Create it when the workflow is created, refresh it when the workflow changes. `./scripts/deploy/workflows/snapshot-sdk.sh <workflow_id>` generates it from live; `./scripts/query/sdk-coverage.sh` lists anything missing and exits non-zero. (No plugin; do by hand.)
+- **`.sdk.js` snapshot**: **every non-archived workflow has a snapshot in `scripts/deploy/workflows/`.** The refresh is now automatic rather than a reminder: both harnesses run `./scripts/deploy/workflows/snapshot-sdk.sh <workflow_id>` after a successful `update_workflow` / `create_workflow` (`.opencode/plugins/n8n-sdk-snapshot.js` and `.claude/hooks/sdk-snapshot.py`), reusing the workflow's existing filename. If a push happened outside the harness, run the script by hand. Two checks: `./scripts/query/sdk-coverage.sh` lists workflows with no snapshot, `./scripts/query/sdk-drift.sh` lists snapshots whose live workflow has moved on. Both exit non-zero. Never edit a drifted snapshot as if it were live; regenerate it first.
+- **System Map reminder**: **every time a workflow is completed and published**, update `workflow_planning/System Map.md` and push it to the live Airtable row with `bash scripts/deploy/schema/sync-system-map.sh`. The Telegram assistant reads the **Airtable row**, not the repo file, so the repo edit alone changes nothing for the agent. Read the live row first (it has drifted before). Do this every time, without being asked.
 
 ## n8n expert guidance
 

@@ -28,6 +28,14 @@ there is no unique anchor telling the Assistant (or Jonny) *which* episode a
 reply like "change the title" or "delete this" refers to. The ID in the message
 is the shared context that makes a reply unambiguous.
 
+**The code is a formula, so it can only be read, never derived.** On the Episodes
+table `ID` is `"BA-" & RIGHT(RECORD_ID(), 6)`, so the code is the last six
+characters of the internal record id. Anything that needs to print or quote a code
+must read that field (or the whole record); a read restricted to a field list that
+leaves `ID` out returns no code, and building one from `rec...` produces a code
+that does not exist. On 2026-11-04 the Assistant said `BA-dOmo4E` for `BA-8yPGl0`
+for exactly this reason, which is why its system prompt now forbids guessing.
+
 **Good (compliant):**
 
 ```
@@ -189,3 +197,19 @@ PR #15 unattended. The content was wanted; the merge was not the agent's to make
 - **Workflow naming** — name a workflow after its trigger, not its actions.
 - **One Telegram trigger per bot** — only one active workflow can hold the
   Telegram Trigger for a given bot; other workflows may *send* but not *trigger*.
+
+---
+
+## RULE: Update the System Map when a workflow ships
+
+**Every time a workflow is created, completed, or materially changed and published, update
+the System Map** (`workflow_planning/System Map.md`) and push it to the live Airtable row:
+
+```
+bash scripts/deploy/schema/sync-system-map.sh
+```
+
+The Telegram assistant reads the **Airtable row**, not the repo file, so editing the repo
+file alone changes nothing for the agent. The map's preconditions checklists are the Airtable
+view filters spelled out; keep them in step with the actual views (read the live row first —
+it has drifted before). This is a standing rule: do it every time, without being asked.

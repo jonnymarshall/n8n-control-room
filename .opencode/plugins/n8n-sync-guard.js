@@ -5,11 +5,18 @@
 // this enforces it by refusing an update_workflow push when the live workflow
 // is newer than the last-synced baseline recorded in .claude/n8n-sync-state.json.
 //
+// Migrated to the OpenCode 2 plugin API on 2026-11-07: Plugin.define with an id and
+// a setup function, directory from ctx.location.directory, arguments from the hook
+// event rather than a separate args object, and the tool result read from
+// event.result. OpenCode 2 has no structured logging method for plugins, so
+// advisory messages go to stderr (visible with `--print-logs`).
+//
 // Fail-open: if creds are missing or n8n is unreachable, the push is allowed
 // but a warning is logged. A confirmed drift is the only thing that blocks.
 
 import fs from "node:fs"
 import path from "node:path"
+import { Plugin } from "@opencode/plugin"
 
 const LEDGER_REL = path.join(".claude", "n8n-sync-state.json")
 const ENV_REL = ".env"
@@ -18,6 +25,7 @@ const ENV_REL = ".env"
 const GRACE_SECONDS = 5
 
 function readEnvFile(dir) {
+  /** @type {Record<string, string>} */
   const out = {}
   try {
     const text = fs.readFileSync(path.join(dir, ENV_REL), "utf8")
@@ -69,23 +77,35 @@ const isUpdateTool = (name) => UPDATE_TOOL_RE.test(String(name || ""))
 const isCreateFromCodeTool = (name) => CREATE_FROM_CODE_RE.test(String(name || ""))
 const isPullTool = (name) => PULL_TOOL_RE.test(String(name || ""))
 
-// opencode passes tool arguments on the output object for before-hooks; older
-// builds and the after-hook shape put them on the input. Read whichever exists,
-// otherwise the id is never found and the guard silently does nothing.
-function argsOf(input, output) {
-  if (output && output.args && typeof output.args === "object") return output.args
-  if (input && input.args && typeof input.args === "object") return input.args
-  return {}
+// Tool arguments arrive on the hook event as `input`. Older shapes put them on
+// the output object; read whichever exists, otherwise the id is never found and
+// the guard silently does nothing.
+function argsOf(input) {
+  return input && typeof input === "object" ? input : {}
 }
 
-function workflowIdFrom(args, resultText) {
+// OpenCode 2 carries the tool result as { content, output, metadata }. Flatten
+// whichever of those holds the text so id extraction keeps working.
+function resultText(result) {
+  if (!result || typeof result !== "object") return ""
+  if (typeof result.content === "string") return result.content
+  if (Array.isArray(result.content)) {
+    return result.content.map((part) => (part && part.type === "text" ? part.text : "")).join("\n")
+  }
+  if (result.output !== undefined) {
+    return typeof result.output === "string" ? result.output : JSON.stringify(result.output)
+  }
+  return ""
+}
+
+function workflowIdFrom(args, text) {
   if (args && typeof args === "object") {
     for (const k of ["workflowId", "id", "workflow_id"]) {
       if (args[k]) return String(args[k])
     }
   }
-  if (resultText) {
-    const m = String(resultText).match(/"(?:workflowId|id)"\s*:\s*"([A-Za-z0-9]+)"/)
+  if (text) {
+    const m = String(text).match(/"(?:workflowId|id)"\s*:\s*"([A-Za-z0-9]+)"/)
     if (m) return m[1]
   }
   return null
@@ -101,27 +121,27 @@ async function fetchUpdatedAt(baseUrl, apiKey, id) {
   return { updatedAt: data.updatedAt, name: data.name }
 }
 
-export const N8nSyncGuard = async ({ directory, client }) => {
-  const env = { ...readEnvFile(directory), ...process.env }
-  const baseUrl = (env.N8N_URL || "").replace(/\/+$/, "")
-  const apiKey = env.N8N_API_KEY || ""
+export default Plugin.define({
+  id: "n8n-control-room.sync-guard",
+  async setup(ctx) {
+    const directory = ctx.location.directory
+    const env = { ...readEnvFile(directory), ...process.env }
+    const baseUrl = (env.N8N_URL || "").replace(/\/+$/, "")
+    const apiKey = env.N8N_API_KEY || ""
 
-  const log = async (level, message) => {
-    try {
-      await client.app.log({ body: { service: "n8n-sync-guard", level, message } })
-    } catch {}
-  }
+    const log = (level, message) => {
+      console.error(`[n8n-sync-guard] ${level}: ${message}`)
+    }
 
-  return {
-    "tool.execute.before": async (input, output) => {
+    await ctx.tool.hook("execute.before", async (event) => {
       // Guard every push tool. create_workflow_from_code makes a NEW workflow
       // (nothing live to clobber), so it doesn't need the pre-check.
-      if (!isUpdateTool(input.tool)) return
-      const id = workflowIdFrom(argsOf(input, output), null)
+      if (!isUpdateTool(event.tool)) return
+      const id = workflowIdFrom(argsOf(event.input), null)
       if (!id) return // nothing to compare against (e.g. no id in args) -> allow
 
       if (!baseUrl || !apiKey) {
-        await log("warn", `n8n-sync-guard: N8N_URL/N8N_API_KEY missing; manual-edit check skipped for workflow ${id}. Push allowed, but if Jonny may have edited it by hand, pull it first with get_workflow_details.`)
+        log("warn", `N8N_URL/N8N_API_KEY missing; manual-edit check skipped for workflow ${id}. Push allowed, but if Jonny may have edited it by hand, pull it first with get_workflow_details.`)
         return
       }
 
@@ -129,20 +149,20 @@ export const N8nSyncGuard = async ({ directory, client }) => {
       try {
         live = await fetchUpdatedAt(baseUrl, apiKey, id)
       } catch (e) {
-        await log("warn", `n8n-sync-guard: couldn't reach n8n to verify workflow ${id} (${e.message}). Push allowed (fail-open); the manual-edit check did not run.`)
+        log("warn", `couldn't reach n8n to verify workflow ${id} (${e.message}). Push allowed (fail-open); the manual-edit check did not run.`)
         return
       }
 
       const entry = loadLedger(directory)[id]
       if (!entry || !entry.updatedAt) {
-        await log("info", `n8n-sync-guard: no sync baseline yet for workflow ${id} (${live.name || "?"}); allowing this push and recording its state. Future manual edits WILL be detected before the next push.`)
+        log("info", `no sync baseline yet for workflow ${id} (${live.name || "?"}); allowing this push and recording its state. Future manual edits WILL be detected before the next push.`)
         return
       }
 
       const baseTs = Date.parse(entry.updatedAt)
       const currTs = Date.parse(live.updatedAt)
       if (Number.isNaN(baseTs) || Number.isNaN(currTs)) {
-        await log("warn", `n8n-sync-guard: couldn't compare timestamps for workflow ${id}; push allowed without the manual-edit check.`)
+        log("warn", `couldn't compare timestamps for workflow ${id}; push allowed without the manual-edit check.`)
         return
       }
 
@@ -161,20 +181,17 @@ export const N8nSyncGuard = async ({ directory, client }) => {
         )
       }
       // In sync -> allow silently.
-    },
+    })
 
-    "tool.execute.after": async (input, output) => {
+    await ctx.tool.hook("execute.after", async (event) => {
       // Record a baseline after any successful push, and after a pull (a pull is
       // how an agent acknowledges the live version, so it refreshes the baseline
       // too). Without this the next push has nothing to compare against.
-      const isWrite = isUpdateTool(input.tool) || isCreateFromCodeTool(input.tool)
-      const isPull = isPullTool(input.tool)
+      if (event.status !== "completed") return
+      const isWrite = isUpdateTool(event.tool) || isCreateFromCodeTool(event.tool)
+      const isPull = isPullTool(event.tool)
       if (!isWrite && !isPull) return
-      const rawResult = output && output.output
-      const id = workflowIdFrom(
-        argsOf(input, output),
-        typeof rawResult === "string" ? rawResult : ""
-      )
+      const id = workflowIdFrom(argsOf(event.input), resultText(event.result))
       if (!id || !baseUrl || !apiKey) return
       try {
         const live = await fetchUpdatedAt(baseUrl, apiKey, id)
@@ -182,6 +199,6 @@ export const N8nSyncGuard = async ({ directory, client }) => {
           saveBaseline(directory, id, live.updatedAt, live.name, isPull ? "pull" : "push")
         }
       } catch {}
-    },
-  }
-}
+    })
+  },
+})
