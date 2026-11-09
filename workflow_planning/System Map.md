@@ -28,7 +28,12 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-10-29 (the episode status `Scheduled` is now **`Recording Scheduled`**, so it can
+*Last updated 2026-11-06 (stage 9 now emails the host a short AI-written guest brief built
+from the intake answers: the new `BA - Guest Intake Submitted > Host Brief Emailed` workflow
+runs every five minutes, sends each new submission to Guy through AgentMail with a Gemini
+2.5 Flash summary via **OpenRouter**, and stamps `Host Brief Sent At` / `Host Brief Message
+ID` so nothing sends twice. The intake itself is still Airtable-native).
+Previously 2026-10-29 (the episode status `Scheduled` is now **`Recording Scheduled`**, so it can
 no longer be confused with `Scheduled to Publish`; a successful publisher run marks the
 episode `Scheduled to Publish`, and the reconciler that flips it to `Published` is active.
 Also stage 3 is live as two workflows: `Ready for Metadata` and
@@ -577,8 +582,9 @@ Three paths in one workflow.
 Requests to publish are often mistaken for something the assistant cannot do, so follow
 this exactly.
 
-- **This bot never touches Fountain.** It has no Fountain access and must never claim or
-  imply otherwise. Publishing is **one Airtable write on the Episode**, and the automation
+- **This bot never writes to Fountain.** Its only Fountain access is the read-only item
+  look-up, which cannot change anything, so it must never claim or imply it can publish
+  there. Publishing is **one Airtable write on the Episode**, and the automation
   does the upload. **Never answer "I can't publish to Fountain" / "upload it yourself" —
   that is the wrong answer.** The right answer is the status flip plus what will happen
   next.
@@ -609,6 +615,8 @@ this exactly.
   06:00 had already passed.)
 - **Ignoring a proposal ("adopt what's on Fountain", 2026-10-30).** If Jonny says the change was already made on Fountain, or that he does not want it, set the Fountain Publication row's `Sync Status` to `Adopt Requested` and clear `Sync Approved`. The next 15-minute tick records what Airtable would currently send as the new baseline (`Content Fingerprint`, `Frame.io File ID`), marks the row `Synced`, and replies once. Nothing is sent to Fountain. Future changes will still be offered normally. Never set `Adopt Requested` when he actually wants the change applied; that is `Sync Approved`.
 - **Live items are never re-scheduled.** If the Publication is already `Published`, the sync ignores release-date differences, because re-scheduling something that is live makes no sense.
+- **Fountain is the source of truth for status (2026-11-06).** You have a read-only Fountain tool. For any question about whether an episode is live, what state its item is in, when it is scheduled, or what media it holds, read the Fountain item itself (feed id from `Publishing Settings`, item id from `Platform Item ID` on the `Publications` row). The `Publications` row lags and has been hours out of date; never claim an episode is not live without checking. If the two disagree, say so plainly and trust Fountain.
+- **Hand-edited descriptions are protected (2026-11-06).** Before the sync sends title/description to Fountain it reads the live item and compares it with `Formatted Description`, the exact text we last sent. If they differ, someone edited the description on Fountain by hand, so the sync leaves the text alone, applies the other changes, keeps the stored record of what we last sent, and says so in its message. Charlie fixes the description on Fountain by hand; those fixes are now safe from being overwritten by an unrelated sync.
 - **The approval gate (2026-10-30).** The content sync no longer changes Fountain on its own. Every 15 minutes it compares four things and, if any differ, it posts ONE Telegram message headed "Fountain needs updating" listing the changed items with ticks, writes `Sync Status = Awaiting Approval` and stores a hash of that exact proposal in `Approved Fingerprint`. Nothing is sent until the Publication row's `Sync Approved` is ticked. **If Jonny replies "approve sync"** for an episode, tick `Sync Approved` on that episode's Fountain Publication row; if several are pending, ask which one. The next tick recomputes the hash and only acts if it still matches what was proposed, so an approval cannot be applied to a cut that changed afterwards. After a successful run it clears `Sync Approved`, sets `Sync Status = Synced` and updates the baselines (`Content Fingerprint`, `Frame.io File ID`, `Scheduled For`). If the proposal is superseded, a new message arrives with a new hash.
 - **What each change means.** `title and description` and `1x1 artwork` are content edits. `video file` means the episode's `Frame.io URL` now points at a different file than the one Fountain holds (`Publications.Frame.io File ID`), and applying it re-uploads the video (a 4.84 GB master takes about 80 minutes) and swaps `video_default_id`. `release date` means the Episode's `Release Date` day no longer matches the day the Fountain item is scheduled for; applying it re-schedules the item (today = now + 1 hour, otherwise the date at `Default Publish Time`).
 - **Fountain and audio.** Attaching a new video only rebuilds the audio when the item's audio slot is empty. On an episode that already has audio, a video swap leaves the old audio track. Check the item's `audio_default` URL after a video sync: it should contain the new upload id.
@@ -644,11 +652,11 @@ this exactly.
 - **Errors:** 401 for a missing/wrong/revoked token; 400 for an unknown action or an invalid query (a plain `{ error, detail }`, never a crash).
 - **Guardrail:** if someone asks how a client gets episode data, this is the answer. The client never sees the Airtable PAT. Tokens are minted/revoked with `scripts/deploy/tokens/issue.sh` / `revoke.sh`. Client-facing doc: `setup/Public API - client guide.md`.
 
-### 9. Guest Intake (Airtable form, not n8n)
+### 9. Guest Intake (Airtable form + host brief email)
 - **What it is:** the way a guest lands on an episode without a manual link. A `Chat`
   guest fills an Airtable form, and the submission creates or links their `Guests`
-  record. Entirely Airtable-native: a form, a formula field, and one base automation.
-  No n8n workflow is involved.
+  record. The intake itself is Airtable-native: a form, a formula field, and one base
+  automation. A small n8n workflow then emails the host the interview answers.
 - **The form:** one form on the `Guest Intake` table (`New Guest Intake`). It collects the
   guest's contact details, bio, headshot, links, socials, and interview prep (talking
   points, unpopular opinion, most / least bullish, questions to avoid, asset release).
@@ -665,22 +673,37 @@ this exactly.
   details onto the guest, links the guest to the episode on both sides (merging, so a
   returning guest keeps their past episodes and a multi-guest Chat keeps every guest), and
   writes `Matched Guest` + `Status` back on the intake row.
+- **Host brief email (n8n):** `BA - Guest Intake Submitted > Host Brief Emailed`
+  (`HTzyHw7Kz8VE1CTw`, ACTIVE 2026-11-06; sends to `guy@bitcoinaudible.com`). Every five
+  minutes it reads the `Ready for Host Brief` view (`viw62a1wBDn39NzDe`) and filters rows
+  where `Host Brief Sent At` is empty. It builds a short AI-written brief with Gemini 2.5
+  Flash via **OpenRouter** (one headline plus 6-8 bullets), adds the guest's `Questions to
+  Avoid` answer verbatim, emails it through AgentMail (`pod21@agentmail.to`), then stamps
+  `Host Brief Sent At` and `Host Brief Message ID`. The email carries the guest's angle,
+  talking points, the avoid list and contact details, with no Airtable links, no headshot
+  attachment and no long-form answers; it is meant to be a one-minute read. A failed AI
+  call or send leaves the stamp empty, so the row stays in the view and the next run
+  retries it.
 - **Why it matters to the pipeline:** a `Chat` episode needs a guest on `Guests` before
   artwork will run (see the artwork precondition in stage 4). This flow is how that link
-  gets made automatically. Without it, a guest-less `Chat` waits out of the artwork view
-  forever, with no error. It does **not** advance `Status`; it is a side input, so it can
-  be used at any point before artwork.
+  gets made automatically, and the host brief email is how the guest's interview prep
+  actually reaches the host. Without the guest link, a guest-less `Chat` waits out of the
+  artwork view forever, with no error. The intake flow does **not** advance episode
+  `Status`; it is a side input, so it can be used at any point before artwork.
 - **Caveats:**
   - Every submission is a new `Guest Intake` row (there is no de-duplication there), so a
     repeat submission stacks a second row for the same episode and person. The guest
     record itself is reused, not duplicated, and its details are refreshed with the newer
-    answers.
+    answers. The host brief email also sends again for the new row, which is deliberate
+    for now: the newer answers may differ.
   - Matching is email first, then exact name. A guest who changes both their email and
     their name creates a duplicate guest. Two different people who share the same full
     name are treated as one.
   - An anonymous submission with no name and no email can never match, so it always
     creates a new guest.
-- **Readme:** `n8n_workflow_readmes/Guest Intake Form.md`.
+- **Readmes:** `n8n_workflow_readmes/Guest Intake Form.md` (the form and guest linking)
+  and `n8n_workflow_readmes/BA - Guest Intake Submitted > Host Brief Emailed.md` (the
+  email).
 
 ---
 

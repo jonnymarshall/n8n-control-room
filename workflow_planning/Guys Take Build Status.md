@@ -124,6 +124,8 @@ Recommended order: **0.1 → 0.2 → 0.7 → 0.3 → 0.4 → 0.5 → 0.6 → Pha
 
 > **▶ RESUME POINT (session closed 2026-07-15).** State: 0.1 ✅ (built, active, wired on the 6 main workflows; PAT scope on the ops base + end-to-end test unverified) · 0.2 🔨 (table + `Error` writer live; `Heartbeat`/`Completed` writers not started) · 0.5 ✅ via the System Map · 1.2 half done. **Next actions, in order:** (1) verify PAT can write to `appwcz1Bux9YLcZYm` + run the throw-test in the error-handler readme; (2) add `Heartbeat` rows to Backups + Research (an Airtable create node at each tail; ⚠️ pushing Backups drops its two GitHub HTTP-node credentials, rebind by hand after); (3) 0.7 housekeeping; (4) 0.3 watchdog — note its planned host `Pod21: Daily Reminders` was deleted 2026-07-21, so it needs a new home (fold into an existing scheduled workflow, don't spawn a new one). Read Part 0 before building anything.
 
+> **⏸ PARKED FOR LATER (2026-11-04): YouTube publishing (§3.2) is fully scoped but not started.** Jonny's call: fix the Fountain upload and content-sync issues first, because YouTube rides the same Frame.io → upload → writeback path. The setup message for Guy is ready at `setup/YouTube API setup - Guy.md`. **Do not send it until Fountain is stable.** The full to-do list and the researched facts live in §3.2.
+
 Effort key: S = one short session · M = one focused session · L = multiple sessions.
 
 ---
@@ -312,13 +314,34 @@ Channels: { Pod feed, X, YouTube, Rumble, Keet, Instagram, Nostr }.
 - **Result:** full publishing oversight and assistant-reportable state BEFORE any publishing API is integrated; per-episode or permanent manual override is just row state.
 - **Acceptance test:** flip a test episode → 7 rows + checklist message; mark all Published → episode `Published`.
 
-#### 3.2 YouTube automation — 📋 L — biggest ROI
+#### 3.2 YouTube automation — 📋 L — biggest ROI (⏸ parked 2026-11-04, after the Fountain upload/sync fixes)
 
+**Status:** fully scoped 2026-11-02, deliberately deferred 2026-11-04. **Do not start, and do not send the Guy message, until the open Fountain upload and content-sync issues are fixed.** Publishing is one machine: YouTube rides the same Frame.io → download → upload → Airtable writeback path that Fountain already uses, so that path needs to be stable first. Setup message is written and waiting: `setup/YouTube API setup - Guy.md` (includes a screenshare offer for the final "Allow" click).
+
+**To-do, in order:**
+- [ ] **Clear the dependency:** Fountain upload, content sync and reconciler stable, no open P1 issues.
+- [ ] **Ask Guy the one question:** Workspace (Internal) or personal Gmail (External)? Then send `setup/YouTube API setup - Guy.md` (ready, not sent).
+- [ ] **Guy does the Google Cloud steps** (or a screenshare): create project, enable YouTube Data API v3, consent screen, OAuth client with redirect `https://vmi3181229.contaboserver.net/rest/oauth2-credential/callback`. He sends back the client ID and secret.
+- [ ] **Guy publishes the app** (or uses Internal user type), so the refresh token does not die after 7 days.
+- [ ] **Create the n8n credential** `YouTube OAuth2 API` with custom scopes limited to `youtube.upload` + `youtube`; Guy clicks Allow on the call.
+- [ ] **Prove auth:** YouTube node, Video → Get on one existing video. Then one manual unlisted upload.
+- [ ] **Build `BA - Subworkflow - Upload Video to YouTube`** modelled on `XY4WfJ2XaBA9bPKY`: resumable session, chunked shell/Node uploader in `Execute Command`, thumbnail via HTTP Request, return the video id.
+- [ ] **Add the `YouTube` adapter to the publication fan-out and content sync** (Switch output plus writeback of `URL`, `Published At`, `Status=Published`).
+- [ ] **Acceptance test:** unlisted end-to-end with thumbnail and chapters, then schedule one real episode with `publishAt`.
+
+**Scoped facts (2026-11-02 research, so the next session does not re-derive them):**
+
+- **Ownership:** the channel's Google account belongs to Guy; Jonny is a channel manager, not the owner. Only Guy can create the Cloud project, and the final n8n "Connect my account" step needs his live Google session. Plan: he does the console steps (or shares his screen), then a 10-minute call for the last click.
 - Trigger: Airtable view (`Publications: Status=Ready, Channel=YouTube`).
-- Flow: fetch Episode (title = approved `Title`, description + chapters text, selected Thumbnail 16:9 URL, `Frame.io URL`) → **Frame.io original** download (Show File `media_links.original`, constraint 16) → YouTube **resumable upload** (Google OAuth cred; the native YouTube node or raw HTTP) → set thumbnail via API → write `URL` + `Published At` + `Status=Published` on the row.
-- **⚠️ Prerequisite:** set `N8N_DEFAULT_BINARY_DATA_MODE=filesystem` on the instance BEFORE piping multi-GB video through n8n, or the process OOMs. If files outgrow even that, fall back to a small helper script on the VPS (download→upload server-side) that n8n calls over localhost.
-- YouTube API quota: uploads cost 1600 units of the 10k/day default; fine at this volume.
-- **Acceptance test:** publish an unlisted test video end-to-end; verify thumbnail + chapters render.
+- Flow: fetch Episode (title = approved `Title`, description + chapters text, selected Thumbnail 16:9 URL, `Frame.io URL`) → **Frame.io original** download (Show File `media_links.original`, constraint 16) → YouTube **resumable upload** → set thumbnail via API → write `URL` + `Published At` + `Status=Published` on the row.
+- **Quota (corrected 2026-11-02):** free, and uploads now have their **own bucket of 100 calls/day at 1 unit each**. Everything else shares 10,000 units/day (`thumbnails.set` 50, `videos.update` 50, reads 1). No billing account and no paid tier. The old "1600 units of the 10k/day" figure was years out of date. Re-check `developers.google.com/youtube/data/determine_quota_cost` before building in case it moves again.
+- **No audit needed for public uploads:** the current `videos.insert` reference says uploads from unverified API projects are no longer restricted to private. The audit only matters if we ever need more than 100 uploads/day.
+- **OAuth trap:** an External consent screen left in **Testing** issues refresh tokens that expire after **7 days**, which silently kills the automation weekly. Publish the app, or use **Internal** if Guy's channel sits on Google Workspace. Settle this before creating the credential.
+- **Implementation:** do NOT use the native YouTube node for a ~5 GB master. It uploads resumably but in ~1 MB chunks (roughly 5,000 sequential PUTs for a 5 GB file) with no per-chunk retry, cannot set a thumbnail, and risks the execution timeout. Mirror `BA - Subworkflow - Upload Video to Fountain` (`XY4WfJ2XaBA9bPKY`): the sub-workflow opens the resumable session, an `Execute Command` node runs a small shell/Node downloader + chunked uploader (8 to 64 MB chunks, retries), then `thumbnails.set` goes through an HTTP Request node (2 MB image, fine in n8n). Long work gets its own execution clock.
+- **Metadata knobs:** `status.publishAt` with `privacyStatus=private` schedules the public release; `status.selfDeclaredMadeForKids=false`; `notifySubscribers=true` (n8n's node defaults it to **false**, so a show would go up silently); chapters are just timestamp lines in the description. Limits: title 100 chars, description 5,000, tags 500 total.
+- **Thumbnail prerequisites:** the channel must be phone-verified, image max **2 MB**, JPG or PNG (1280x720 recommended).
+- **Disk:** about 5 GB free in temp on the VPS if we download before uploading. The Fountain upload took ~80 minutes for 4.84 GB, so budget a similar window per episode.
+- **D5 note:** `N8N_DEFAULT_BINARY_DATA_MODE=filesystem` is only needed if video bytes pass through n8n nodes. The shell-uploader route avoids that, since only metadata and the thumbnail traverse n8n. Keep D5 for any native-node fallback.
 
 #### 3.3 X automation — 📋 M
 
@@ -358,8 +381,8 @@ Channels: { Pod feed, X, YouTube, Rumble, Keet, Instagram, Nostr }.
 | D1 | Podcast host (needs API: Transistor / Buzzsprout / Podbean / self-host?) | 3.4 | Chapters JSON + Summary already produced per episode |
 | D2 | X API tier (media upload needs paid Basic, ~$200/mo) | 3.3 | If no: X stays a Manual checklist row |
 | D3 | IG Business account + linked FB Page exist? | 3.5 | If no: Instagram stays Manual |
-| D4 | Google OAuth for YouTube upload (which Google account owns the channel) | 3.2 | One-time credential setup in n8n |
-| D5 | `N8N_DEFAULT_BINARY_DATA_MODE=filesystem` on the VPS | 3.2 | Env change + restart; do during a quiet window |
+| D4 | YouTube OAuth: **Guy owns the Google account** (Jonny is channel manager, not owner). Needs Guy for the Cloud project and the final "Allow" click. Ask him: Workspace (Internal) or personal Gmail (External)? | 3.2 | **Parked 2026-11-04** until the Fountain upload/sync fixes land. Instructions ready at `setup/YouTube API setup - Guy.md`, not sent |
+| D5 | `N8N_DEFAULT_BINARY_DATA_MODE=filesystem` on the VPS | 3.2 | Env change + restart; only needed if video bytes pass through n8n. The planned shell uploader avoids it |
 | D6 | VPS DB backup cron (needs shell access) | 0.7 | The only true disaster-recovery hole |
 | D7 | Scheduling: confirm "light" version (no placeholder episodes; `Record Date` stamped post-pick) | 2.3 | Recommended; reconcile in STATE-MACHINE.md |
 | D8 | Notification routing: OK to move Script Gen + Thumbnail messages from Jonny's DM to the group? | 0.7 | Recommended for Charlie's visibility + assistant reply anchors |
@@ -379,6 +402,19 @@ Channels: { Pod feed, X, YouTube, Rumble, Keet, Instagram, Nostr }.
 
 ## Change log
 
+- 2026-11-06 (guest intake) - **New workflow sends Guy a short AI brief for every guest intake submission (`HTzyHw7Kz8VE1CTw`, ACTIVE).** It reads the `Ready for Host Brief` view (`viw62a1wBDn39NzDe`) on `Guest Intake`, filters out rows with a `Host Brief Sent At` stamp, asks **Gemini 2.5 Flash via OpenRouter** (`google/gemini-2.5-flash`, `json_object`, 2,000 max tokens) for one headline plus 6-8 bullets, adds the guest's `Questions to Avoid` answer verbatim, and emails it through AgentMail (`pod21@agentmail.to`) to `guy@bitcoinaudible.com`. New fields `Host Brief Sent At` / `Host Brief Message ID` stop duplicates; a failed AI call or send leaves the row in the view for a retry. Tested on BA-X1UJTh: execution `14440` sent the live OpenRouter version at 21:05 UTC (327 completion tokens, zero reasoning tokens, 1,893 characters of text) and stamped the row. `versionId == activeVersionId`, credentials verified, `availableInMCP: true`. Readme: `n8n_workflow_readmes/BA - Guest Intake Submitted > Host Brief Emailed.md`. System Map re-synced.
+
+- 2026-11-04 (roadmap triage) - **YouTube publishing is parked as a to-do, not started, behind the Fountain upload and content-sync fixes.** The scoping did not change; only the sequencing did.
+  - §3.2 is now a nine-step checkbox list: clear the Fountain dependency, ask Guy the Workspace/Gmail question and send the setup message, Guy does the Cloud Console steps, Guy publishes the app, create the n8n credential, prove auth, build the upload sub-workflow, wire the YouTube adapter, run the acceptance test. The researched facts stay underneath so the next session does not re-derive them.
+  - A parked banner now sits at the top of Part 2, above the effort key, so a future session sees it before picking work. D4 says parked instead of waiting.
+  - `setup/YouTube API setup - Guy.md` stays **unsent**. Send it only once Fountain is stable.
+- 2026-11-02 (YouTube publishing research) - **Auto-publishing to YouTube is confirmed free and technically straightforward; the blocker is ownership, not money or API limits.** Guy owns the channel's Google account, so he must create the Cloud project and do the single "Allow" click. Nothing is built yet.
+  - **The instructions are written.** `setup/YouTube API setup - Guy.md` is a paste-ready message: what it is for, the 15-minute console path, the exact redirect URI, what to send back, the "unverified app" warning explained, an explicit "no password needed", and an offer to do it on a screenshare instead.
+  - **Quota corrected.** `videos.insert` now has its own bucket: **100 uploads/day at 1 unit each**, separate from the 10,000 units/day shared pool (`thumbnails.set` 50, `videos.update` 50, reads 1). No billing account, no paid tier. The "1600 units of the 10k/day" line in §3.2 was years out of date.
+  - **Audit myth retired.** Google's current `videos.insert` reference states that uploads from unverified API projects are not restricted to private, so public publishing needs no compliance audit at this volume.
+  - **OAuth trap found.** An External consent screen left in Testing issues refresh tokens that expire after 7 days, which would break uploads weekly with no warning. Publish the app, or use Internal if Guy's account is Workspace. This has to be decided before the credential is created.
+  - **Upload path decided on paper.** The native YouTube node is unsuitable for a 5 GB master (~1 MB chunks, no per-chunk retry, no thumbnail support, timeout risk). Plan is to clone the Fountain upload pattern (`XY4WfJ2XaBA9bPKY`): resumable session from n8n, shell/Node chunked uploader in `Execute Command`, `thumbnails.set` via HTTP Request. Consequence: D5 (filesystem binary mode) is not needed for the video route.
+  - **Open questions for the next session:** Guy's reply; Internal vs External; whether the channel is a Brand Account (it changes whose Google login must authorize). Unverified idea worth testing later: if it is a Brand Account and Guy adds Jonny as a channel manager, Jonny may be able to authorize with his own account and take Guy out of the loop.
 - 2026-10-29 (metadata split + fields fix) - **The AI metadata stage is now two workflows, and the Frame.io webhook no longer starts work.** Triggered by a Frame.io re-delivery that re-ran a whole episode: at 11:12 a fresh `file.ready` arrived for a file uploaded the previous afternoon and unchanged since (execution 9678, after 9404). The webhook cannot be made idempotent, so Airtable `Status` now decides.
   - **New `BA - Frame.io Uploaded > Episode Marked`** (`5ZMcCY8WPQ3bFji6`, ACTIVE): webhook → Show File → `_Skip` / non-media / missing-episode / `_Bypass` / over-2GB checks → write `Frame.io URL` → set `Ready for Metadata` only when the episode is at `Recorded` or `Edited`. One short Telegram line per upload, always with the episode ID and `⚙️ workflow · exec` footer.
   - **`BA - Frame.io Uploaded > AI Metadata` renamed to `BA - Ready for Metadata View Entered > AI Metadata`** (`jroXHciDvy0sWlRM`, ACTIVE, updated in place so the ID survives): Airtable trigger on view `viwNSD7pdOs2sKTgR`, flips to `Generating Metadata`, resolves the file id from the row's `Frame.io URL`, and no longer contains the webhook, `Find Episode`, `Name Ends _Skip?`, `Name Ends _Bypass?`, `File Over 2 GB?` or `Create Review Link`.
