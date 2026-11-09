@@ -85,6 +85,8 @@ a status.
 | `Episode` | link -> Episodes | Pre-filled by the form URL, hidden from the guest |
 | `Matched Guest` | link -> Guests | Written by the automation |
 | `Status` | single select: Submitted, New guest created, Linked to existing guest, Needs review | Written by the automation |
+| `Host Brief Sent At` | date/time | Written by the host brief email workflow, not the form |
+| `Host Brief Message ID` | single line text | Written by the host brief email workflow, not the form |
 | `Submitted At` | created time | Automatic |
 
 ---
@@ -94,7 +96,8 @@ a status.
 Built in Airtable's form designer on the `Guest Intake` table.
 
 - **Every listed field is on the form except the system fields.** Do not add `Matched
-  Guest`, `Status`, or `Submitted At`; the automation owns those.
+  Guest`, `Status`, or `Submitted At`; the automation owns those. Do not add `Host Brief
+  Sent At` or `Host Brief Message ID` either; the host brief email workflow owns those.
 - **`Episode` must be on the form even though it is hidden.** A field that is not on the
   form cannot be pre-filled by the URL, and then the submission would not be tied to an
   episode. The `hide_Episode=true` parameter keeps it out of the guest's view.
@@ -225,3 +228,5 @@ turned on is not processed.
   ahead, run `scripts/deploy/schema/pull-system-map.sh` first.
 - **Thumbnail Artwork** (`n8n_workflow_readmes/BA - Guy's Take Thumbnail Artwork.md`): the
   consumer of the `Guests` link; a `Chat` will not generate artwork until a guest is linked.
+- **Host brief email** (`n8n_workflow_readmes/BA - Guest Intake Submitted > Host Brief Emailed.md`):
+  the n8n workflow that emails the host the interview-prep answers from each submission.
