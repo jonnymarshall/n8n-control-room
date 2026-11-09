@@ -9,6 +9,9 @@
 // authorisation and merged PR #15, so the rule is now enforced in code as well.
 //
 // Ported from .claude/hooks/merge-guard.py so the same check runs under opencode.
+// Migrated to the OpenCode 2 plugin API on 2026-11-07: Plugin.define with an id and
+// a setup function, hooks registered through the tool domain, arguments read from
+// the hook event rather than a separate args object.
 //
 // Covers:
 //   - `gh pr merge`
@@ -22,11 +25,18 @@
 // Fail-open: malformed input or an unreadable git state allows the command. A
 // confirmed merge attempt is the only thing that blocks.
 
+import { Plugin } from "@opencode/plugin"
+
 let execSync = null
-try {
-  ;({ execSync } = await import("node:child_process"))
-} catch {
-  // Running without child_process (unusual): fall back to static matching only.
+
+async function loadExecSync() {
+  if (execSync) return execSync
+  try {
+    ;({ execSync } = await import("node:child_process"))
+  } catch {
+    // Running without child_process (unusual): fall back to static matching only.
+  }
+  return execSync
 }
 
 const MERGE_RULE =
@@ -117,14 +127,24 @@ function mergeAttempt(segment, branch) {
   return ""
 }
 
-export const MergeGuard = async () => {
-  return {
-    "tool.execute.before": async (input, output) => {
-      const tool = String(input.tool || "").toLowerCase()
-      if (tool !== "bash") return
+// OpenCode 2 names the shell tool `shell`; OpenCode 1 and Claude-style aliases
+// call it `bash`. Missing either name would leave the guard silently dead.
+const SHELL_TOOLS = new Set(["bash", "shell"])
 
-      const args = (output && output.args) || (input && input.args) || {}
-      const raw = args.command || ""
+function argsOf(input) {
+  return input && typeof input === "object" ? input : {}
+}
+
+export default Plugin.define({
+  id: "n8n-control-room.merge-guard",
+  async setup(ctx) {
+    await loadExecSync()
+
+    await ctx.tool.hook("execute.before", (event) => {
+      const tool = String(event.tool || "").toLowerCase()
+      if (!SHELL_TOOLS.has(tool)) return
+
+      const raw = argsOf(event.input).command || ""
       if (!raw) return
 
       const cmd = stripTextRegions(raw)
@@ -133,6 +153,6 @@ export const MergeGuard = async () => {
         const reason = mergeAttempt(segment, branch)
         if (reason) throw blocked(reason)
       }
-    },
-  }
-}
+    })
+  },
+})

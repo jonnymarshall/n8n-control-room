@@ -5,9 +5,13 @@
 // which is how a Read on .env slipped through under opencode (it was only
 // stopped by a manual permission prompt).
 //
+// Migrated to the OpenCode 2 plugin API on 2026-11-07. OpenCode 1 returned a
+// hooks object from the default export; OpenCode 2 wants Plugin.define with an
+// id and a setup function that registers each hook on its domain.
+//
 // Covers:
 //   - Read/Edit/Write (and their subagent aliases) on sensitive file paths.
-//   - Bash commands that reference sensitive files or dump the environment.
+//   - Shell commands that reference sensitive files or dump the environment.
 //
 // Behaviour matches the Python original: template dotenv files (.env.example
 // etc.) are exempt, heredoc bodies and commit/PR message commands are not
@@ -15,6 +19,8 @@
 // skipped, and malformed input fails OPEN (allows) so it never breaks
 // unrelated tool calls. A confirmed sensitive target is the only thing that
 // blocks.
+
+import { Plugin } from "@opencode/plugin"
 
 // Leading separator: start-of-string, path separator, or any non-identifier char.
 const SEP = "(?:^|[^A-Za-z0-9_])"
@@ -102,27 +108,37 @@ function blocked(reason) {
 // Claude-Code-style aliases subagents may expose.
 const FILE_TOOLS = new Set(["read", "edit", "write", "notebookedit", "multiedit"])
 
-export const BlockSecrets = async () => {
-  return {
-    "tool.execute.before": async (input, output) => {
-      const tool = String(input.tool || "").toLowerCase()
-      const args = (output && output.args) || {}
+// OpenCode 2 names the shell tool `shell`; OpenCode 1 and the Claude-style
+// aliases call it `bash`. Missing either name would leave command scanning
+// silently dead, so match the family.
+const SHELL_TOOLS = new Set(["bash", "shell"])
+
+function argsOf(input) {
+  return input && typeof input === "object" ? input : {}
+}
+
+export default Plugin.define({
+  id: "n8n-control-room.block-secrets",
+  async setup(ctx) {
+    await ctx.tool.hook("execute.before", (event) => {
+      const tool = String(event.tool || "").toLowerCase()
+      const args = argsOf(event.input)
 
       if (FILE_TOOLS.has(tool)) {
         const path = args.filePath || args.file_path || args.notebook_path || args.path || ""
         if (path && SECRET_RE.test(path)) {
-          throw blocked(`${input.tool} on sensitive path '${path}'`)
+          throw blocked(`${event.tool} on sensitive path '${path}'`)
         }
         return
       }
 
-      if (tool === "bash") {
+      if (SHELL_TOOLS.has(tool)) {
         const cmd = args.command || ""
         // Env-dump check runs against the raw command: dumping values is not
         // legitimate inside heredocs or commit messages either.
         if (ENV_DUMP_RE.test(cmd)) {
           throw blocked(
-            "bash command would print environment/shell variable values " +
+            "shell command would print environment/shell variable values " +
             "(printenv / env / set / export / declare -p); a secret could leak to stdout"
           )
         }
@@ -132,11 +148,9 @@ export const BlockSecrets = async () => {
         stripped = stripInertSegments(stripped)
         if (TEXT_ONLY_CMD_RE.test(stripped)) return
         if (SECRET_RE.test(stripped)) {
-          throw blocked(`bash command references a sensitive file: ${stripped.slice(0, 200)}`)
+          throw blocked(`shell command references a sensitive file: ${stripped.slice(0, 200)}`)
         }
       }
-    },
-  }
-}
-
-export default BlockSecrets
+    })
+  },
+})
