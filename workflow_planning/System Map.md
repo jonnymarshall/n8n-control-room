@@ -362,15 +362,22 @@ pipeline); a webhook cannot be made idempotent, but a `Status` can. On 2026-11-0
 which is why the webhook now also checks Frame.io's signature and ignores a file the row already has.
 
 **3a. `BA - Frame.io Uploaded > Episode Marked` (`5ZMcCY8WPQ3bFji6`)** — webhook, seconds, no AI.
-- **Fires:** a file becomes ready in the Frame.io project.
+- **Fires:** a file becomes ready in the Frame.io project. The project is also used for personal
+  files, so the first decision is always "does this filename name an episode?" — on 2026-11-10 about
+  156 personal images each sent a notice and throttled the Telegram group, which is why that check
+  now sits before everything else.
 - **Auth:** the request must carry a valid Frame.io HMAC signature and a timestamp under 10 minutes
   old. Anything else is blocked before Airtable is touched, and reported in Telegram.
 - **Does:** looks the file up, checks it, writes `Frame.io URL`, and sets `Status = Ready for Metadata`
   only when the episode is at `Recorded` or `Edited`.
+- **Only for named episodes:** the filename must start with a real `BA-` episode ID. Anything else
+  (personal files, screenshots, reference images in the same Frame.io project) stops silently: no
+  Airtable read, no write, no probing, no message. A name that starts `BA-` but whose ID cannot be read
+  gets one warning.
 - **Never queues:** an unsigned request, a file the row already has while it is past metadata
-  (silent no-op), images/PDFs, a filename with no usable `BA-` prefix, anything over 2 GB,
-  a name ending `_Skip` (silent) or `_Bypass` (link refresh only), or any other status.
-  In every one of those cases except the two silent ones it says so in one Telegram line.
+  (silent no-op), images/PDFs, a filename with no `BA-` ID (silent), a `BA-` name with no matching row
+  (warns), anything over 2 GB, a name ending `_Skip` (silent) or `_Bypass` (link refresh only), or any
+  other status. In every one of those cases except the silent ones it says so in one Telegram line.
 - Re-delivery of an old event is therefore harmless: the row has already left `Ready for Metadata`.
 
 **3b. `BA - Ready for Metadata View Entered > AI Metadata` (`jroXHciDvy0sWlRM`)** — the AI work.
@@ -644,6 +651,9 @@ this exactly.
 - **Fires:** whenever any workflow that names it as its error handler fails.
 - **Does:** posts the failure (workflow, node, error, execution link) to the group
   and logs it to an Ops Log table. No episode involvement.
+- **Quiet for noise:** a transient DNS blip on a poller, or a Telegram rate limit
+  (`Too Many Requests` / 429), is written to the Ops Log only. Alerting about a
+  throttled group would only add messages to the throttled group.
 
 ### 8. Public API (client access, not a pipeline stage)
 - **What it is:** a token-authenticated, **read-only** webhook (`POST /webhook/api`) that lets an external client read the Episodes table only. It never writes and cannot reach another table. It is not part of the production pipeline; it exists so a third party can read episode data without ever seeing our credentials.
