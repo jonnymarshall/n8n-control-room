@@ -56,7 +56,7 @@ A request that is not signed by Frame.io (or whose timestamp is more than 10 min
 |---|---|---|
 | `Adobe OAuth` | `oAuth2Api` | `Show File` |
 | `Airtable [n8n] (PAT)` | `airtableTokenApi` | `Find Episode`, `Record Video Quality`, the three Airtable update nodes |
-| `Telegram [pod21_n8n_agent_bot]` | `telegramApi` | all six Telegram nodes |
+| `Telegram [pod21_n8n_agent_bot]` | `telegramApi` | all seven Telegram nodes |
 | `Frame.io Webhook Signing Secret` | `crypto` | `Sign Webhook Body` |
 
 The `crypto` credential holds the Frame.io webhook secret in n8n's encrypted store. It is deliberately **not** in the workflow JSON or the SDK snapshot, so it never reaches git. The same value sits in `.env` as `FRAME_IO_SECREY_KEY` (gitignored) for the test scripts.
