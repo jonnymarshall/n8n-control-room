@@ -34,6 +34,18 @@ Before changing any `.sdk.js` file, pull the live workflow (`get_workflow_detail
 
 - **Address Airtable records by their `BA-` ID, never the internal `rec…` ID.** The `BA-` ID is the Episodes `ID` field (e.g. `BA-0CH3H6`); for a Publication, use its `Publication` name (`<BA-…> - <Platform>`). Internal record IDs mean nothing to him and must never be used in chat.
 
+## Talking to Charlie (after every PR)
+
+Jonny forwards a plain-English update to Charlie after every PR. **Write that update every time a PR is opened or updated, without being asked.**
+
+- **Audience.** Charlie works in Airtable and talks to the Telegram agent every day. He does not read code, n8n, git, or GitHub, and should not have to.
+- **Depth limit.** The deepest technical thing to mention is an Airtable view, field, or status name. Never mention workflow IDs, node names, commits, branches, files, credentials, APIs, or SDKs.
+- **Structure.** Three short sections, in this order: **What changed**, **What this fixes**, **Things to know**. Plain sentences, no jargon, no emoji, no tables.
+- **Only what he can see or feel.** Bot messages, Airtable views and fields, timing, and anything he must do differently. Skip everything else.
+- **Say it plainly when nothing changes for him**, e.g. "Nothing you need to do."
+- **Length.** Under about 250 words.
+- **Format.** Give it in chat as a copy-ready block, not as a file. Jonny pastes it straight into his message to Charlie.
+
 ## Guardrails under opencode
 
 The `.claude/hooks/` Python hooks only run inside Claude Code. Under opencode:
