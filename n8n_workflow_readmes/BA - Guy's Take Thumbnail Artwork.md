@@ -1,5 +1,7 @@
 # BA: Guy's Take Thumbnail Artwork
 
+> **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published `f8a3f601`).** Status emoji first, blank-line blocks, BA- codes only. Also fixed two real defects found while restyling: `Send a text message` carried a double `==` so its "extra picks" warning printed a stray `=` first, and `Check Extra Picks`, `Notify Manual` and `Warn No 16x9 Source` were printing internal `rec...` row ids instead of the human code. Album captions now read `1 · Neutral · BA-DCvtat`; `Resolve Selected` emits `rowName` so the reversion warning can name the option. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
+
 > **Find this workflow in n8n by name.** Workflow IDs change whenever a workflow is rebuilt from code, so the name is the stable identifier. (Current ID: `mLAn4ya2AmZoHDUk`. The previous hand-built copy `YyXiJ0lusoW7ynu9` is **archived**.)
 
 > **2026-10-30 - the caption area is now a measured, fixed TOP band (LIVE, prompts + one code node; NOT yet re-run end-to-end).** The first 4 x 16:9 delivery of a Duo episode came back with all four options filling the frame edge to edge: no clean area anywhere for the caption, on an image Jonny otherwise loved. Two causes, both fixed:
