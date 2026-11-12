@@ -64,6 +64,24 @@ The Final Cut · <code>{{ $('Build Outputs').first().json.episodeId }}</code>
 
 ---
 
+## RULE: Telegram messages follow the house style in `TELEGRAM-STYLE.md`
+
+Every message a workflow sends must be scannable on a phone: one status emoji at
+the start (✅ done, 🟡 act now, ⏳ waiting, 🔄 running, ⏭️ skipped, ♻️ unchanged,
+⚠️ needs a look, ❌ failed), one idea per block with a blank line between blocks,
+three to six lines, no markdown, no closing pleasantries, and no internal `rec...`
+ids in the visible text. Machine data (`⟦…⟧` payloads and anything else a workflow parses) goes
+below a 14-character `─` rule under the label `🤖 system data · tap to reveal`,
+wrapped in a Telegram spoiler.
+
+This is not only cosmetic. On 2026-11-12 a `BA-DCvtat` approval opened with
+"✅ Done." and the instruction to send step 2 was skimmed past, so an hour was
+lost waiting for a regeneration that had never been started. See
+`TELEGRAM-STYLE.md` for the full rule, the approval/done body shape, and the
+per-workflow migration status.
+
+---
+
 ## RULE: Test and dry-run messages go to Jonny's DM, never the team group
 
 **The pod21 group (`-5254203539`) is for real events only.** When you need to prove a

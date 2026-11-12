@@ -1,5 +1,7 @@
 # BA - Schedule Every 15m > Publication Content Synced
 
+> **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published).** Status emoji first, blank-line blocks, BA- codes only, no `rec...` ids, machine payloads behind a spoiler. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
+
 > **Find this workflow in n8n by name.** Workflow IDs can change when a workflow is rebuilt. ID at time of writing: `WMZ0Zpin1Stn9uF1`.
 
 Local SDK source: `scripts/deploy/workflows/guys-take-fountain-content-sync.sdk.js` (generated from the live workflow 2026-09-30).

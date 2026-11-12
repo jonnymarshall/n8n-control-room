@@ -1,5 +1,7 @@
 # BA - Ready for Metadata View Entered > AI Metadata
 
+> **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published).** The packaging message now leads with 🟡 (it asks for a reply) instead of 🎬, and the metadata caption, same-cut, skipped and Audionauts notices use the house shape. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
+
 > **Find this workflow in n8n by name.** Workflow IDs change when a workflow is rebuilt from code, so the name is the stable identifier. (ID at time of writing: `jroXHciDvy0sWlRM`.) Renamed 2026-10-29 from `BA - Frame.io Uploaded > AI Metadata`, when the Frame.io webhook half moved out to its own workflow.
 
 This is **stages #6 + #7** of the Guy's Take build: transcription (#6) and AI metadata (#7). It is triggered by an episode entering the **`Ready for Metadata` view**, not by Frame.io.

@@ -1,5 +1,7 @@
 # Pod21: Workflow Failed > Telegram Alert
 
+> **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published).** Status emoji first, blank-line blocks, BA- codes only, no `rec...` ids, machine payloads behind a spoiler. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
+
 > **Find this workflow in n8n by name.** Workflow IDs change whenever a workflow is rebuilt from code, so the name is the stable identifier. (ID at time of writing: `9PMI1kuBjLW2YHwb`.)
 > Built 2026-07-06 as `Ops - Workflow Failed > Telegram Alert`; renamed by Jonny to the `Pod21:` prefix the same day (infra workflows use `Pod21:`, not a separate `Ops` prefix). Ops Log append added 2026-07-06. Phase 0.1 + first half of 0.2 of the Content Machine roadmap (`workflow_planning/Guys Take Build Status.md`).
 > **2026-09-30, transient-DNS filter.** Added the `Is Alertable?` If node. Trigger-level transient DNS failures (the `EAI_AGAIN` blips from the Airtable pollers) are now logged to the Ops Log but **not** sent to Telegram. Real failures still alert.

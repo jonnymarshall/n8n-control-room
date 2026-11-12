@@ -1,5 +1,7 @@
 # BA - Frame.io Uploaded > Episode Marked
 
+> **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published).** Six notices now lead with one status emoji and use blank-line blocks; the "too large" alert became ❌ with an explicit 🟡 next step. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
+
 > **Find this workflow in n8n by name.** Workflow IDs change whenever a workflow is rebuilt from code, so the name is the stable identifier. (ID at time of writing: `5ZMcCY8WPQ3bFji6`.) Created 2026-10-29 when the AI metadata stage was split in two.
 
 This is the **cheap front half** of stage 5+6+7. It owns the Frame.io webhook, does every check that can be made without the media file, records the Frame.io link on the episode, and decides whether the episode should be queued for AI metadata.

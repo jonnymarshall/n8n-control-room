@@ -1,5 +1,7 @@
 # AgentMail Received > Episode Scheduling
 
+> **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published).** Canceled ✅, poll sent ⏳, scheduled ✅, and the three status-guard notices now end with a 🟡 action line. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
+
 > **Find this workflow in n8n by name.** Workflow IDs change when a workflow is rebuilt, so the name is the stable identifier. (ID at time of writing: `DFkl8armVlXqBWWD`.)
 > Built 2026-09-29. Active.
 
