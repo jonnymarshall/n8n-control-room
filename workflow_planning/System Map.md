@@ -28,7 +28,13 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-06 (stage 9 now emails the host a short AI-written guest brief built
+*Last updated 2026-11-12 (stage 4b is now documented: `BA - Publish Readiness View Entered >
+Telegram Checklist` (`RATBwwfOlRDPDHeN`) posts the "Ready to publish?" checklist from the
+`Publish Readiness Nudge` view. Its 2026-11-12 fix makes it go quiet once an episode is at or
+past `Ready to Publish`: the view now excludes those statuses and the Code node repeats the
+same list. Before that, every scheduler and publisher status write re-sent the checklist,
+including one 36 seconds after the "Fountain episode published" message).
+Previously 2026-11-06 (stage 9 now emails the host a short AI-written guest brief built
 from the intake answers: the new `BA - Guest Intake Submitted > Host Brief Emailed` workflow
 runs every five minutes, sends each new submission to Guy through AgentMail with a Gemini
 2.5 Flash summary via **OpenRouter**, and stamps `Host Brief Sent At` / `Host Brief Message
@@ -195,7 +201,8 @@ Episode:  Script Ready
 6. **Set the episode to `Ready to Publish`** once the artwork is picked and the `Release
    Date` is right. Nothing promotes `Artwork Ready` to `Ready to Publish` on its own — that
    one status flip is the "publish it" instruction, and it starts the Fountain upload. See
-   stage 5 for the recipe.
+   stage 5 for the recipe. Stage 4b posts a "Ready to publish?" checklist once the metadata
+   and artwork are in place; it stops once the row is handed over.
 
 If a booking is cancelled, optionally reply `suspend this episode` to the cancellation
 notice to set the episode to `Suspended`.
@@ -542,6 +549,29 @@ Three paths in one workflow.
   and targets). No forced cascade: it changes only what was named; revising the
   `16x9` alone leaves the 1:1/9:16 as they were (with a heads-up note).
 - **Next:** publishing, or another revision.
+
+### 4b. Publish Readiness Nudge
+- **Workflow:** `BA - Publish Readiness View Entered > Telegram Checklist`
+  (`RATBwwfOlRDPDHeN`), **ACTIVE**.
+- **Fires:** once a minute, on any change to an episode sitting in the `Publish Readiness Nudge`
+  view (`viwcMtlZm687luVei`). It is a `Last Modified Time` poller, not a true "entered the
+  view" trigger, so a later write to the same row re-fires it.
+- **Preconditions checklist (Episode) - this IS the view filter, spelled out:**
+  - [ ] The row is in `viwcMtlZm687luVei`.
+  - [ ] `Status` is **none of** `Ready to Publish`, `Publishing`, `Scheduled to Publish`,
+        `Publishing Failed`, `Partially Published`, `Published`, `Suspended` (added
+        2026-11-12; it must sit in an AND group, or the exclusion does nothing).
+  - [ ] Any other conditions the view already carried still hold. Read them in the Airtable UI:
+        the API cannot return view filters.
+- **Does:** posts a Telegram checklist of what the publisher needs (Title, Summary, Chapters,
+  thumbnail caption, 1:1 artwork, video, release date) and repeats that the `Ready to Publish`
+  flip stays manual. It changes nothing.
+- **Quiet once handed over, in two layers:** since 2026-11-12 the view excludes the seven
+  statuses above, and `Build Checklist` repeats the same list in code so a filter edit cannot
+  bring the noise back. Without either layer the scheduler's and publisher's own status writes
+  re-sent the checklist, in one case 36 seconds after the "Fountain episode published"
+  message. A new "done" status must be added in both places.
+- **Next:** a human sets `Status = Ready to Publish` (stage 5).
 
 ### 5. Publishing (Fountain)
 - **Was:** `Airtable - View to Published` (`7O9z3UwcUOkHjAC2`) polled the ready view
