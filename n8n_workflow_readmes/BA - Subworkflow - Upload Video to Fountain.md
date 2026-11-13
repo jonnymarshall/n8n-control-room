@@ -35,9 +35,9 @@ Input → Resolve Frame.io Media → Probe Frame.io Video → Validate Video
                             └─ not ready → back to Wait for Fountain Video
 ```
 
-1. **Resolve Frame.io Media** — `GET /v4/accounts/{acct}/files/{id}?include=media_links.efficient,media_links.original` with `Adobe OAuth`. The id is parsed from `videoUrl`, so the caller never has to know Frame.io's object ids.
-2. **Probe Frame.io Video** — `HEAD` on the signed download URL, full response, to learn the true byte length and MIME type. `original` is preferred over `efficient`: the proxy is smaller but the master is what Fountain should hold.
-3. **Validate Video** — rejects a missing `Content-Length`, a MIME type outside `video/mp4` / `video/quicktime` / `video/webm`, and anything over Fountain's 20 GB limit. Fails loudly with the reason.
+1. **Resolve Frame.io Media** — `GET /v4/accounts/{acct}/files/{id}?include=media_links.efficient,media_links.original,media_links.high_quality` with `Adobe OAuth`. The id is parsed from `videoUrl`, so the caller never has to know Frame.io's object ids.
+2. **Probe Renditions** — one 1 MB `Range` request per copy for the true total (`Content-Range`), MIME type, and width/height from the `moov`/`tkhd` atom. Do not use `HEAD` here: the `stream-download.frame.io` copies answer `HEAD` with 18 bytes of `text/plain` and only report the real size to a `Range` GET.
+3. **Choose Source** — the smallest copy at 1920x1080, else the smallest at 1280x720, else it throws with everything it measured. Since 2026-11-04 the master is not uploaded when a 1080p copy exists, and nothing measured below 720p is ever uploaded. `Note Upload Started` then writes the choice (rendition, resolution, size) into `Publications.Notes`.
 4. **Start Fountain Video Upload** — `POST /v1/uploads` (`kind: ITEM_VIDEO`, `access: DEFAULT`).
 5. **Build Video Part Jobs** — one item per multipart URL. Each carries a shell command that fetches that byte range from Frame.io and `PUT`s it to Fountain, with 20 attempts and exponential backoff. This node is copied verbatim from the publisher, which is the tested implementation.
 6. **Upload Fountain Video Parts** — `Execute Command`, one process per part. Runs on the n8n host, so it needs `node` on PATH and outbound access to both Frame.io and Fountain.
