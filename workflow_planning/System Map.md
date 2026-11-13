@@ -512,17 +512,19 @@ Three paths in one workflow.
   a detailed `Custom Image Prompt` overrode them, which flattened all four options into the
   same picture (`BA-C8Uwej`). They preserve subject count and do not control colour; they
   were first added 2026-09-09 after a one-mood run returned duplicate options. Since
-  2026-11-13 they state the framing as a **camera position** ("the top of the highest head
-  about a third of the way down the frame"), never as space reserved off the top edge.
-- **Every 16:9 option keeps open headroom above the heads for the caption.** Say where the
-  heads sit, not where a reserved area ends: the prompts ask for the heads in the **lower
-  two thirds of the frame** with the set carrying on above them at the same focus, light
-  and level of detail. The 1:1, 9:16 and revision prompts carry the same rule, and it
-  applies to reruns. **Never describe the space as a measured band** (a percentage of the
-  height, "across the full width", "low detail / no texture", or a list of shapes to
-  avoid): 2026-10-30 did exactly that and every option came back with a flat bar and a hard
-  seam across the top, because that wording describes a letterbox. If a thumbnail comes
-  back with a seam, the `Prompts` rows are the place to look, not the workflow.
+  2026-11-13 they describe **shot size and angle only**. Do not put a framing measurement
+  in them ("head a third down", "top quarter reserved"): the model satisfies it by drawing
+  a bar, smearing a strip, duplicating a panel, or cropping the chin.
+- **Nothing in the frame is reserved for the caption, on purpose.** The 2026-10-30 attempt
+  to reserve the top quarter produced, across four rounds: a flat bar with a hard seam, a
+  smeared strip, a two-panel duplicate, an empty room replacing the art direction, a
+  chin-cropped close-up, clutter, and cold grades. The image model cannot be asked to
+  leave space without damaging the picture, so the prompts now require only that the whole
+  head and chin stay inside the frame and that the set fills it into the corners. Expect
+  roughly 4-15% of air above the head. Captions are typeset over the image (with a scrim)
+  or added as a band in Photoshop; see the thumbnail readme's "Caption space". **If a
+  thumbnail comes back with a bar or a seam, check the `Prompts` rows for a reintroduced
+  reserved-space instruction before looking at the workflow.**
 - **Diagnosing "it ignored my moods":** the `Resolve Vibes` node emits a `moodSource`
   field on every run. `picked` means his chosen moods were used; `default-neutral`
   means the field was empty or nothing matched and `Neutral` was used for all four

@@ -1,6 +1,20 @@
 # BA: Guy's Take Thumbnail Artwork
 
-> **2026-11-13 - the caption band is gone: headroom is now a camera position, not reserved space (LIVE, published `63797196`, 26 test generations).** Jonny reported a hard, flat, full-width block across the top of the picture with a razor-straight line under it: two of the four Takes options on his latest run, one of four on a Roundtable, and four of four on the Roundtable run before that.
+> **2026-11-13 (later) - the caption band is out of the prompts again, because it was making every image worse (LIVE, published `78fb4864`, 10 test generations).** The run that evening for `BA-HRwIMb` came back with the block back on option 1, option 2 a chin-cropped head in an empty room, option 3 with a TV duplicated three times and a cluttered top, and option 4 cold and dull. All four were the headroom wording added earlier the same day, not the model drifting:
+> - **"a bare wall, a dark corner, the ceiling of a quiet room"** gave the model permission to replace the art direction with a plainer set. Option 2 is exactly that: an empty room.
+> - **"the head sits in the lower two thirds of the frame"** and a close-up cannot both be true. To put the head low and keep the face large, the chin goes off the bottom edge (option 2).
+> - **"quiet and uncluttered from side to side"** is a treatment instruction, and it is what produced the flat block on option 1 and the cold, aged look on 3 and 4.
+> - the quarter target was met on option 3 only by filling the top with props, so the space is cluttered rather than clean.
+>
+> **The honest conclusion: this image model cannot be asked to reserve space.** Across four rounds and roughly 40 generations, every explicit headroom target was either ignored or satisfied by drawing a bar, a smeared strip, a duplicated panel, a simplified set, a cropped chin, or clutter. No wording fixed it without damaging the picture.
+>
+> **What the prompts say now:** no headroom block anywhere. The layout rows require his **whole head and chin inside the picture** and the **set filling the frame into the corners**; the shot lines give size and angle only; `HOUSE STYLE` gained an explicit cold/desaturated guard; `ONE REAL PHOTOGRAPH` gained "build the set once, every object appears exactly once"; the Read shot lines lost their head-position sentences. All nine `Prompts` rows rewritten, `Build Image Requests` patched (`SAFE_ZONE` / `READ_SAFE_ZONE` are now plain framing restatements), published `78fb4864`, active with `availableInMCP: true`, credentials untouched, snapshot refreshed.
+>
+> **Cost, stated plainly:** the 16:9 options now come back with roughly 4-15% of air above the head instead of a reserved quarter. Captions have to be typeset over the image with a scrim, or Jonny adds the band himself in Photoshop. This deliberately reverses the 2026-10-30 decision; see "Caption space" below.
+>
+> **Verified:** 10 generations across solo and roundtable, using the two real episodes' own art direction. No seam, no bar, no duplicated props, no empty room, no chin crop, no cold grade.
+
+> **2026-11-13 - the caption band is gone: headroom is now a camera position, not reserved space (LIVE, published `63797196`, 26 test generations).** *(Superseded later the same day: the camera-position wording still produced a bar, an empty room, a cropped chin and cold grades on a real run. See the note above.)* Jonny reported a hard, flat, full-width block across the top of the picture with a razor-straight line under it: two of the four Takes options on his latest run, one of four on a Roundtable, and four of four on the Roundtable run before that.
 >
 > **It was the 2026-10-30 fix working exactly as written.** That block asked for "the top 25% of the image height, across the full width, as clean background", told the model to "divide the frame into four equal horizontal strips", required the top strip to be "smooth, low detail and low contrast, with no busy texture and no bright edges", and put the subject "clearly below that line". Those are the properties of a letterbox bar. Anything exactly 25% tall, full width, flat, textureless and bounded by a straight line *is* one, so the model drew one and squeezed the scene underneath. The list of shapes not to draw ("no letterbox bars, black bands, strips, banners, boxes, panels, empty rectangles") made it worse by naming them, and the same block was sent twice - once by the Airtable template, once by the `SAFE_ZONE` constant at the very front of the prompt, where instructions bite hardest.
 >
@@ -258,9 +272,9 @@ Two decisions that used to be made by code are now made by Jonny, in his reply t
 
 ### Stripped-back prompt templates (paste into the `Prompts` table)
 
-> **2026-10-07 - one-scene, framing and no-words rules added (LIVE).** Real runs showed the people being pasted into the frame as flat, cropped head cut-outs with mismatched lighting, and one episode (BA-5XpVHJ) rendered the headline because its own `Custom Image Prompt` explicitly asked for text, which the old `ART DIRECTION wins` wording honoured. All three layout prompts now carry three NON-NEGOTIABLE blocks: `ONE REAL PHOTOGRAPH` (everyone in one believable photograph, shared camera / perspective / lighting, natural shadow and scale, no pasting or cut-out edges, no rigid evenly spaced row), `PEOPLE AND FRAMING` (head to upper chest minimum, never crop a head or chop a chin, similar scale, no passport stares), and `NO RENDERED WORDS` (no words / letters / numbers / captions / watermarks, even if `ART DIRECTION` asks; brand logos still allowed only when `ART DIRECTION` asks). All three now also carry `HEADROOM FOR THE HEADLINE` (2026-10-30, replacing the old `MANUAL HEADLINE AREA` block; reworded 2026-11-13 so it describes a camera position rather than a reserved band). The final line of each layout prompt states these four blocks override any contradicting `ART DIRECTION`. The three layout templates below are the live text copied verbatim from Airtable, so they can be pasted straight back; edit the `Prompts` rows to change them.
+> **2026-10-07 - one-scene, framing and no-words rules added (LIVE).** Real runs showed the people being pasted into the frame as flat, cropped head cut-outs with mismatched lighting, and one episode (BA-5XpVHJ) rendered the headline because its own `Custom Image Prompt` explicitly asked for text, which the old `ART DIRECTION wins` wording honoured. All three layout prompts now carry three NON-NEGOTIABLE blocks: `ONE REAL PHOTOGRAPH` (everyone in one believable photograph, shared camera / perspective / lighting, natural shadow and scale, no pasting or cut-out edges, no rigid evenly spaced row), `PEOPLE AND FRAMING` (head to upper chest minimum, never crop a head or chop a chin, similar scale, no passport stares), and `NO RENDERED WORDS` (no words / letters / numbers / captions / watermarks, even if `ART DIRECTION` asks; brand logos still allowed only when `ART DIRECTION` asks). All three now also carry a headline block: `MANUAL HEADLINE AREA`, then `HEADLINE SAFE ZONE` (2026-10-30), then `HEADROOM FOR THE HEADLINE` (2026-11-13), and **since 2026-11-13 evening none of them is present at all** - the reserved-space instruction itself caused the artifacts. See the top note and "Caption space" below. The final line of each layout prompt states the surviving blocks override any contradicting `ART DIRECTION`. The three layout templates below are the live text copied verbatim from Airtable, so they can be pasted straight back; edit the `Prompts` rows to change them.
 
-> **Current live prompt contract, updated 2026-11-13.** The full prompt text lives in Airtable (`Prompts` table, `Prompt` field) and is read at runtime. The key rules now are: natural cinematic colour first, with red / amber / orange only as small accents; and **headroom described as a camera position, never as a region measured off the frame edge**. Say where the heads sit ("in the lower two thirds of the frame") and that the set carries on above them "at the same focus, light and level of detail". Do **not** reintroduce any of: a reserved area, a percentage of the frame height, "across the full width", "divide the frame into strips", "low detail / no texture / smooth", or a list of shapes to avoid (bar, band, strip, panel, letterbox, banner, box). Every one of those pushes the model to paint a flat block with a straight edge, which is the bug this replaced. Do not reintroduce `warm amber and burnt orange` as the default whole-image palette either.
+> **Current live prompt contract, updated 2026-11-13 (evening).** The full prompt text lives in Airtable (`Prompts` table, `Prompt` field) and is read at runtime. The key rules now are: natural cinematic colour, with red / amber / orange only as small accents **and an explicit guard against the cold, blue-grey, drained look**; the whole head and chin always inside the frame; the set filling the frame into the corners; and **no instruction anywhere that asks the model to reserve, clear or quieten part of the frame**. Do not reintroduce any of: a reserved area, a percentage of the frame height, "across the full width", "divide the frame into strips", "low detail / no texture / smooth", "quiet and uncluttered", "a plain wall / dark corner", or a list of shapes to avoid (bar, band, strip, panel, letterbox). Every one of those has now produced a visible artifact on a real run. Do not reintroduce `warm amber and burnt orange` as the default whole-image palette either.
 
 > **Logo exception.** The layout prompts no longer ban every logo. They ban random text, captions, watermarks, letters, numbers, and symbols, but allow brand logos when `ART DIRECTION` explicitly asks for them. This matters for episodes that deliberately reference projects such as Coldcard, Blockstream, Ledger, or Trezor.
 
@@ -279,27 +293,16 @@ SUBJECT
 Image 1 is a likeness reference only: take his face, hair, beard, skin tone and colouring from it and nothing else. Do not copy its framing, crop, zoom, camera angle, pose, background or lighting - the shot described here decides all of those. His facial expression should read as: {{VIBE}}.
 
 ONE REAL PHOTOGRAPH (NON-NEGOTIABLE)
-Build a single, believable photograph, as if the host is physically present in the scene. The lighting direction, colour temperature, perspective and focus on him must match the surroundings, and he must cast natural shadow and sit at a believable scale within the scene. Do not paste, cut out or superimpose him. No cut-out edges, hard outlines or halos around the head, hair or clothing. This is one exposure of one place: never two photographs, two versions of the scene, or two joined halves.
+Build a single, believable photograph, as if the host is physically present in the scene. The lighting direction, colour temperature, perspective and focus on him must match the surroundings, and he must cast natural shadow and sit at a believable scale within the scene. Do not paste, cut out or superimpose him. No cut-out edges, hard outlines or halos around the head, hair or clothing. This is one exposure of one place: never two photographs, two versions of the scene, or two joined halves. Build the set once: every object appears exactly once, and no screen, TV, sign, prop or shelf is duplicated, repeated, mirrored or cloned.
 
 PEOPLE AND FRAMING
-Show the host at least from the top of the head to the upper chest. Never crop the top of the head and never cut the face off at the chin or neck. Avoid a stiff passport-style stare; let him look naturally, toward the camera or at the scene, with an expression that fits {{VIBE}}.
+Show the host from the top of the head to at least the upper chest, and keep his whole head and chin inside the picture: never crop the top of his head and never cut his face off at the chin or neck. The set fills the frame behind him, right into the corners, the way a photographed room does. Avoid a stiff passport-style stare; let him look naturally, toward the camera or at the scene, with an expression that fits {{VIBE}}.
 
 HOUSE STYLE
-Create a polished cinematic editorial image with natural, professionally graded colour. Use a dark, realistic background, but keep the overall palette neutral and believable. Red, amber, and orange may appear only as small warning lights, UI alerts, or local accents. Do not let them tint the whole image. Avoid sepia, orange wash, heavy warmth, or posterized colour.
+Create a polished cinematic editorial image with natural, professionally graded colour. Use a dark, realistic background, but keep the overall palette neutral and believable. Red, amber, and orange may appear only as small warning lights, UI alerts, or local accents. Do not let them tint the whole image. Avoid sepia, orange wash and posterized colour. Do not go to the opposite extreme either: the picture must not look cold, blue-grey, steel-toned, drained, faded or aged. Aim for rich, natural, believable colour with realistic warm skin tones.
 
 COLOUR - NON-NEGOTIABLE
 Render the host in full, natural colour: lifelike skin tones, and the true colour of his hair, beard, eyes and clothing exactly as they appear in the reference photo. NEVER render a person greyscale, monochrome, sepia, duotone, desaturated, or as a flat colour-tinted cutout, and never drain the colour out of a face to help it blend into the background. Background and graphic elements MAY be stylised, muted or monochrome where the design calls for it - the person must not be. If the composition needs contrast or drama, take it from the background, lighting or the headline, never by desaturating the subject.
-
-HEADROOM FOR THE HEADLINE (NON-NEGOTIABLE)
-A headline is typeset across the top of this picture afterwards, so compose the shot with real headroom: the head sits in the lower two thirds of the frame and the set carries on above him, quiet and uncluttered from side to side.
-
-Everything in the picture is the same photograph: the same focus, the same light, the same level of detail from top to bottom. Nothing different happens above his head - it is simply the room, the street or the ceiling continuing to the top edge of the frame.
-
-Give the headline its room with the camera, in a set that is already plain above head height: a bare wall, a dark corner, the open air of a street, the ceiling of a quiet room.
-
-Frame wider and tilt the camera up; if the shot feels tight, make it wider still. Never shrink him, because the face stays large and readable.
-
-Final check: above his head there is nothing but the scene continuing to the very top edge of the frame, and no straight line across the picture where it changes character.
 
 NO RENDERED WORDS (NON-NEGOTIABLE)
 Do not render any words, letters, numbers, captions, subtitles or watermarks anywhere in the image. If the ART DIRECTION below asks for text, ignore that part. Brand logos are allowed only if the ART DIRECTION explicitly asks for one.
@@ -310,7 +313,7 @@ EPISODE CONTEXT (for tone only - do not render any of this as text)
 ART DIRECTION
 {{CUSTOM}}
 
-Output a single 16:9 image. The ONE REAL PHOTOGRAPH, PEOPLE AND FRAMING, HEADROOM FOR THE HEADLINE, and NO RENDERED WORDS rules above always apply and override anything in the ART DIRECTION that contradicts them. Follow the natural cinematic colour grade unless the ART DIRECTION explicitly asks for a different colour treatment.
+Output a single 16:9 image. The ONE REAL PHOTOGRAPH, PEOPLE AND FRAMING and NO RENDERED WORDS rules above always apply and override anything in the ART DIRECTION that contradicts them. Follow the natural cinematic colour grade unless the ART DIRECTION explicitly asks for a different colour treatment.
 ```
 
 **`Duo Thumbnail`**
@@ -322,27 +325,16 @@ SUBJECTS
 Images 1 and onwards are likeness references only: each face, head of hair and colouring comes from those images and nothing else. Do not copy their framing, crop, zoom, camera angles, poses, backgrounds or lighting - the shot described here decides all of those. Reproduce each person's likeness faithfully. Each person's facial expression should read as: {{VIBE}}.
 
 ONE REAL PHOTOGRAPH (NON-NEGOTIABLE)
-Build a single, believable photograph, as if all of these people were in the room at the same time. Everyone must share the same camera, perspective, lighting direction and colour temperature, cast natural shadows, and sit at a believable scale relative to each other and the background. Do not paste, cut out, collage or superimpose anyone. No cut-out outlines, hard edges, halos, mismatched lighting on a face, or floating heads. Do not line people up in a rigid, evenly spaced row. Use natural spacing, slight overlap and depth, and let people relate to the scene and to each other. This is one exposure of one place: never two photographs, two versions of the scene, or two joined halves.
+Build a single, believable photograph, as if all of these people were in the room at the same time. Everyone must share the same camera, perspective, lighting direction and colour temperature, cast natural shadows, and sit at a believable scale relative to each other and the background. Do not paste, cut out, collage or superimpose anyone. No cut-out outlines, hard edges, halos, mismatched lighting on a face, or floating heads. Do not line people up in a rigid, evenly spaced row. Use natural spacing, slight overlap and depth, and let people relate to the scene and to each other. This is one exposure of one place: never two photographs, two versions of the scene, or two joined halves. Build the set once: every object appears exactly once, and no screen, TV, sign, prop or shelf is duplicated, repeated, mirrored or cloned.
 
 PEOPLE AND FRAMING
-Show every person at least from the top of the head to the upper chest. Never crop the top of a head, and never cut a face off at the chin or neck. Keep all faces fully visible and at a similar scale, none hidden behind another person. Avoid stiff, identical passport stares: let people look naturally, some toward the camera and some at the scene, with expressions that fit {{VIBE}}.
+Show every person from the top of the head to at least the upper chest, and keep every head and chin inside the picture: never crop the top of a head, and never cut a face off at the chin or neck. The set fills the frame behind them, right into the corners, the way a photographed room does. Keep all faces fully visible and at a similar scale, none hidden behind another person. Avoid stiff, identical passport stares: let people look naturally, some toward the camera and some at the scene, with expressions that fit {{VIBE}}.
 
 HOUSE STYLE
-Create a polished cinematic editorial image with natural, professionally graded colour. Use a dark, realistic background, but keep the overall palette neutral and believable. Red, amber, and orange may appear only as small warning lights, UI alerts, or local accents. Do not let them tint the whole image. Avoid sepia, orange wash, heavy warmth, or posterized colour.
+Create a polished cinematic editorial image with natural, professionally graded colour. Use a dark, realistic background, but keep the overall palette neutral and believable. Red, amber, and orange may appear only as small warning lights, UI alerts, or local accents. Do not let them tint the whole image. Avoid sepia, orange wash and posterized colour. Do not go to the opposite extreme either: the picture must not look cold, blue-grey, steel-toned, drained, faded or aged. Aim for rich, natural, believable colour with realistic warm skin tones.
 
 COLOUR - NON-NEGOTIABLE
 Render EVERY person in full, natural colour: lifelike skin tones, and the true colour of their hair, beards, eyes and clothing exactly as they appear in the reference photos. NEVER render a person greyscale, monochrome, sepia, duotone, desaturated, or as a flat colour-tinted cutout, and never drain the colour out of faces to help them blend into the background. This applies to the host and every guest equally. Background and graphic elements MAY be stylised, muted or monochrome where the design calls for it - the people must not be. If the composition needs contrast or drama, take it from the background or lighting, never by desaturating the subjects.
-
-HEADROOM FOR THE HEADLINE (NON-NEGOTIABLE)
-A headline is typeset across the top of this picture afterwards, so compose the shot with real headroom: the heads sit in the lower two thirds of the frame and the set carries on above them, quiet and uncluttered from side to side.
-
-Everything in the picture is the same photograph: the same focus, the same light, the same level of detail from top to bottom. Nothing different happens above their heads - it is simply the room, the street or the ceiling continuing to the top edge of the frame.
-
-Give the headline its room with the camera, in a set that is already plain above head height: a bare wall, a dark corner, the open air of a street, the ceiling of a quiet room.
-
-Frame wider and tilt the camera up; if the shot feels tight, make it wider still. Never shrink anyone, because the faces stay large and readable.
-
-Final check: above the heads there is nothing but the scene continuing to the very top edge of the frame, and no straight line across the picture where it changes character.
 
 NO RENDERED WORDS (NON-NEGOTIABLE)
 Do not render any words, letters, numbers, captions, subtitles or watermarks anywhere in the image. If the ART DIRECTION below asks for text, ignore that part. Brand logos are allowed only if the ART DIRECTION explicitly asks for one.
@@ -353,7 +345,7 @@ EPISODE CONTEXT (for tone only - do not render any of this as text)
 ART DIRECTION
 {{CUSTOM}}
 
-Output a single 16:9 image. The ONE REAL PHOTOGRAPH, PEOPLE AND FRAMING, HEADROOM FOR THE HEADLINE, and NO RENDERED WORDS rules above always apply and override anything in the ART DIRECTION that contradicts them. Follow the natural cinematic colour grade unless the ART DIRECTION explicitly asks for a different colour treatment.
+Output a single 16:9 image. The ONE REAL PHOTOGRAPH, PEOPLE AND FRAMING and NO RENDERED WORDS rules above always apply and override anything in the ART DIRECTION that contradicts them. Follow the natural cinematic colour grade unless the ART DIRECTION explicitly asks for a different colour treatment.
 ```
 
 **`Roundtable Thumbnail`**
@@ -365,27 +357,16 @@ SUBJECTS
 Images 1 and onwards are likeness references only: each face, head of hair and colouring comes from those images and nothing else. Do not copy their framing, crop, zoom, camera angles, poses, backgrounds or lighting - the shot described here decides all of those. Reproduce each person's likeness faithfully. Arrange the host and all guests across the frame as an ensemble lineup, like a film poster: every face clearly visible, similar scale, none cropped or hidden behind another. Each person's facial expression should read as: {{VIBE}}.
 
 ONE REAL PHOTOGRAPH (NON-NEGOTIABLE)
-Build a single, believable photograph, as if the whole group was photographed together in one shot. Everyone must share the same camera, perspective, lighting direction and colour temperature, cast natural shadows, and sit at a believable scale relative to each other and the background. Do not paste, cut out, collage or superimpose anyone. No cut-out outlines, hard edges, halos, mismatched lighting on a face, or floating heads. Do not line people up in a rigid, evenly spaced row: keep the lineup readable but give it natural spacing, slight overlap and a little depth. This is one exposure of one place: never two photographs, two versions of the scene, or two joined halves.
+Build a single, believable photograph, as if the whole group was photographed together in one shot. Everyone must share the same camera, perspective, lighting direction and colour temperature, cast natural shadows, and sit at a believable scale relative to each other and the background. Do not paste, cut out, collage or superimpose anyone. No cut-out outlines, hard edges, halos, mismatched lighting on a face, or floating heads. Do not line people up in a rigid, evenly spaced row: keep the lineup readable but give it natural spacing, slight overlap and a little depth. This is one exposure of one place: never two photographs, two versions of the scene, or two joined halves. Build the set once: every object appears exactly once, and no screen, TV, sign, prop or shelf is duplicated, repeated, mirrored or cloned.
 
 PEOPLE AND FRAMING
-Show every person at least from the top of the head to the upper chest. Never crop the top of a head, and never cut a face off at the chin or neck. Keep all faces fully visible and at a similar scale, none hidden behind another person. Avoid stiff, identical passport stares: let people look naturally, some toward the camera and some at the scene, with expressions that fit {{VIBE}}.
+Show every person from the top of the head to at least the upper chest, and keep every head and chin inside the picture: never crop the top of a head, and never cut a face off at the chin or neck. The set fills the frame behind them, right into the corners, the way a photographed room does. Keep all faces fully visible and at a similar scale, none hidden behind another person. Avoid stiff, identical passport stares: let people look naturally, some toward the camera and some at the scene, with expressions that fit {{VIBE}}.
 
 HOUSE STYLE
-Create a polished cinematic editorial image with natural, professionally graded colour. Use a dark, realistic background, but keep the overall palette neutral and believable. Red, amber, and orange may appear only as small warning lights, UI alerts, or local accents. Do not let them tint the whole image. Avoid sepia, orange wash, heavy warmth, or posterized colour.
+Create a polished cinematic editorial image with natural, professionally graded colour. Use a dark, realistic background, but keep the overall palette neutral and believable. Red, amber, and orange may appear only as small warning lights, UI alerts, or local accents. Do not let them tint the whole image. Avoid sepia, orange wash and posterized colour. Do not go to the opposite extreme either: the picture must not look cold, blue-grey, steel-toned, drained, faded or aged. Aim for rich, natural, believable colour with realistic warm skin tones.
 
 COLOUR - NON-NEGOTIABLE
 Render EVERY person in full, natural colour: lifelike skin tones, and the true colour of their hair, beards, eyes and clothing exactly as they appear in the reference photos. NEVER render a person greyscale, monochrome, sepia, duotone, desaturated, or as a flat colour-tinted cutout, and never drain the colour out of faces to help them blend into the background. This applies to the host and every guest equally - an ensemble lineup must not become a row of grey cutouts. Background and graphic elements MAY be stylised, muted or monochrome where the design calls for it - the people must not be. If the composition needs contrast or drama, take it from the background or lighting, never by desaturating the subjects.
-
-HEADROOM FOR THE HEADLINE (NON-NEGOTIABLE)
-A headline is typeset across the top of this picture afterwards, so compose the shot with real headroom: the heads sit in the lower two thirds of the frame and the set carries on above them, quiet and uncluttered from side to side.
-
-Everything in the picture is the same photograph: the same focus, the same light, the same level of detail from top to bottom. Nothing different happens above their heads - it is simply the room, the street, the wall of screens or the ceiling continuing to the top edge of the frame.
-
-Give the headline its room with the camera, in a set that is already plain above head height: a bare wall, a dark corner, the open air of a street, the ceiling of a quiet room.
-
-Frame wider and tilt the camera up; if the shot feels tight, make it wider still. Never shrink the lineup, because the faces stay large and readable.
-
-Final check: above the heads there is nothing but the scene continuing to the very top edge of the frame, and no straight line across the picture where it changes character.
 
 NO RENDERED WORDS (NON-NEGOTIABLE)
 Do not render any words, letters, numbers, captions, subtitles or watermarks anywhere in the image. If the ART DIRECTION below asks for text, ignore that part. Brand logos are allowed only if the ART DIRECTION explicitly asks for one.
@@ -396,8 +377,22 @@ EPISODE CONTEXT (for tone only - do not render any of this as text)
 ART DIRECTION
 {{CUSTOM}}
 
-Output a single 16:9 image. The ONE REAL PHOTOGRAPH, PEOPLE AND FRAMING, HEADROOM FOR THE HEADLINE, and NO RENDERED WORDS rules above always apply and override anything in the ART DIRECTION that contradicts them. Follow the natural cinematic colour grade unless the ART DIRECTION explicitly asks for a different colour treatment.
+Output a single 16:9 image. The ONE REAL PHOTOGRAPH, PEOPLE AND FRAMING and NO RENDERED WORDS rules above always apply and override anything in the ART DIRECTION that contradicts them. Follow the natural cinematic colour grade unless the ART DIRECTION explicitly asks for a different colour treatment.
 ```
+
+### Caption space (2026-11-13: stopped asking the image model for it)
+
+The 2026-10-30 design reserved the top quarter of every 16:9 for the caption. Over four rounds that produced, in turn: a flat bar with a hard seam, a smeared blurred strip, a two-panel duplicate with a seam at exactly 25%, an empty room replacing the art direction, a chin-cropped close-up, a top filled with clutter, and cold or aged grades. The common factor is the instruction, not the model: anything that asks it to make one part of the frame different gets satisfied by changing that part, and a close-up cannot hold a quarter of empty space without losing the chin.
+
+So the prompts no longer reserve anything. The picture is framed for the picture.
+
+The caption is a separate step now, with three options:
+
+1. **Typeset over the image with a scrim** (recommended). A soft dark gradient or a coloured bar behind the text, added in Photoshop. Keeps the art direction intact and the subject large, which is what most channels do.
+2. **Add the band in Photoshop** and export slightly taller. Guarantees a clean, identical band every time.
+3. **Re-render that one option** with a `Revision Brief` asking for more air. Works, but per image.
+
+If a reserved band is ever wanted in the produced image, the honest way is mechanical: generate the artwork, then have the workflow compose it onto a larger canvas with the band added. That is a real workflow change and it has not been built.
 
 Move `{{CUSTOM}}` wherever you like — it's a token precisely so its position is yours to change without touching n8n. Leaving it near the end works well because later instructions tend to win when they conflict with earlier ones. When Jonny replies `default`, `{{CUSTOM}}` renders empty and the `ART DIRECTION` heading is left dangling with nothing under it; harmless, and Nano Banana ignores it.
 
