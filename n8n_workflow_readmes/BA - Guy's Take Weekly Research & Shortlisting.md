@@ -1,5 +1,7 @@
 # BA: Guy's Take Weekly Research & Shortlisting
 
+> **⛔ 2026-11-13 - BROKEN AND SWITCHED OFF (unpublished by Jonny; he is not using it).** Both of its last two runs die at `Cluster Videos by Topic`. Root cause is known and the fix is one field, but nothing was changed because the workflow is off. Before switching it back on, read **Known broken** below.
+
 > **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published).** Status emoji first, blank-line blocks, BA- codes only, no `rec...` ids, machine payloads behind a spoiler. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
 
 > **Find this workflow in n8n by name.** Workflow IDs change whenever a workflow is rebuilt from code, so the name is the stable identifier. (ID at time of writing: `Z9dDjafBA899Hgok`.)
@@ -32,6 +34,49 @@ The goal: surface this week's most podcast-worthy Bitcoin stories so Guy can pic
 | **Output 3** | Telegram message to the configured user chat (see `TELEGRAM_USER_CHAT_ID` in `.env`) |
 | **LLM** | Google Gemini 2.5 Flash via OpenRouter |
 | **Airtable base** | `app8Xw9Tq0XLjhmp9` (Guy's Take) |
+| **State** | ⛔ inactive + unpublished, broken at the clustering step since at least 2026-11-06 |
+
+---
+
+## Known broken (2026-11-13)
+
+**Symptom.** The Friday run fails and no digest arrives.
+
+```
+Workflow failed
+Workflow: BA: Guy's Take Weekly Research & Shortlisting
+Failed node: Cluster Videos by Topic
+Error: Bad request - please check your parameters
+```
+
+**Evidence.** Execution `21356` (2026-11-13) and execution `14172` (2026-11-06), both failed at the same node with the same message. Steps 1-7 complete normally, including the Airtable `Stories` upsert; nothing reaches `Shortlist` and no Telegram message is sent.
+
+**Root cause.** The node's error message is generic. The real reason is in the execution's `error.messages`:
+
+```
+400 google/gemini-2.5-flash does not support a JSON response_format combined with tool calling.
+Remove response_format or tools, or use a Gemini 3 model.
+```
+
+- `Cluster Videos by Topic` is an **AI Agent** (`@n8n/n8n-nodes-langchain.agent` v3.1) with **`Cluster JSON Parser`** attached. An agent with a structured output parser is enforced through **tool calling**, so it cannot run without tools while the parser is attached.
+- `Gemini Flash (Clustering)` (`@n8n/n8n-nodes-langchain.lmChatOpenRouter`) is set to `model: google/gemini-2.5-flash` with **`responseFormat: json_object`**.
+- OpenRouter will not accept both on this model. Hence the 400.
+
+This is platform behaviour, not a config typo: it is **constraint 21** in `Guys Take Build Status.md`.
+
+**The fix when you switch it back on** (either one, first is smaller):
+
+1. On `Gemini Flash (Clustering)`, **delete `responseFormat: json_object`** from Options. The structured output parser already forces JSON, so nothing is lost. In the UI that is the *Response Format* option, set back to the default.
+2. Or keep `responseFormat` and swap the model to one that allows JSON mode plus tools (a Gemini 3 model, or `openai/gpt-5.1`, which the metadata and script workflows already use).
+
+**Deliberately not applied** on 2026-11-13: Jonny had already unpublished and deactivated the workflow and asked only for it to be recorded. So live, the `.sdk.js` snapshot and everything downstream were left alone. `Cluster JSON Parser`, the prompt and the scoring code are all fine, so do not rewrite them for this.
+
+**When re-enabling, also check:**
+
+- Republish it (the push saves a draft only) and confirm it is Active, `availableInMCP` on, and the three credentials are still bound (constraint 6 / the post-push ritual in `AGENTS.md`).
+- Test it by hand first. The trigger is a plain Friday clock, so "Execute workflow" is the reliable check rather than waiting a week.
+- One real run should produce 8-15 clusters and a Telegram digest. If the agent now returns prose instead of JSON, the parser is what is failing, not the model.
+- Nothing else in the pipeline consumes this workflow's output directly; `Shortlist` rows are read by `BA: Guy's Take Script Generation`, so a frozen `Shortlist` table simply means no new episodes from this route.
 
 ---
 
