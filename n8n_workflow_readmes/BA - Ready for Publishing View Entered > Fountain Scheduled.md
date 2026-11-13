@@ -1,5 +1,7 @@
 # BA - Ready for Publishing View Entered > Fountain Scheduled
 
+> **2026-11-13 - the publisher now uploads the smallest 1080p copy, not the master (LIVE, published).** It sent `media_links.original`, so an episode with a 4.63 GB master and an 891 MB 1080p copy would have pushed all 4.63 GB, and an episode whose `Frame.io URL` pointed at a 360p proxy file would have published 360p without a word. Two nodes now sit between `Resolve Frame.io Media` and `Probe Frame.io Video`: `Probe Frame.io Renditions` measures every copy, `Choose Fountain Source` picks the smallest 1920x1080, else the smallest 1280x720, and refuses anything it *measured* below 720p. That is the same rule `BA - Subworkflow - Upload Video to Fountain` has used since 2026-11-04. `Probe Frame.io Video` also changed from `HEAD` to a 1 KB `Range` GET: the 1080p copy lives on `stream-download.frame.io`, which answers `HEAD` with 18 bytes of `text/plain` and only reports the real size in `Content-Range`. Verified end to end against `BA-HRwIMb`'s real file: picks the 891 MB 1080p copy over the 4.63 GB master.
+
 > **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published).** Status emoji first, blank-line blocks, BA- codes only, no `rec...` ids, machine payloads behind a spoiler. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
 
 > **Find this workflow in n8n by name.** Workflow IDs can change when a workflow is rebuilt. ID at time of writing: `LTmRVKn9TWJd6Gtk`.
@@ -113,7 +115,7 @@ The Fountain nodes that need the bearer credential are:
 - `Update Fountain Item`
 - `Schedule Fountain Item`
 
-`Probe Frame.io Video` HEAD-checks the signed Frame.io download URL that `Resolve Frame.io Media` returned, and `Probe Square Artwork` HEAD-checks the signed Airtable attachment URL. Neither carries a credential — the signing is already in the URL. `Resolve Frame.io Media` itself uses the `Adobe OAuth` credential to call the Frame.io API.
+`Probe Frame.io Video` sends a 1 KB `Range` GET to the copy that `Choose Fountain Source` picked, and `Probe Square Artwork` `HEAD`-checks the signed Airtable attachment URL. Neither carries a credential — the signing is already in the URL. `Resolve Frame.io Media` itself uses the `Adobe OAuth` credential to call the Frame.io API.
 
 ---
 
@@ -155,13 +157,22 @@ The trigger record must provide:
 
 The first linked Thumbnail row must contain a `1x1` attachment. The workflow uses that attachment's signed URL as Fountain artwork.
 
-`Frame.io URL` is the stable **view link** (for example `https://next.frame.io/project/…/view/<file id>`), not a direct media URL — fetching it redirects to a Frame.io login page and returns HTML. `Resolve Frame.io Media` takes the last path segment as the Frame.io file id, calls `GET /v4/accounts/{account}/files/{fileId}?include=media_links.efficient,media_links.original` with the `Adobe OAuth` credential, and uses the returned signed `original.download_url` as the video source. That resolved mp4 is what `Probe Frame.io Video` then checks: it must respond to `HEAD` with a positive `Content-Length` and one of:
+`Frame.io URL` is the stable **view link** (for example `https://next.frame.io/project/…/view/<file id>`), not a direct media URL — fetching it redirects to a Frame.io login page and returns HTML. `Resolve Frame.io Media` takes the last path segment as the Frame.io file id and calls `GET /v4/accounts/{account}/files/{fileId}?include=media_links.efficient,media_links.original,media_links.high_quality` with the `Adobe OAuth` credential.
+
+`Probe Frame.io Renditions` then measures every copy that came back: a 1 MB `Range` request per copy gives the true total from `Content-Range`, and the width and height are read out of the `moov`/`tkhd` atom (sampling the last 2 MB too when the atom is at the end). `Choose Fountain Source` picks the copy to upload:
+
+- the smallest copy at **1920x1080 or better**, else
+- the smallest copy at **1280x720 or better**, else
+- the original, if it could not be measured at all (a `0x0` reading, which the 4.63 GB `BA-HRwIMb` master produces), else
+- **stop** with `Nothing on this Frame.io file is 1280x720 or better`, listing what was measured. That is the 360p-proxy case.
+
+`Probe Frame.io Video` then fetches the first 1 KB of the chosen URL with a `Range` request, which is what confirms the URL is alive, its MIME type and its byte count. Its `Content-Range` total must agree with what `Choose Fountain Source` measured, or the run stops rather than upload the wrong thing. Accepted video types:
 
 - `video/mp4`
 - `video/quicktime`
 - `video/webm`
 
-Prefer `original`: it is a range-able CloudFront mp4. `efficient` is an HLS manifest (`stream-download.frame.io/manifest/hls?…`) and is only a last-resort fallback, not a byte-rangeable file.
+Do not go back to `HEAD` on the chosen copy. The 1080p copy is served from `stream-download.frame.io/manifest/hls?…`, which answers `HEAD` with 18 bytes of `text/plain`; only a `Range` GET reports the real file. Both the S3 original and that endpoint honour `Range` and report the total in `Content-Range` (measured 2026-11-13).
 
 The artwork URL must respond to `HEAD` with a positive `Content-Length` and one of:
 
@@ -349,7 +360,7 @@ The following repeat-safe Airtable and read/status operations retry 5 times with
 - Save plan, persist item ID, save upload IDs
 - Mark Publication scheduled, mark Episode scheduled
 - Mark Publication failed, mark Episode failed, restore a guarded Episode status
-- Both media `HEAD` probes
+- Both media probes (video `Range` GET, artwork `HEAD`)
 - Both Fountain upload-status `GET` calls
 
 The Telegram sends retry 4 times with 5 seconds between attempts.
@@ -364,9 +375,10 @@ The multipart upload has its own per-part retry loop, described below.
 
 The workflow avoids loading multi-gigabyte video into n8n memory or storing it on disk. Each part is moved by a short Node script that the Execute Command node runs inside the n8n container.
 
-1. `Resolve Frame.io Media` exchanges the Episode `Frame.io URL` for a fresh signed Frame.io download URL (the stored URL is a login-walled view link).
-2. `Probe Frame.io Video` and `Probe Square Artwork` issue `HEAD` requests and capture full response headers.
-3. `Validate Fountain Media` checks each MIME type and byte count, and adopts the resolved URL as `videoUrl` for the uploads.
+1. `Resolve Frame.io Media` exchanges the Episode `Frame.io URL` for a fresh signed Frame.io download URL per copy (the stored URL is a login-walled view link).
+2. `Probe Frame.io Renditions` measures each copy's size, dimensions and MIME type, and `Choose Fountain Source` picks the one to upload.
+3. `Probe Frame.io Video` sends a 1 KB `Range` GET to the chosen URL and `Probe Square Artwork` sends a `HEAD`; both capture full response headers.
+4. `Validate Fountain Media` checks each MIME type and byte count, and adopts the chosen URL as `videoUrl` for the uploads.
 4. `Start Fountain Video Upload` or `Start Fountain Artwork Upload` asks Fountain for a media ID, `part_size`, and one signed upload URL per part.
 5. `Build Video Part Jobs` or `Build Artwork Part Jobs` calculates an inclusive byte range for each URL and emits one job per part.
 6. Each job builds a shell command that starts a Node script with the source URL, target URL, and range passed as environment variables:
@@ -416,6 +428,8 @@ Ready for Publishing View
              -> Finish Fountain Plan
              -> Save Fountain Plan
              -> Resolve Frame.io Media
+             -> Probe Frame.io Renditions
+             -> Choose Fountain Source
              -> Probe Frame.io Video
              -> Probe Square Artwork
              -> Validate Fountain Media
@@ -538,10 +552,11 @@ Do not test by moving a real episode into the view until the Fountain bearer bin
 
 ## Known fidelity and operational concerns
 
-- The SDK snapshot preserves all 53 live nodes, the live graph, the `FOUNTAIN_API_KEY` references on all nine Fountain HTTP nodes, and the `Adobe OAuth` reference on `Resolve Frame.io Media`.
-- The workflow is **active** and proven end to end: exec `3184` (2026-09-30) uploaded all 5 video parts, Fountain transcoded to `READY`, artwork uploaded, the item scheduled for `2026-10-31T10:00Z`, and the Telegram "scheduled" message was sent.
+- The SDK snapshot preserves all 57 live nodes, the live graph, the `FOUNTAIN_API_KEY` references on all nine Fountain HTTP nodes, and the `Adobe OAuth` reference on `Resolve Frame.io Media`.
+- The workflow is **active** and proven end to end: exec `3184` (2026-09-30) uploaded all 5 video parts, Fountain transcoded to `READY`, artwork uploaded, the item scheduled for `2026-10-31T10:00Z`, and the Telegram "scheduled" message was sent. The copy-selection change of 2026-11-13 has been verified node by node against real Frame.io responses but not yet through a full Fountain upload.
 - `Resolve Frame.io Media` assumes the last path segment of `Frame.io URL` is the Frame.io file id, which held for the tested file, and that the `Adobe OAuth` credential can read that project.
-- The resolved video source prefers `original.download_url` (a range-able CloudFront mp4). `efficient` is an HLS manifest and is only a last-resort fallback.
+- The video source is chosen, not fixed: the smallest copy at 1920x1080, else the smallest at 1280x720, else the original when it could not be measured. Before 2026-11-13 this workflow always sent `original.download_url`.
+- **`Frame.io URL` must point at the cut you want published.** The publisher trusts it, so an episode linked to a proxy file publishes the proxy. On 2026-11-13 `BA-HRwIMb` was linked to `P1_PR002_Proxy.mp4` (360p on every copy) while a 1080p master existed; the link was corrected before it was flipped to `Ready to Publish`. `Video Quality OK` and `Video Source` are written by the upload marker and can describe a different file than the link, so check the link itself.
 - **Fountain transcodes every `ITEM_VIDEO` to HLS**, so the item's video enclosure is an HLS playlist (`playlist.m3u8`). That is normal for video and is not a sign the wrong file was sent; the source mp4 is uploaded correctly. The upload API has **no filename parameter**, so the source filename can't be controlled.
 - **The Fountain item API has no chapters field.** The Markdown description is the only text we can send; Fountain generates its own chapter markers. The Episode `Chapters JSON` attachment cannot be fed to Fountain through this API.
 - Failure Telegram messages include the real reason and an `<b>Execution:</b> <code>{id}</code>` line built from `$execution.id`.

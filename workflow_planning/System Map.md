@@ -670,8 +670,11 @@ this exactly.
      `Release Date` in the same write if it is empty or already past. Use a real future
      date and say which one you used.
   4. In the summary, say what happens next: the publisher picks it up **within about a
-     minute**, sets `Publishing`, uploads the video from `Frame.io URL` and the **1x1**
-     artwork, and **schedules** the Fountain item. The episode does not need to pass through
+     minute**, sets `Publishing`, uploads the video from `Frame.io URL` (the smallest
+     1080p copy Frame.io holds for that file, else the smallest 720p, else the original
+     when its dimensions cannot be read) and the **1x1** artwork, and **schedules** the
+     Fountain item. So the link must point at the cut that should be published, not at a
+     proxy. The episode does not need to pass through
      `Approved` or any other status first; this flip is the whole trigger. A release dated
      **today** is scheduled **one hour from the moment the run happens**; a **future** date
      uses that date at the `Publishing Settings` `Default Publish Time` (**06:00**,
