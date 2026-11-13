@@ -75,6 +75,23 @@ first character of the message is always a status emoji.
 8. **No step is implied.** If a second write is needed, say that it is needed and
    quote the exact words to send. Never let a "✅ Done" headline stand over an
    unfinished job.
+9. **Always give the words to send.** If the message leaves the person with something to
+   do and it has no buttons, end the body with one 🟡 line that quotes the exact reply and
+   says what it does:
+
+   `🟡 Reply <i>publish it</i> and I will set Status = Ready to Publish, or set it yourself in Airtable.`
+
+   - A button replaces the phrase. Never send both.
+   - The phrase is plain words the bot understands, not a code.
+   - Replying to the message must be enough to know which record, so the message carries the
+     `BA-` code. Never make the person type an ID.
+   - If the action is theirs to do in Airtable, name the field and value in the same line,
+     as above.
+   - Never close with "let me know" when there is a specific next step.
+
+   This was added on 2026-11-13 because the readiness checklist said "Set Status = Ready to
+   Publish when you want it to go to Fountain" and stopped there. Correct, and still a dead
+   end on a phone: nothing to tap, no words to copy.
 
 ---
 
@@ -155,6 +172,13 @@ listed as out of scope.
 
 All active, human-facing workflows were converted on **2026-11-12**. Nothing is
 pending.
+
+**2026-11-13:** rule 9 added (always give the words to send). The readiness
+checklist was the case that prompted it and now ends with `Reply "publish it"`. The
+assistant's `== MESSAGE STYLE (Telegram) ==` block carries the same rule, because it
+composes messages of its own. Other conversions were not audited message by message
+against rule 9; a message that asks for an action with no buttons and no quoted
+reply is a bug, so fix it when you see one.
 
 | Workflow | Telegram nodes | State |
 |---|---|---|
