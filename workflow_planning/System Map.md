@@ -20,6 +20,20 @@
 > reconciled that day and are byte-identical below the paste line. **Always read the
 > live Airtable row before pasting over it** — pasting this file blind would have
 > destroyed the Known-problems section.
+>
+> **Drift is now checkable: run `./scripts/query/system-map-drift.sh`** after editing
+> either copy. It verifies, against live Airtable and live n8n, every `app`/`tbl`/`fld`
+> id the Map names, every n8n workflow id, every choice value it claims (Statuses,
+> Episode Types) and the critical field names the pipeline depends on. It exits
+> non-zero, so it can gate a commit. It cannot check view filter conditions (the
+> Airtable API exposes view names but not filters), so anything the Map says about a
+> view's conditions is still a transcription and should carry the date it was read.
+>
+> **2026-11-13: the Map being correct is not enough.** The assistant answered an
+> artwork question from memory without reading this Map, and invented behaviour that
+> was never written here. Correct prose does not help if it is not read, which is why
+> the workflow now requires a fresh read on every pipeline turn and bans explaining
+> mechanics that were not read.
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════
      ▼▼▼  PASTE EVERYTHING BELOW THIS LINE into the Airtable "System Map" row (Prompt field)  ▼▼▼
@@ -464,13 +478,21 @@ Three paths in one workflow.
   `Last Modified Time` advancing past its stored cursor. A record that entered via a view
   filter change, or whose timestamp is older than the cursor, sits there with no error.
   Touch the record to advance the timestamp.
-- **⚠️ How to RE-generate artwork for an episode that already has options.** Deleting
-  the four `Thumbnails` rows satisfies `Thumbnails is empty`, but the episode is still
-  `Awaiting Thumbnail Pick`, which the view excludes — so it stays out, nothing runs,
-  and **there is no error anywhere to tell you why**. You must ALSO set `Status` back to
-  `Approved` (or any status outside the two excluded ones). If someone asks you to
-  regenerate artwork, propose both writes together, and say plainly that the status
-  change is what actually re-arms the trigger. Also warn them it costs 4 fresh images.
+- **⚠️ How to RE-generate artwork for an episode that already has options.** The old
+  options are **not** overwritten, replaced or reused. They block the trigger: the view
+  only admits an episode whose `Thumbnails` is empty, and while rows are linked the
+  episode never enters it, so nothing runs and **no error appears anywhere** to say why.
+  Two different tables, so it is two writes and two approvals:
+  1. **Delete the linked `Thumbnails` rows.** That is what makes `Thumbnails is empty`
+     true again. One DELETE on the Thumbnails table, up to 10 ids per call.
+  2. **Write the episode**: the new `Custom Image Prompt` if there is one, and a `Status`
+     outside all **five** excluded values (`Awaiting Thumbnail Pick` / `Generating
+     Artwork` / `Published` / `Suspended` / `Artwork Ready`; `Approved` is the usual
+     choice). The genuine change to `Status` is also what advances `Last Modified Time`,
+     which the poller cursor needs.
+  Whenever someone asks to regenerate, give all three parts in that order, count the rows
+  out loud, and say the old options will be **deleted** and that it costs 4 fresh images.
+  Never offer a status change on its own as the fix while rows are linked.
 - **Does:** sets `Generating Artwork`, generates 4 sixteen-by-nine options (layout
   by Type), creates 4 `Thumbnails` rows (`Proposed`), posts them as a Telegram
   album, then sets the episode to `Awaiting Thumbnail Pick`. If the type's
@@ -612,7 +634,7 @@ Three paths in one workflow.
   in the view drops out and is not picked up. That is deliberate: it keeps a past-dated
   episode from triggering the publisher, which would otherwise fail the preflight with
   "Fountain schedule time must be in the future".
-- **The 1x1 guard is a helper rollup:** `1x1 Thumbnail Count` (`fldL2ttmgchk8y40J`) counts non-empty `1x1` attachments across the linked `Thumbnails` rows (`COUNTA(values)`); it is `0` when no linked row has a 1x1. The workflow reads only the **first** linked row, so on a rare multi-row episode the filter and the workflow can disagree. A second rollup named `zz BROKEN 1x1 rollup - delete in Airtable UI` (`fldFUV4KHwzOrb9WB`) is an early `COUNTALL` mistake that counted blank rows; ignore and delete it in the Airtable UI (Airtable's public API cannot delete fields).
+- **The 1x1 guard is a helper rollup:** `1x1 Thumbnail Count` (`fldL2ttmgchk8y40J`) counts non-empty `1x1` attachments across the linked `Thumbnails` rows (`COUNTA(values)`); it is `0` when no linked row has a 1x1. The workflow reads only the **first** linked row, so on a rare multi-row episode the filter and the workflow can disagree.
 - **Retry after a failure:** a failure sets the Episode to `Publishing Failed` and the
   Fountain `Publications` row to `Failed`, with a Telegram message carrying the reason and
   the execution id. To retry, fix the problem and set the episode back to `Ready to Publish`
