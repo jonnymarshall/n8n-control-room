@@ -219,7 +219,8 @@ Episode:  Script Ready
    Date` is right. Nothing promotes `Artwork Ready` to `Ready to Publish` on its own — that
    one status flip is the "publish it" instruction, and it starts the Fountain upload. See
    stage 5 for the recipe. Stage 4b posts a "Ready to publish?" checklist once the metadata
-   and artwork are in place; it stops once the row is handed over.
+   and artwork are in place; it stops once the row is handed over, and it ends by quoting the
+   reply that does this: `publish it`.
 
 If a booking is cancelled, optionally reply `suspend this episode` to the cancellation
 notice to set the episode to `Suspended`.
