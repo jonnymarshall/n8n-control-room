@@ -28,7 +28,10 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-12 (stage 4b is now documented: `BA - Publish Readiness View Entered >
+*Last updated 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
+broken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
+on purpose and why; see its entry below. Nothing else changed).
+Previously 2026-11-12 (stage 4b is now documented: `BA - Publish Readiness View Entered >
 Telegram Checklist` (`RATBwwfOlRDPDHeN`) posts the "Ready to publish?" checklist from the
 `Publish Readiness Nudge` view. Its 2026-11-12 fix makes it go quiet once an episode is at or
 past `Ready to Publish`: the view now excludes those statuses and the Code node repeats the
@@ -313,6 +316,12 @@ Base for all content workflows: **Guy's Take** (`app8Xw9Tq0XLjhmp9`),
 Episodes table `tbl3uYLIvtB9APZp6`.
 
 ### 1. Weekly Research & Shortlisting
+> **⛔ OFF SINCE 2026-11-13: switched off and known broken.** Jonny unpublished it and it is
+> not being used. It is **not** producing a Friday digest, and the `Shortlist` table is not
+> being topped up by it. Do not tell anyone a digest is coming. If it is ever switched back
+> on, it fails at `Cluster Videos by Topic` until the model node's JSON response format is
+> removed (Gemini 2.5 Flash refuses that plus tool calling). Details in the workflow readme.
+
 - **Fires:** every **Friday 7am**. Clock only, no episode preconditions.
 - **Does:** scrapes Bitcoin YouTube feeds, writes the top 8 clustered topics into
   the `Shortlist` table (`Status = Shortlisted`), and DMs Jonny a ranked digest.
@@ -756,6 +765,15 @@ The bug log is the **Automation Upgrades** table (base `appwcz1Bux9YLcZYm`, tabl
 `tblja27Lsn7qXJfZM`); read it to answer "what's currently broken?" and add to it when
 something new is reported.
 
+- **Weekly Research & Shortlisting is off and broken (open, 2026-11-13).** Its last two runs,
+  2026-11-06 and 2026-11-13, both died at `Cluster Videos by Topic` with
+  `Bad request - please check your parameters`. The real cause, only visible in the error
+  detail: OpenRouter rejects `google/gemini-2.5-flash` when a JSON response format and tool
+  calling are requested together. The AI Agent needs the tools because the structured output
+  parser is enforced that way, so the fix is to remove `responseFormat: json_object` from the
+  model node, not to remove the parser. **Not fixed**, because Jonny stopped using the
+  workflow and unpublished it on 2026-11-13. Treat the `Shortlist` table as frozen until it
+  is switched back on, and don't promise a Friday digest.
 - **Calendly meeting polls are invisible to the API (confirmed 2026-09-29).** Poll creation
   and booking produce no Calendly webhook, no `scheduled_event`, and the poll isn't in
   `GET /event_types`. Scheduling is email-driven instead (workflow 2b above). If someone
