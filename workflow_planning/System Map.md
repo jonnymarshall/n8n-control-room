@@ -474,22 +474,24 @@ Three paths in one workflow.
   and does auto-generate. Entering the view is not the same as being auto-artable.
 - **What makes the 4 options differ:** the moods in `Thumbnail Moods`, cycled across the
   slots, whatever `Custom Image Prompt` says, and a **required** per-slot distinct shot
-  direction (tight close-up, medium eye-level, wider environmental, or asymmetric
+  direction (medium close-up, medium from chest height, wide environmental, or
   off-centre). **Jonny picks the moods**; the old AI mood-picker and prescriptive framing
   variations are gone. Since 2026-10-07 these directions are stated as required and are
   **prepended** ahead of the template, not appended and labelled "secondary". Before that
   a detailed `Custom Image Prompt` overrode them, which flattened all four options into the
   same picture (`BA-C8Uwej`). They preserve subject count and do not control colour; they
   were first added 2026-09-09 after a one-mood run returned duplicate options. Since
-  2026-10-30 they also restate the caption safe zone, so a shot direction can no longer
-  fill the frame and eat the space the caption needs.
-- **Every 16:9 option keeps a clean caption band at the top.** The prompts reserve the
-  **top 25% of the height, full width** (top third on 9:16) as background only, with
-  nothing of the people or props in it, and tell the model to check it before returning
-  the image. It is achieved with the camera (headroom), never a bar, band or overlay, and
-  it applies to reruns: the 1:1, 9:16 and revision prompts carry the same rule. If a
-  thumbnail ever comes back with no clean area for the caption, the `Prompts` rows are
-  the place to look, not the workflow.
+  2026-11-13 they state the framing as a **camera position** ("the top of the highest head
+  about a third of the way down the frame"), never as space reserved off the top edge.
+- **Every 16:9 option keeps open headroom above the heads for the caption.** Say where the
+  heads sit, not where a reserved area ends: the prompts ask for the heads in the **lower
+  two thirds of the frame** with the set carrying on above them at the same focus, light
+  and level of detail. The 1:1, 9:16 and revision prompts carry the same rule, and it
+  applies to reruns. **Never describe the space as a measured band** (a percentage of the
+  height, "across the full width", "low detail / no texture", or a list of shapes to
+  avoid): 2026-10-30 did exactly that and every option came back with a flat bar and a hard
+  seam across the top, because that wording describes a letterbox. If a thumbnail comes
+  back with a seam, the `Prompts` rows are the place to look, not the workflow.
 - **Diagnosing "it ignored my moods":** the `Resolve Vibes` node emits a `moodSource`
   field on every run. `picked` means his chosen moods were used; `default-neutral`
   means the field was empty or nothing matched and `Neutral` was used for all four
