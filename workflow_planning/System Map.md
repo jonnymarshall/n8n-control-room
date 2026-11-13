@@ -406,8 +406,10 @@ which is why the webhook now also checks Frame.io's signature and ignores a file
   gets one warning.
 - **Never queues:** an unsigned request, a file the row already has while it is past metadata
   (silent no-op), images/PDFs, a filename with no `BA-` ID (silent), a `BA-` name with no matching row
-  (warns), anything over 2 GB, a name ending `_Skip` (silent) or `_Bypass` (link refresh only), or any
-  other status. In every one of those cases except the silent ones it says so in one Telegram line.
+  (warns), anything whose copy for Gemini would be over 2 GB (measured on the proxy it would send,
+  since 2026-11-13, not on the master), a name ending `_Skip` (silent) or `_Bypass` (link refresh
+  only), or any other status. In every one of those cases except the silent ones it says so in one
+  Telegram line.
 - Re-delivery of an old event is therefore harmless: the row has already left `Ready for Metadata`.
 
 **3b. `BA - Ready for Metadata View Entered > AI Metadata` (`jroXHciDvy0sWlRM`)** — the AI work.
