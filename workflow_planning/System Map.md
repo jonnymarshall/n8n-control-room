@@ -44,7 +44,8 @@
 
 *Last updated 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
 broken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
-on purpose and why; see its entry below. Nothing else changed).
+on purpose and why; see its entry below. Also fixed the same day: the Fountain publisher was
+scheduling items with no description; see stage 5).
 Previously 2026-11-12 (stage 4b is now documented: `BA - Publish Readiness View Entered >
 Telegram Checklist` (`RATBwwfOlRDPDHeN`) posts the "Ready to publish?" checklist from the
 `Publish Readiness Nudge` view. Its 2026-11-12 fix makes it go quiet once an episode is at or
@@ -625,6 +626,14 @@ Three paths in one workflow.
     (`WMZ0Zpin1Stn9uF1`), **ACTIVE**. Pushes later Airtable edits (Title, description, 1x1
     artwork) onto the already scheduled/published item, leaving its state untouched.
   See the three readmes for the flow.
+- **Description delivery (fixed 2026-11-13).** The publisher builds the description in
+  `Build Fountain Content`, but `Validate Fountain Media` used to rebuild its payload from
+  `Build Fountain Plan`, which is the earlier copy without a description. The item PATCH
+  therefore contained no `description` at all, while the stored `Content Fingerprint` still
+  matched, so the content sync saw nothing to change. Found on `BA-HRwIMb`, whose scheduled
+  item had no description; the live item was repaired from its `Formatted Description` and
+  the publisher now carries the description through. If an episode's Fountain description is
+  empty, read `Formatted Description` on its `Publications` row first.
 - **Preconditions checklist (Episode) — this IS the ready view filter, spelled out:**
   - [ ] `Title` is not empty
   - [ ] `Frame.io URL` is not empty
