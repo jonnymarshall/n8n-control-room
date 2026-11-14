@@ -206,6 +206,7 @@ Drafts`, `Draft Approvals`, `weekday-drip`, `BA: Airtable Update Telegram
 Notifier`) are out of scope and are skipped by the audit. If one is revived,
 convert it before switching it on.
 
-Three converted workflows still have no readme of their own (pre-existing debt,
-not introduced by this pass): `Second Brain Capture`, `BA - Publish Readiness
-View Entered > Telegram Checklist`, and `BA - Subworkflow - Apply Fountain Sync`.
+Two converted workflows still have no readme of their own (pre-existing debt,
+not introduced by this pass): `Second Brain Capture` and `BA - Publish Readiness
+View Entered > Telegram Checklist`. (`BA - Subworkflow - Apply Fountain Sync` got
+one on 2026-11-14.)
