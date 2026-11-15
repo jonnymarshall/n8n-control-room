@@ -182,6 +182,29 @@ git, so nobody can diff what changed or spot drift.
 
 ---
 
+## RULE: No real line breaks inside a quoted string in an expression
+
+Inside a `{{ … }}` chunk, a quoted string may contain the **two-character escape**
+`\n`, but never an actual line break. n8n sees a quote that runs across a line as
+`ExpressionExtensionError: invalid syntax` and the node fails before it can send
+or write anything.
+
+- The stored parameter must hold backslash-`n`. In JavaScript or JSON that means
+  `\\n` when the chunk itself is being written as a string (an `.sdk.js` snapshot
+  puts the whole parameter inside a double-quoted JS string, so it needs `\\n`;
+  the live value then holds `\n`).
+- The failure is **late and quiet**: on 2026-11-14 `BA - Subworkflow - Apply
+  Fountain Sync` failed at `Notify Synced` *after* `Finish Sync` had written
+  Airtable. The item was synced correctly; only the confirmation message died, so
+  the sole symptom was the red "Workflow failed" alert and a missing message.
+- The n8n UI does not warn about this on a pushed workflow, and the Telegram style
+  audit only reads wording. `./scripts/query/expression-syntax-audit.sh` scans
+  every snapshot for quote-across-line-break and exits non-zero. Run it after
+  touching any expression that contains a quoted string, and before blaming a
+  node's logic for `invalid syntax`.
+
+---
+
 ## RULE: Agents create PRs; Jonny merges them
 
 **An agent never merges its own pull request, and never pushes straight to `main`.** The
