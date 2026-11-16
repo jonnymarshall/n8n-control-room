@@ -52,12 +52,14 @@ recipient. The guest's headshot is not attached; the footer says it is on file.
 2. **Find Pending Intakes** reads the `Ready for Host Brief` view and also applies
    `{Host Brief Sent At} = BLANK()`, limit 10. The view is the human queue; the formula is
    a safety net so a stamped row can never be sent twice even if the view is edited. Ten is
-   a safety cap; the next run handles any remainder.
+   a safety cap; the next run handles any remainder. It retries three times, ten seconds
+   apart, so a transient network or DNS failure on the n8n host does not fail the run.
 3. **Prepare Rows** flattens each record into `intakeId`, `intake`, and `episodeId`.
    It skips any item without a record id.
 4. **Find Episode** searches `Episodes` with `RECORD_ID()='<episodeId>'`.
    It is set to `alwaysOutputData`, so a missing episode does not stop the email; the
-   brief simply says "No episode linked".
+   brief simply says "No episode linked". It also retries three times, ten seconds apart,
+   for the same reason as the node above.
 5. **Build Guest Facts** builds the AI input from the form answers and the linked episode,
    and builds the OpenRouter request body. It also cleans the episode title: if the Airtable
    title is missing or still contains `XXX`, the email uses "Chat with <guest>" (or the
@@ -225,6 +227,22 @@ To test again:
 4. If it fails, check the execution and the Telegram failure alert. The row stays
    unstamped, so fixing the cause and waiting for the next run retries it.
 
+### 2026-11-11 and 2026-11-16: DNS blips failing the run
+
+Four runs failed at `Find Pending Intakes` with `getaddrinfo EAI_AGAIN api.airtable.com`
+("The DNS server returned an error, perhaps the server is offline"): executions `19058`,
+`19147` and `19349` on 11 November, and `24528` on 16 November at 00:10 New York time. The
+n8n host could not resolve `api.airtable.com` for about five seconds. Airtable was not
+down, the credential was fine and no Airtable change was needed.
+
+Nothing was lost: no intake row was stamped, the next five-minute run read the view
+normally, and in each case the view was empty (on 16 November, `24531` at 00:15 found zero
+rows). The only cost was a red alert that looked like a real failure.
+
+`Find Pending Intakes` and `Find Episode` now carry `retryOnFail` with three attempts ten
+seconds apart, the same shape as `Mark Brief Sent`. Both are reads, so retrying them can
+never send a second email or write twice.
+
 ---
 
 ## Edge cases
@@ -241,6 +259,14 @@ To test again:
 - **Send succeeds, stamp fails.** The stamp retries three times. If all three fail, the
   run errors and the next run could send a duplicate. Check the execution before clearing
   anything by hand.
+- **Network or DNS blip on the n8n host.** Reads of `api.airtable.com` can fail with
+  `getaddrinfo EAI_AGAIN` / "The DNS server returned an error, perhaps the server is
+  offline". The host resolver, not Airtable, is at fault, and the failure is temporary.
+  `Find Pending Intakes` and `Find Episode` now retry three times, ten seconds apart, so a
+  blip of a few seconds is absorbed inside the run. If all three attempts fail the run
+  errors and the Telegram alert fires, and because nothing was stamped the next five-minute
+  run picks the row up again. A failed read means no email was sent for that row, never a
+  duplicate.
 - **More than ten pending rows.** The first ten go out; the rest wait for the next run.
 - **OpenRouter unavailable, blocked or truncated.** The run fails before sending, the row
   stays unstamped, the next tick retries, and the error workflow alerts. A blank or

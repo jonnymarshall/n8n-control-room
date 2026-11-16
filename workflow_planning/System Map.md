@@ -773,7 +773,8 @@ this exactly.
   talking points, the avoid list and contact details, with no Airtable links, no headshot
   attachment and no long-form answers; it is meant to be a one-minute read. A failed AI
   call or send leaves the stamp empty, so the row stays in the view and the next run
-  retries it.
+  retries it. The two Airtable reads retry three times, ten seconds apart, so a transient
+  DNS failure on the n8n host no longer fails the run.
 - **Why it matters to the pipeline:** a `Chat` episode needs a guest on `Guests` before
   artwork will run (see the artwork precondition in stage 4). This flow is how that link
   gets made automatically, and the host brief email is how the guest's interview prep
