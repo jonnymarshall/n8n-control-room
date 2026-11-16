@@ -102,6 +102,23 @@ The model is set in `Build Social Request`, `Build Edit Request`, `Build Revisio
 
 ---
 
+## Humanizer inputs (2026-11-16)
+
+Two more repos were reviewed: `lynote-ai/humanize-text` and `sgaofen/humanizer-local-model`.
+
+**Not used:** `humanize-text`'s translation chain (English → Chinese → Japanese → Finnish → English). It is built for long generic prose, needs translation API keys, and would mangle facts and voice in a 280-character post.
+
+**Used, in the writer and editor:**
+
+- "Vary sentence length on purpose. A three-word sentence next to a longer one is good. Do not let every sentence settle into the same length or shape. It is fine to sound uneven." (burstiness, from both repos)
+- "Cut hedging, throat-clearing, and any sentence that only announces what comes next." (local model instruction)
+- "Prefer the concrete word over the abstract one." (local model instruction)
+- "Every fact, number, unit, date, name and quotation in the supplied fields must survive unchanged. Do not smooth a specific detail into a generic one." (local model's fact-preservation rule)
+
+The local model itself is not installed; its instruction was the useful part. The translation chain is not in the workflow.
+
+---
+
 ## Airtable schema
 
 ### `Social Posts` table (`tbly8EpeOlYrXHYNE`)
@@ -138,7 +155,7 @@ One row per option. Four rows per round.
 | `Social Post` | link → Social Posts (`fldVjKmQ3RMFsS6cr`) | The exact option that was chosen |
 | `Platform` | single select | Needs an `X` option. The row is `BA-xxxx - X`, `Status = Pending`. |
 
-⚠️ **Manual setup step:** Airtable would not accept an `X` choice through the API. Add `X` to the `Platform` field on `Publications` in the Airtable UI. Until it exists, the selection workflow's create call will fail. The empty choice created during the 2026-11-16 test can be renamed to `X` instead of adding a new one.
+The `X` choice was added to `Publications.Platform` on 2026-11-16 and the full selection path was tested against it: the workflow created `BA-rvik4X - X`, wrote body + CTA into `Post Copy`, linked the chosen option, set `Status = Pending`, and rejected the other three. No manual setup remains for the X row.
 
 The selection workflow only writes `Post Copy` and `Social Post` on an existing X row. It does not reset `Status` on an existing row, so re-picking a different option after the post is live does not knock it back to `Pending`.
 
@@ -172,22 +189,18 @@ The selection workflow only writes `Post Copy` and `Social Post` on an existing 
 
 ---
 
-## What triggers it, and why there is no view
+## What triggers it
 
-The drafting workflow is a **whole-table Airtable poller on `Episodes`**, on `Last Modified Time`. It is not a view trigger.
+The drafting workflow is an Airtable trigger on the **`Ready for Social Posts` view** (`viw7OScgqnRQdCLJz`) on `Episodes`, watching `Last Modified Time`.
 
-Reason: `Approved` is transient. The artwork workflow also fires on `Approved` and immediately moves the row to `Generating Artwork`, `Awaiting Thumbnail Pick` or `Awaiting Manual Artwork`. A view filtered on `Status = Approved` would often read the row after artwork had moved it and miss the episode entirely.
-
-The guard is `Social Posts` empty, not `Status = Approved`. The allowed statuses are the pre-publish states that can follow approval.
-
-If you want a view, create one called `Ready for Social Posts` with:
+The view carries the whole guard:
 
 - `Status` is any of `Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`
 - `Social Posts` is empty
 - `Title` is not empty
 - `Summary` is not empty
 
-Then point `Episodes Changed` at that view. The code guard stays as a backstop. Airtable's API cannot create views, so this one is a manual step.
+The Code node repeats the same checks as a backstop. The view was created by Jonny on 2026-11-16; Airtable's API cannot create views.
 
 The selection and revision workflows poll the `Social Posts` table on `Last Modified Time`. That table only has the four option rows, so the volume is tiny.
 
@@ -210,16 +223,19 @@ The assistant proposes the write; the normal approval tap still applies. It neve
 - After the spine and no-transcript rebuild, Gemini 3.7 Flash produced four broad options: a question about products getting worse, misplaced blame on free markets, listener feedback on "capitalism confusion", and declining quality from broken incentives. Body counts 250, 248, 256, 237; CTAs 30, 25, 13, 29.
 - GPT-6 Astra on the same input was more polished but repetitive: three of four reused "separate free markets from fiat monopolies". Body counts 237, 232, 272, 251.
 - A revision with "Make these broader and about the whole episode, not one small part. No narrow examples. No 'matters'. No 'Not X. Not Y.'" produced four broad options at body counts 278, 263, 234, 275, with separate CTAs. No "matters", no staccato, no invented position.
-- A live trigger test on a temporary `Approved` episode (`BA-6prm8M`) fired the poller, created four `Proposed` rows and sent to Jonny's DM. The test data was deleted.
-- Manual pinned selection created `BA-HRwIMb - X`, wrote body + CTA into `Post Copy`, linked the chosen row, and rejected the other three. The test row was deleted.
-- **Not yet exercised:** the Telegram assistant's `option N` and `revise:` paths end to end, and a selection after `X` is added to the `Publications` Platform field.
+- **View trigger test (2026-11-16):** a temporary `Approved` episode in `Ready for Social Posts` (`viw7OScgqnRQdCLJz`) fired execution `25365`, created four `Proposed` rows and sent to Jonny's DM. The test transcript on the row was ignored, which proves the writer is not reading it.
+- **X selection test (2026-11-16):** setting Option 1 to `Selected` fired execution `25386`, created `BA-rvik4X - X` with `Platform = X`, `Status = Pending`, `Post Copy` = body + CTA, linked the chosen row and rejected the other three.
+- **Live bug found and fixed:** the Airtable trigger returns linked-record fields as arrays of record **ID strings**, not `{id, name}` objects. `Pick Selected` and `Pick Revising` assumed objects and silently skipped every live row. Both now accept either shape. The pinned tests had passed because the test payload used the object shape.
+- All test rows, publications and the temporary episode were deleted.
+- **Not yet exercised:** the Telegram assistant's `option N` and `revise:` replies end to end.
 
 ---
 
 ## Gotchas
 
 - **A 280 body + CTA + link is longer than 280 characters.** That is the requested shape: P1-P3 stay inside 280, the CTA and link sit outside. If the account has the standard 280 limit, the final post will need trimming or the CTA posted as a reply. Decide this before the X automation is built.
-- **The drafting trigger is a whole-table poller.** Every edit to an episode in the allowed statuses starts an execution; the guard exits in milliseconds. Use the `Ready for Social Posts` view if you want to reduce that.
+- **The drafting trigger is a view poller.** `Ready for Social Posts` (`viw7OScgqnRQdCLJz`) carries the status, empty-link and title/summary conditions. The Code node repeats them as a backstop.
+- **The Airtable trigger returns linked records as ID strings.** `Episode` arrives as `["rec..."]`, not `[{id, name}]`. `Pick Selected` and `Pick Revising` accept either shape; do not "simplify" them back to `link.id`.
 - **Do not put a second Telegram trigger on the bot.** These workflows only send.
 - **The `Social Post` and `Social Post Editor` rows are live prompts.** Edit them in Airtable; no deploy and no credential rebind.
 - **The editor is a second model call.** It roughly doubles the generation time and cost per episode. If that becomes a problem, rewire `Draft with OpenRouter` straight to `Parse Options` (and `Redraft` straight to `Parse Revision`).

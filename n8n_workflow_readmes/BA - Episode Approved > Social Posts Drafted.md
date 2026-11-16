@@ -3,7 +3,7 @@
 Writes four platform-neutral social post options after an episode's AI metadata is signed off, writes them to the `Social Posts` table as `Proposed`, and posts them to the team group.
 
 - **Workflow ID:** `ntXHSW3AbNntnaj0` (stable identifier: the name)
-- **Trigger:** Airtable poll every minute on the `Episodes` table, `Last Modified Time`, no view
+- **Trigger:** Airtable poll every minute on the `Episodes` view `Ready for Social Posts` (`viw7OScgqnRQdCLJz`), `Last Modified Time`
 - **Status change:** none. This is a side stage; artwork and publishing own the Episode `Status`.
 - **Shared feature readme:** `Social Posts.md`
 
@@ -26,13 +26,18 @@ Episodes Changed (whole-table Airtable poll)
   -> Send Social Posts        team group, HTML
 ```
 
-## Why the trigger is wide and guarded
+## Why the guard is wide
 
-`Approved` is transient. The artwork workflow also fires on `Approved` and immediately writes `Generating Artwork`, `Awaiting Thumbnail Pick` or `Awaiting Manual Artwork`. A trigger filtered on `Status = Approved` would often read the row after artwork had moved it and skip the episode forever.
+`Approved` is transient. The artwork workflow also fires on `Approved` and immediately writes `Generating Artwork`, `Awaiting Thumbnail Pick` or `Awaiting Manual Artwork`. The `Ready for Social Posts` view therefore accepts the pre-artwork and artwork statuses and uses the real gate: `Social Posts` must be empty.
 
-`Pick Episodes` therefore accepts the pre-artwork and artwork statuses and uses the real gate: `Social Posts` must be empty. The first run creates the four rows, the reverse link fills, and every later edit fails the guard.
+The view (`viw7OScgqnRQdCLJz`, created 2026-11-16) carries the full condition set:
 
-**No view is used.** A view can replace the table-wide poll if one is created with `Status` in the allowed set, `Social Posts` empty, `Title` and `Summary` not empty. Airtable's API cannot create views, so this is a manual step. See `Social Posts.md` for the exact conditions.
+- `Status` is any of `Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`
+- `Social Posts` is empty
+- `Title` is not empty
+- `Summary` is not empty
+
+`Pick Episodes` repeats the checks as a backstop. The first run creates the four rows, the reverse link fills, and every later edit leaves the view.
 
 ## What it skips
 
@@ -107,12 +112,12 @@ The model string is in `Build Social Request` and `Build Edit Request`.
 
 - Pinned draft on `BA-HRwIMb`: four broad options with separate CTAs and no transcript.
 - A revision with "Make these broader and about the whole episode, not one small part. No narrow examples. No 'matters'. No 'Not X. Not Y.'" produced four broad options at body counts 278 / 263 / 234 / 275.
-- Live trigger test on a temporary episode (`BA-6prm8M`, `Approved`): poller fired, four rows created, DM message sent, test data deleted.
+- Live view-trigger test on a temporary `Approved` episode in `Ready for Social Posts` (`viw7OScgqnRQdCLJz`): execution `25365` created four rows and sent to Jonny's DM. The test transcript on the row was ignored.
 - **Not yet exercised live:** a real approved episode through the group message and a real assistant pick.
 
 ## Gotchas
 
-- Every edit to an in-scope episode runs this workflow; the guard is cheap and exits on the first line.
+- Every edit to an episode in the view runs this workflow; the guard is cheap and exits on the first line.
 - The AI runs twice (writer, then editor). Expect roughly 15 to 20 seconds and two OpenRouter calls per episode.
 - The link and the CTA are not stored in `Copy`. `Copy` is the body only; `CTA` is its own field.
 - `versionId == activeVersionId`, active, `availableInMCP: true`, error workflow `9PMI1kuBjLW2YHwb` as of 2026-11-16.

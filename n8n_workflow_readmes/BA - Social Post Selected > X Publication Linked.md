@@ -42,9 +42,9 @@ The body is capped at 280 characters. The CTA and the episode link are outside t
 - It does not add the episode URL to `Post Copy`. The URL is appended when the post is sent.
 - It does not touch the Episode `Status`.
 
-## Manual setup dependency
+## Platform dependency
 
-The `Publications.Platform` single select must contain `X`. Airtable would not accept the new choice through the API, so it was left as a manual step on 2026-11-16. Until it exists, `Create Publication` fails with an invalid-option error and the run stops after the sibling rejection.
+`Publications.Platform` now contains `X` (added 2026-11-16). The live selection test created `BA-rvik4X - X` with `Platform = X`, `Status = Pending`, `Post Copy` = body + CTA, and the `Social Post` link. No manual setup remains.
 
 ## Credentials
 
@@ -59,10 +59,12 @@ All verified bound on 2026-11-16.
 ## Verified
 
 - Pinned run on `BA-HRwIMb`: created `BA-HRwIMb - X`, copied the Option 2 body into `Post Copy`, linked the chosen row, rejected Options 1, 3 and 4, and sent the confirmation. The test row was deleted afterwards.
-- **Not yet run after `X` is added to the Platform field.** The test used a blank Platform value because the choice did not exist.
+- **Live run on a temporary episode (`BA-rvik4X`) on 2026-11-16:** execution `25386` created `BA-rvik4X - X` with `Platform = X`, `Status = Pending`, `Post Copy` = body + CTA, linked the selected row, and rejected the other three. The test publication, rows and episode were deleted.
+- **Live bug found and fixed:** the Airtable trigger returns `Episode` as an array of record ID strings, not `{id, name}` objects. `Pick Selected` assumed objects and skipped every live row. It now accepts either shape. The pinned test had used the object shape.
 
 ## Gotchas
 
 - Two rows set to `Selected` at once: the first one wins and `Prepare Selection` rejects the other as a sibling. The second row's own trigger run will then find no `Selected` row and do nothing.
 - The formula `{Publication}="BA-xxxx - X"` matches the primary field, not the linked record id. That is intentional and works because `Publication` is unique per episode and platform.
+- The Airtable trigger returns linked-record IDs as strings. Do not simplify `Pick Selected` back to `link.id`.
 - `versionId == activeVersionId`, active, `availableInMCP: true`, error workflow `9PMI1kuBjLW2YHwb` as of 2026-11-16.

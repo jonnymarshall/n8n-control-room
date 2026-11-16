@@ -76,4 +76,5 @@ All verified bound on 2026-11-16.
 
 - The editor pass roughly doubles the redraft time and cost. To remove it, rewire `Redraft with OpenRouter` straight to `Parse Revision`.
 - `Fetch Episode` still pulls the whole record, but only the title, type, summary, thumbnail caption and chapters are used. The transcript is ignored.
+- The Airtable trigger returns `Episode` as an array of record ID strings, not `{id, name}` objects. `Pick Revising` accepts either shape; do not simplify it back to `link.id`.
 - `versionId == activeVersionId`, active, `availableInMCP: true`, error workflow `9PMI1kuBjLW2YHwb` as of 2026-11-16.

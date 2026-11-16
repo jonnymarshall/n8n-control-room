@@ -42,7 +42,7 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options, posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. It does not change the Episode `Status`. One manual Airtable step is still needed: add `X` to `Publications.Platform`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
+*Last updated 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
 broken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
 on purpose and why; see its entry below. Also fixed the same day: the Fountain publisher was
 scheduling items with no description; see stage 5).
@@ -616,7 +616,7 @@ Three paths in one workflow.
 
 ### 4c. Social posts (after approval, no status change)
 - **Workflows:** `BA - Episode Approved > Social Posts Drafted` (`ntXHSW3AbNntnaj0`, **ACTIVE**), `BA - Social Post Selected > X Publication Linked` (`6m5s6x2sYMWJRz1s`, **ACTIVE**), `BA - Social Post Revising > Four Redrafted` (`G4GoqVPpUMJWoEmM`, **ACTIVE**).
-- **Fires:** the drafting workflow polls the whole Episodes table. It acts when the row's `Status` is one of `Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready` **and** its `Social Posts` link is empty. Do not explain it as `Status = Approved`: artwork moves that status on within seconds, so the real gate is the empty link. There is no view.
+- **Fires:** the drafting workflow polls the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`) on Episodes. The view carries `Status` in (`Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`), `Social Posts` empty, `Title` not empty and `Summary` not empty. Do not explain it as `Status = Approved`: artwork moves that status on within seconds, so the real gate is the empty link.
 - **Preconditions checklist (Episode):**
   - [ ] `Title` is set and is not the placeholder `[Clip]`
   - [ ] `Summary` is non-empty
@@ -634,8 +634,8 @@ Three paths in one workflow.
 - **Revising:** reply `revise: broader, no narrow examples, no 'matters'` (or set `Revision Brief` on the `Option = 1` row and `Status = Revising`). The revision workflow rewrites all four rows in place, increments `Round`, clears the brief and posts the new options. The brief changes tone, angle and length, not the subject. It refuses if a row is already `Selected`; clear the selection first.
 - **The assistant's rules:** proposing `Status = Selected` on a `Proposed` row is the pick; proposing `Revision Brief` + `Status = Revising` on the `Option = 1` row is the redraft. It never writes `Copy`, `CTA`, `Angle` or `Characters`, and never touches the Publication row itself.
 - **Model:** `google/gemini-3.7-flash` via OpenRouter for both writer and editor. It beat `openai/gpt-6-astra` on breadth and variety in the 2026-11-16 comparison and is about 20x cheaper.
-- **⚠️ Manual Airtable step:** `Publications.Platform` must contain `X`. Airtable rejected the API change on 2026-11-16; until the option exists, creating the X row fails. The selection workflow names the row `<BA-xxxx> - X` and uses `Status = Pending`.
-- **Not yet exercised end to end:** the assistant's `option N` / `revise:` replies, and a selection after `X` is added to the Platform field. The drafting and revision paths have been run on real and temporary episodes.
+- **⚠️ X publication:** `Publications.Platform` contains `X`. The selection workflow creates `<BA-xxxx> - X` with `Status = Pending`, `Post Copy` = body + blank line + CTA, and a `Social Post` link. The full path was tested live on 2026-11-16.
+- **Not yet exercised end to end:** the assistant's `option N` / `revise:` replies. The view trigger, drafting, revision and X selection paths have all been run live or pinned.
 - **Next:** publishing (stage 5), or an artwork revision. The social post and the artwork are independent.
 
 ### 5. Publishing (Fountain)
