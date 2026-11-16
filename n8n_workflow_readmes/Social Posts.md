@@ -27,9 +27,13 @@ Both live in the Airtable `Prompts` table (`tblhG1nw2P1k3CBVU`), so the wording 
 | `Social Post` | `rectYoHGj9beSqYIY` | The writer. Four options from the episode, with the per-type guidance, the 256-character body limit and the full anti-slop rule set. |
 | `Social Post Editor` | `recDuioM1M0NOr0AP` | The final editor. Takes the four drafts and removes binary contrasts, throat-clearing, signposting, `-ing` analysis, fake endings and banned words. It may not add facts. |
 
-Placeholders in `Social Post`: `{{TITLE}}`, `{{TYPE}}`, `{{EPISODE_ID}}`, `{{GUEST}}`, `{{SUMMARY}}`, `{{CHAPTERS}}`, `{{TRANSCRIPT}}`, `{{BRIEF}}`, `{{PREVIOUS}}`.
+Placeholders in `Social Post`: `{{TITLE}}`, `{{TYPE}}`, `{{EPISODE_ID}}`, `{{GUEST}}`, `{{SPINE}}`, `{{CHAPTERS}}`, `{{TRANSCRIPT}}`, `{{BRIEF}}`, `{{PREVIOUS}}`.
 
-The transcript is trimmed to 12,000 characters and chapters to 4,000 before it reaches the model. The summary is the grounded fallback when a transcript is missing.
+The transcript is not sent as one opening block. It is three 4,000-character excerpts from the start, middle and end, joined with `[...]`. That gives the model the whole arc instead of only the first twelve minutes, which on a listener-comments episode is the housekeeping before the argument starts.
+
+`{{SPINE}}` is the episode's `Summary` plus its `Chapters`. It is the subject of every post. The transcript is labelled `SOURCE MATERIAL (details only)`, and the prompt forbids building a post around a single passing mention, a book attribution, a listener's name, an opening aside, or the source of an example. It also forbids naming a book, author, article, show, company or person unless the spine or the guest field names them.
+
+**Why the spine exists (2026-11-16).** A revision brief said "lead with the wine maker story". The model found the only `wine maker` line in the opening transcript excerpt, which was a listener saying the analogy came from Gary North's *Honest Money*, and made the book attribution the subject of all four posts. The episode is about listener comments on enshittification, fake interest rates and sound money. The wine maker story is an example inside that argument, not the episode. The spine block, the transcript spread and the no-names rule are the fix.
 
 ---
 
@@ -131,6 +135,7 @@ The assistant proposes the write; the normal approval tap still applies. It neve
 
 - Manual pinned run on `BA-HRwIMb` (a real Take) produced four options and a clean Telegram message. Character counts: 267, 273, 278, 251 with the link.
 - Manual pinned revision with the brief "Make it punchier. Under 200 characters." produced 173, 167, 194, 160 with the link.
+- Manual pinned revision with "Make it more personal and lead with the wine maker story." initially produced four posts about Gary North's book. After the spine, transcript-spread and no-names fix, the same brief produced four posts about the episode's argument (wine maker flaw, incentives, deflation, the word capitalism), with no book or author named.
 - A live trigger test used a temporary Episodes row (`BA-6prm8M`): the poller fired, created four `Proposed` rows, and sent to Jonny's DM. The temporary episode and its rows were deleted.
 - Manual pinned selection created `BA-HRwIMb - X`, filled `Post Copy`, linked the chosen row, and rejected the other three. The test row was deleted.
 - **Not yet exercised:** the Telegram assistant's `option N` and `revise:` paths end to end, and a selection after `X` is added to the `Publications` Platform field.

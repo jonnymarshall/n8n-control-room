@@ -51,6 +51,8 @@ The previous round is preserved only in the message and the model prompt, not as
 
 The brief is passed verbatim. The writer is told that a numeric length in the brief wins over the 180-240 target but never over the 256 hard limit. The code enforces only the 280 hard limit; a brief that says "under 220" is a target, not a guarantee. The message shows the actual counts.
 
+**The brief controls the angle, not the subject (fixed 2026-11-16).** A brief that said "lead with the wine maker story" originally made all four posts about Gary North's book, because the only `wine maker` line in the opening excerpt was the listener's attribution. The redraft now receives the same `{{SPINE}}` (summary + chapters) as the first draft, three transcript excerpts spread across the whole episode, and a rule that the subject stays the spine. If the brief names a story, it is used as an example inside the episode's argument, never as a replacement for it.
+
 ## Credentials
 
 | Node | Credential |

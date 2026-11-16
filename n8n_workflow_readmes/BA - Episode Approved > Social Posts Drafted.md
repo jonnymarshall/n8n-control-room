@@ -41,6 +41,17 @@ Episodes Changed (whole-table Airtable poll)
 
 It does not skip a type. Take, Chat, Roundtable, 2 Sats, Read, Clip and Audionauts all get options; the prompt changes the angle per type.
 
+## Grounding (fixed 2026-11-16)
+
+The first version passed the opening 12,000 characters of the transcript. On a listener-comments episode that is the housekeeping, and a narrow revision brief could pull the whole post into a passing aside. It now:
+
+- builds `{{SPINE}}` from the `Summary` and `Chapters`, and makes the spine the subject of every post
+- sends three 4,000-character transcript excerpts (start, middle, end) as `SOURCE MATERIAL (details only)`
+- forbids a post built around a single passing mention, a book attribution, a listener's name, an opening aside, or an example's source
+- forbids naming a book, author, article, show, company or person unless the spine or the guest field names them
+
+The same rule is repeated in `Social Post Editor`, and the editor is told to rewrite anything that is really about the source of an example.
+
 ## Output
 
 Four rows in `Social Posts`:
