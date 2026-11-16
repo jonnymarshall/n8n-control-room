@@ -42,7 +42,7 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
+*Last updated 2026-11-16 (stage 4c added: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options, posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. It does not change the Episode `Status`. One manual Airtable step is still needed: add `X` to `Publications.Platform`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
 broken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
 on purpose and why; see its entry below. Also fixed the same day: the Fountain publisher was
 scheduling items with no description; see stage 5).
@@ -216,6 +216,7 @@ Episode:  Script Ready
    optional and is **not** a view gate; a `Read` is gated on its **book cover** instead.
    Then set the episode to `Approved`.
 5. Pick one of the 4 thumbnail options (set a Thumbnails row to `Selected`).
+5b. **Pick one of the four social post options** (reply `option 2` to the "Social posts ready" message, or set that `Social Posts` row to `Selected`), **or reply `revise: ...`** for four new ones. This is optional and does not change the Episode `Status`; the chosen copy lands on the episode's X publication row. See stage 4c.
 6. **Set the episode to `Ready to Publish`** once the artwork is picked and the `Release
    Date` is right. Nothing promotes `Artwork Ready` to `Ready to Publish` on its own — that
    one status flip is the "publish it" instruction, and it starts the Fountain upload. See
@@ -313,7 +314,8 @@ cover can also have the cover replaced later; the `Read Reversion 1x1` and
 | `Duration (s)` | number | Integer seconds. Written by the metadata workflow. |
 | `Record Date` | date/time | The confirmed recording slot. Written by the scheduling workflow (2b) when a booking is confirmed, read from the calendar invite; also settable by hand. |
 | `Release Date` | date | The date the episode should go live. **This is the publish date**: the Fountain publisher schedules the item for this date at `Publishing Settings.Default Publish Time` (currently `06:00`, `America/New_York`), and the ready view requires it to be **today or later**. Set by hand; written by nothing automatically. |
-| `Publications` | link -> Publications | One row per channel. `<BA-xxxx> - Fountain` carries the Fountain item id, upload ids, schedule time and any error. |
+| `Publications` | link -> Publications | One row per channel. `<BA-xxxx> - Fountain` carries the Fountain item id, upload ids, schedule time and any error. `<BA-xxxx> - X` carries the approved social post body in `Post Copy` and a link to the chosen `Social Posts` row. |
+| `Social Posts` | link -> Social Posts | The four platform-neutral post options drafted after approval. One row per option; `Status` is `Proposed` / `Selected` / `Rejected` / `Revising`. Empty means the drafting workflow has not run yet. |
 | `Thumbnail Caption` | long text | The artwork headline. Set by Jonny's reply to the packaging message (`TC1`–`TC5` or his own wording). A precondition for artwork. It is typeset manually over the artwork afterwards, into the reserved top-quarter band. |
 | `Custom Image Prompt` | long text | **His free-text art direction for this episode's artwork.** Set by the same reply. **Optional. The view does not gate on it (corrected 2026-10-23).** `default` (or `none`) means "no extra direction". Fills a `{{CUSTOM}}` placeholder in the layout prompt template. `Read` is never asked for it and uses `Book Cover`. |
 | `Thumbnail Moods` | long text | Comma-separated mood names he picked, e.g. `confident, shocked`. Matched by name (case-insensitively) against the `Thumbnail References` library and cycled across the 4 artwork options **in the order given** — one mood means all four use it, two means they alternate. **Empty or all-unmatched uses `Neutral` for all four** (since 2026-10-22), so a typo never breaks the run; the whole library is only used if the `Neutral` row has no photo. Not a gate. **On a `Read` this field is the facial expression** (2026-10-28); empty means `Neutral`. |
@@ -612,6 +614,24 @@ Three paths in one workflow.
   message. A new "done" status must be added in both places.
 - **Next:** a human sets `Status = Ready to Publish` (stage 5).
 
+### 4c. Social posts (after approval, no status change)
+- **Workflows:** `BA - Episode Approved > Social Posts Drafted` (`ntXHSW3AbNntnaj0`, **ACTIVE**), `BA - Social Post Selected > X Publication Linked` (`6m5s6x2sYMWJRz1s`, **ACTIVE**), `BA - Social Post Revising > Four Redrafted` (`G4GoqVPpUMJWoEmM`, **ACTIVE**).
+- **Fires:** the drafting workflow polls the whole Episodes table. It acts when the row's `Status` is one of `Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready` **and** its `Social Posts` link is empty. Do not explain it as `Status = Approved`: artwork moves that status on within seconds, so the real gate is the empty link.
+- **Preconditions checklist (Episode):**
+  - [ ] `Title` is set and is not the placeholder `[Clip]`
+  - [ ] `Summary` or `Transcript` is non-empty
+  - [ ] `Social Posts` is empty
+  - [ ] `Status` is one of the five values above
+- **Does (draft):** fetches the `Social Post` prompt from the `Prompts` table, writes four options from the episode's `Type`, `Title`, `Summary`, `Chapters` and transcript, runs the `Social Post Editor` prompt as a second anti-slop pass, validates them, writes four `Social Posts` rows (`Status = Proposed`, `Round = 1`) and posts one "Social posts ready" message to the group.
+- **The four options are different, not paraphrases:** the prompt asks for four different openings and angles. The `Angle` label in each row names the approach.
+- **Length:** `Copy` is capped at 256 characters. The link adds a space and 23 characters, so the finished post is 280 or less. `Characters` is that final count and every message shows `N of 280 with the link`. The URL is **not** stored in `Copy`; it is appended when the post is sent.
+- **Picking one:** reply `option 2` (or `2`, `the second one`) to the message, or set that `Social Posts` row to `Selected`. The selection workflow rejects the other three and writes the chosen body to `Post Copy` on the episode's `BA-xxxx - X` row in `Publications`, plus a `Social Post` link to the chosen row. It does not change the Episode `Status`.
+- **Revising:** reply `revise: lead with the wine story, less formal` (or set `Revision Brief` on the `Option = 1` row and `Status = Revising`). The revision workflow rewrites all four rows in place, increments `Round`, clears the brief and posts the new options. It refuses if a row is already `Selected`; clear the selection first.
+- **The assistant's rules:** proposing `Status = Selected` on a `Proposed` row is the pick; proposing `Revision Brief` + `Status = Revising` on the `Option = 1` row is the redraft. It never writes `Copy`, `Angle` or `Characters`, and never touches the Publication row itself.
+- **⚠️ Manual Airtable step:** `Publications.Platform` must contain `X`. Airtable rejected the API change on 2026-11-16; until the option exists, creating the X row fails. The selection workflow names the row `<BA-xxxx> - X` and uses `Status = Pending`.
+- **Not yet exercised end to end:** the assistant's `option N` / `revise:` replies, and a selection after `X` is added to the Platform field. The drafting and revision paths have been run on real and temporary episodes.
+- **Next:** publishing (stage 5), or an artwork revision. The social post and the artwork are independent.
+
 ### 5. Publishing (Fountain)
 - **Was:** `Airtable - View to Published` (`7O9z3UwcUOkHjAC2`) polled the ready view
   `viwDfPHHKrgggdw20` and set `Status = Ready to Publish`. **Archived 2026-09-29.**
@@ -719,6 +739,7 @@ this exactly.
 - **Failure:** Episode `Publishing Failed`, Publication `Failed`, Telegram with the reason
   and execution id. Read the `Publications` row's `Error`, fix it, then set the episode back
   to `Ready to Publish`.
+- **X is a separate row, not part of this publisher.** Stage 4c creates `BA-xxxx - X` with the chosen `Post Copy` and `Status = Pending`. Nothing posts to X yet; the per-channel fan-out is still Phase 3. The social copy is prepared early so it is ready when the posting step lands.
 - **Still being built out:** the per-channel fan-out beyond Fountain (Phase 3 in the Build
   Status). The content sync is already platform-neutral — it routes each `Publications` row
   by `Platform` — so new channels plug in as adapters.
