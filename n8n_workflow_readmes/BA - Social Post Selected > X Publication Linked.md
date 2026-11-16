@@ -29,15 +29,17 @@ Social Posts Changed
 
 The X post has to live on the episode's `Publications` row so the posting step and the bot have one place to read it. The row is `BA-xxxx - X`, `Status = Pending`, with:
 
-- `Post Copy` = the selected body
+- `Post Copy` = the full post: body (P1, P2, P3) + a blank line + CTA
 - `Social Post` = a link to the exact option row
 
 On an existing row, only those two fields are written. `Status` is deliberately left alone, so re-picking after the post is live does not reset a `Published` row to `Pending`.
 
+The body is capped at 280 characters. The CTA and the episode link are outside that count. The link is appended when the post is sent, not stored in `Post Copy`.
+
 ## What it does not do
 
 - It does not post to X. The row is a handoff for the posting step.
-- It does not add the episode URL to `Post Copy`. The URL is appended when the post is sent; the 24-character reservation in `Characters` guarantees it fits.
+- It does not add the episode URL to `Post Copy`. The URL is appended when the post is sent.
 - It does not touch the Episode `Status`.
 
 ## Manual setup dependency

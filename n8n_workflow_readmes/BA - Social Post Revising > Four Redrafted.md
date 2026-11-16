@@ -17,15 +17,15 @@ Social Posts Changed
   -> Fetch Episode Posts      all rows for that episode
   -> Prepare Revision         current round, previous copies, next round, row ids
   -> Already Selected?        yes -> notice and stop
-       no  -> Fetch Episode        full metadata for the prompt
+       no  -> Fetch Episode        title, type, summary, thumbnail caption, chapters
             -> Fetch Social Prompt  Airtable Prompts row "Social Post"
             -> Build Revision Request
-            -> Redraft with OpenRouter
+            -> Redraft with OpenRouter   google/gemini-3.7-flash
             -> Fetch Editor Prompt  Airtable Prompts row "Social Post Editor"
             -> Build Edit Request
-            -> Edit with OpenRouter
-            -> Parse Revision       validate, renumber the round, clear the brief
-            -> Update Social Posts  all four rows, in place
+            -> Edit with OpenRouter     de-slop + breadth + accuracy pass
+            -> Parse Revision       validate 280 body / 120 CTA, renumber the round, clear the brief
+            -> Update Social Posts  all four rows, in place (Copy + CTA)
             -> Build Revised Message
             -> Send Revised Message
 ```
@@ -49,9 +49,11 @@ The previous round is preserved only in the message and the model prompt, not as
 
 ## Brief handling
 
-The brief is passed verbatim. The writer is told that a numeric length in the brief wins over the 180-240 target but never over the 256 hard limit. The code enforces only the 280 hard limit; a brief that says "under 220" is a target, not a guarantee. The message shows the actual counts.
+The brief is passed verbatim. It controls tone, angle, length and opening. It does not control the subject: the episode's title, summary, thumbnail caption and chapters stay the spine. The body is capped at 280 characters and the CTA is separate; a numeric length in the brief is a target, not a hard cut. The message shows the actual counts.
 
-**The brief controls the angle, not the subject (fixed 2026-11-16).** A brief that said "lead with the wine maker story" originally made all four posts about Gary North's book, because the only `wine maker` line in the opening excerpt was the listener's attribution. The redraft now receives the same `{{SPINE}}` (summary + chapters) as the first draft, three transcript excerpts spread across the whole episode, and a rule that the subject stays the spine. If the brief names a story, it is used as an example inside the episode's argument, never as a replacement for it.
+**No transcript.** `Fetch Episode` pulls the metadata fields only. The transcript is not passed to the writer or the editor. It caused both 2026-11-16 failures: the Gary North fixation and the four narrow single-topic posts. The summary and chapters are the grounding.
+
+**The brief cannot replace the episode (fixed 2026-11-16).** A brief that said "lead with the wine maker story" originally made all four posts about Gary North's book. Now a named story is an example inside the episode's theme. The editor checks breadth and accuracy, and the parser fails on "matters" and the `Not X. Not Y.` pattern.
 
 ## Credentials
 
@@ -66,12 +68,12 @@ All verified bound on 2026-11-16.
 
 ## Verified
 
-- Pinned revision on `BA-HRwIMb` with "Make it punchier. Under 200 characters." produced 173 / 167 / 194 / 160 with the link and rewrote the four rows to Round 2.
-- Pinned revision with "Make it more personal and lead with the wine maker story. Keep it under 220 characters." produced usable options close to the target; the final counts are shown in the message.
+- Pinned revision on `BA-HRwIMb` with "Make these broader and about the whole episode, not one small part. No narrow examples. No 'matters'. No 'Not X. Not Y.'" produced four broad options at body counts 278 / 263 / 234 / 275, with separate CTAs. No "matters", no staccato, no invented position.
+- The earlier "Make it more personal and lead with the wine maker story" brief was retested after the no-transcript rebuild; the new output was about the episode's argument, not the book attribution.
 - The `already picked` branch was exercised only in development, not on a real selected episode.
 
 ## Gotchas
 
 - The editor pass roughly doubles the redraft time and cost. To remove it, rewire `Redraft with OpenRouter` straight to `Parse Revision`.
-- `Fetch Episode` pulls the whole record, including the transcript. That is intentional: the redraft needs the same grounding as the first draft.
+- `Fetch Episode` still pulls the whole record, but only the title, type, summary, thumbnail caption and chapters are used. The transcript is ignored.
 - `versionId == activeVersionId`, active, `availableInMCP: true`, error workflow `9PMI1kuBjLW2YHwb` as of 2026-11-16.
