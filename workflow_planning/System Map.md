@@ -42,7 +42,7 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-17 (two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
+*Last updated 2026-11-17 (two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Artwork Paths 2 and 3 followed the same day: one pick or revision per run, claimed as `Thumbnails.Status = Processing` before the work starts. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
 broken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
 on purpose and why; see its entry below. Also fixed the same day: the Fountain publisher was
 scheduling items with no description; see stage 5).
@@ -492,6 +492,12 @@ Three paths in one workflow.
         (A code guard also strips him, but keep him out of `Guests` anyway.)
   - [ ] `Transcript is not empty` is **not** a view condition, and neither is
         `Custom Image Prompt`; older versions of this checklist said both were.
+- **`Processing` on a Thumbnails row is a claim, not a finished state.** A pick or a
+  revision writes it the moment the run starts, so the row leaves its queue view and
+  cannot be started twice. Seeing it means the run has not finished; seeing it for more
+  than a few minutes means the run **died**, so set the row back to `Selected` (a pick) or
+  `Revising` (a revision) and the next minute will take it. `Final` is the finished state
+  for both.
 - **A row already in the view may still not fire — but only on the change-poll paths.** Path 1 polls the view's **contents**, so a row in it is taken on the next minute and no timestamp trick is needed. Paths 2 and 3 (and every other stage still using an Airtable Trigger) poll `Last Modified Time` against a stored cursor, so a record that entered via a view filter change, or whose timestamp is older than the cursor, sits there with no error; a genuine change to the record re-fires it. A write that sets a field to the value it already holds does **nothing**: Airtable does not move `Last Modified Time` for it, so "re-save the same status" is never the fix.
 - **⚠️ How to RE-generate artwork for an episode that already has options.** The old
   options are **not** overwritten, replaced or reused. They block the trigger: the view
@@ -552,10 +558,12 @@ Three paths in one workflow.
 - **Next:** a human sets one `Thumbnails` row `Status = Selected`.
 
 **Path 2 — Select.**
-- **Fires:** a `Thumbnails` row's `Status` becomes `Selected`. (The trigger view was
-  renamed `Selected` → `Ready for 1X1 & 9X16 Thumbnails *J*` on 2026-08-20. Same view,
-  same single condition `Status = Selected`, **no type filter** — the name describes only
-  one of the three things it fires.)
+- **Fires:** a one-minute poll takes the oldest `Thumbnails` row in the
+  `Ready for 1X1 & 9X16 Thumbnails *J*` view, **one per run**, and claims it as
+  `Status = Processing` before doing anything else. (The view was renamed `Selected` →
+  `Ready for 1X1 & 9X16 Thumbnails *J*` on 2026-08-20. Same view, same single condition
+  `Status = Selected`, **no type filter** — the name describes only one of the three
+  things it fires.)
 - **Preconditions checklist:**
   - [ ] One `Thumbnails` row for the episode has `Status = Selected`.
 - **Does, for every episode type:** marks the other options `Rejected` and unlinks them,
@@ -575,7 +583,9 @@ Three paths in one workflow.
 - **Next:** publishing (see below), or an optional revision (Path 3).
 
 **Path 3 — Revision (briefed, in-place, targeted).**
-- **Fires:** the chosen (`Final`) `Thumbnails` row's `Status` becomes `Revising`.
+- **Fires:** a one-minute poll takes the oldest row in the `Revision Requested` view
+  (`Status = Revising`), **one per run**, and claims it as `Status = Processing` before
+  doing anything else.
 - **What it's for:** re-doing the picked artwork with a written instruction, for one
   or more aspect ratios, without regenerating the 4 options or re-picking. Example:
   "make the background more red and lose the laptop, just the 9x16."
