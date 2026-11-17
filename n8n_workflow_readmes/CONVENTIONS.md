@@ -205,6 +205,37 @@ or write anything.
 
 ---
 
+## RULE: A view-triggered workflow must handle every row a poll returns
+
+**An Airtable Trigger fires once per poll, not once per row.** It hands over *every*
+row that matched, then moves its timestamp cursor to now. A workflow that reads
+`.first()` anywhere downstream therefore processes row 1 and silently drops rows
+2..N, and those rows then sit in the view forever, because the cursor has already
+moved past them. Nothing errors, and the view keeps showing them as waiting.
+
+Two acceptable patterns:
+
+- **One row per run (preferred for pipelines built around a single row).**
+  Schedule Trigger → Airtable **search** of the same view, `returnAll: false`,
+  `limit: 1`, sorted oldest `Last Modified Time` first → an IF guard on `$json.id`.
+  Claim the row early (a status write that removes it from the view), so a failure
+  cannot re-fire and re-alert every minute. Cost: a stored execution on every poll,
+  even an empty one, because a schedule always runs the workflow while a trigger
+  poll can decline to.
+- **Loop over the rows.** Keep the Airtable Trigger and wrap the pipeline in
+  Loop Over Items (batch size 1), retargeting every `.first()` at the current
+  iteration. No extra executions, but a much larger edit.
+
+**Never cap it with `limit` on the Airtable Trigger alone.** The cursor still moves
+past every row the poll matched, so rows it dropped cannot come back.
+
+**Why.** On 2026-11-13 two clips entered the `Ready for Metadata` view in one poll
+(execution 21466). Only the first was processed, the claim wrote to it twice, and
+the second (`BA-KXqegO`) was stranded for three days. `BA - Guy's Take Thumbnail
+Artwork` reads its triggers with `.first()` too, so it carries the same risk.
+
+---
+
 ## RULE: Agents create PRs; Jonny merges them
 
 **An agent never merges its own pull request, and never pushes straight to `main`.** The
