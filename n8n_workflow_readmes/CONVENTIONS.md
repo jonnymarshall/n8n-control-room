@@ -297,3 +297,10 @@ The Telegram assistant reads the **Airtable row**, not the repo file, so editing
 file alone changes nothing for the agent. The map's preconditions checklists are the Airtable
 view filters spelled out; keep them in step with the actual views (read the live row first —
 it has drifted before). This is a standing rule: do it every time, without being asked.
+
+**Sync only from merged `main`.** The sync replaces the whole `Prompt` field, so running it
+from an unmerged or stale branch publishes a version that is missing whatever else merged
+meanwhile, and the repo and the bot then disagree with no error anywhere. Merge first, pull
+`main`, then sync. If a workflow change is still on a branch, either wait for the merge or
+expect to sync again afterwards. Same principle for every single shared copy in this system:
+the live n8n workflow and the sync ledger are also last-writer-wins.

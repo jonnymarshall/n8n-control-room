@@ -12,6 +12,27 @@ The admin side of a self-hosted n8n automation server. It runs the **Guy's Take 
 2. **`n8n_workflow_readmes/CONVENTIONS.md`** for cross-workflow rules.
 3. **The specific workflow's readme** in `n8n_workflow_readmes/` before touching that workflow.
 
+## Working in parallel: one folder per session
+
+Jonny runs several agent sessions at once. A git checkout has **one** working folder and **one** checked-out branch, so two sessions in the same folder are not two copies of anything: they share the files and take each other's branch. On 2026-11-17 a second session ran `git checkout -b <branch>` in the shared folder while another agent was mid-edit, and that agent's commit landed on the wrong branch. It was recovered from the branch name by luck.
+
+**RULE: one session per working folder.** The main checkout is for reading, pulling, merging and quick checks. Any second piece of work gets its own **worktree**, named after the task, and the session works there.
+
+- **opencode:** `worktree_create({ name })` returns the new folder (under `~/.local/share/opencode/worktree/…`); `session_move({ directory })` moves the current session into it; `worktree_list()`; `worktree_remove({ directory })`.
+- **Any other harness:** `git worktree add ../n8n-control-room-<name> -b <branch> <base>`, then start the session in that folder. `git worktree list`, `git worktree remove <path>`.
+
+**Always announce a worktree the moment you create one**, in plain words in chat: what it is for, the branch name and the folder. Jonny has several sessions open and needs to know which one has moved.
+
+**Always offer to delete it once the branch's work is finished**: the PR is merged, or the work is abandoned. One line, with the folder path. Never delete without being asked. A merged worktree left behind is invisible clutter outside the project, so do not let them accumulate.
+
+**Credentials do not travel.** Git-ignored files (the local env file holding the API keys) are not copied into a worktree, so any script needing real credentials will refuse to run there. Run those from the main checkout, or copy the file in deliberately.
+
+**RULE: never two sessions working on the same workflow at the same time.** The live n8n instance is single-writer: two branches can each hold a change, but the second push overwrites the first on the server, and git cannot see that. If two pieces of work touch the same workflow, sequence them: A merges, B rebases on the new `main`, then B proceeds.
+
+**RULE: sync the System Map only from merged `main`.** The Airtable row is the bot's live copy and the sync replaces the whole field. Syncing from an unmerged or stale branch publishes a version missing whatever else merged meanwhile, and the repo and the bot then disagree with no error anywhere. Merge first, pull `main`, then `bash scripts/deploy/schema/sync-system-map.sh`. The same applies to anything with a single shared copy: the live n8n workflow, the Airtable row, the sync ledger.
+
+**When a merge conflicts, never silently drop the other side.** Mechanical conflicts (both branches appended an entry to the change log) keep both, in a sensible order. A judgement call (two different opinions about the same sentence) gets surfaced to Jonny with both versions. Conflicts are expected and are resolved by merging `main` into the branch, not by rewriting the other person's work.
+
 ## The source-of-truth rule (most important)
 
 **The live n8n server is the source of truth. The `.sdk.js` files in `scripts/deploy/workflows/` are a local copy.** Jonny edits workflows directly in the n8n UI and changes Airtable by hand, so the SDK copy can drift.
