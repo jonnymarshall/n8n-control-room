@@ -205,6 +205,26 @@ or write anything.
 
 ---
 
+## RULE: Copy Airtable table ids, never build them
+
+Airtable accepts a table in an API path by its id (`tbl…`) or by its exact name.
+Ids are case-sensitive, and an id that does not exist returns
+`INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND`, whose wording blames the token. A typo
+therefore looks like an auth failure and sends everyone to the wrong place.
+
+- **2026-11-17:** the Telegram assistant proposed deleting four Thumbnails rows at
+  `app8Xw9Tq0XLjhmp9/tblThumbnails`. The live id is `tblkcASzE4DXlxokO`, and
+  `tblThumbnails` is the table name with `tbl` glued on. Two taps failed with the
+  permissions wording and nothing was written.
+- In a prompt or a node, take the id from `get_base_schema` (or the base's API
+  metadata) and paste it. Never assemble one from a table name.
+- `./scripts/query/table-id-audit.sh` checks every 17-character Airtable id in
+  every snapshot against the live bases and exits non-zero on an unknown one. It
+  caught the assistant's Social Posts id (`tblY8EpeOlYrXHYNE`, live
+  `tbly8EpeOlYrXHYNE`) on its first run.
+
+---
+
 ## RULE: A view-triggered workflow must handle every row a poll returns
 
 **An Airtable Trigger fires once per poll, not once per row.** It hands over *every*
