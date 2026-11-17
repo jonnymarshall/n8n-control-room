@@ -3,7 +3,7 @@
 Writes four platform-neutral social post options after an episode's AI metadata is signed off, writes them to the `Social Posts` table as `Proposed`, and posts them to the team group.
 
 - **Workflow ID:** `ntXHSW3AbNntnaj0` (stable identifier: the name)
-- **Trigger:** Airtable poll every minute on the `Episodes` view `Ready for Social Posts` (`viw7OScgqnRQdCLJz`), `Last Modified Time`
+- **Trigger:** Schedule every minute + Airtable search on the `Episodes` view `Ready for Social Posts` (`viw7OScgqnRQdCLJz`), `limit: 1`, sorted by `Last Modified Time` ascending
 - **Status change:** none. This is a side stage; artwork and publishing own the Episode `Status`.
 - **Shared feature readme:** `Social Posts.md`
 
@@ -12,19 +12,30 @@ Writes four platform-neutral social post options after an episode's AI metadata 
 ## Flow
 
 ```text
-Episodes Changed (whole-table Airtable poll)
-  -> Pick Episodes            guard: status, no linked posts, title, summary
-  -> Fetch Social Prompt      Airtable Prompts row "Social Post"
-  -> Build Social Request     fill title, type, guest, summary, thumbnail caption, chapters
-  -> Draft with OpenRouter    google/gemini-3.7-flash, 4 bodies + 4 CTAs
-  -> Fetch Editor Prompt      Airtable Prompts row "Social Post Editor"
-  -> Build Edit Request       hand the four drafts and the episode spine to the editor
-  -> Edit with OpenRouter     de-slop + breadth + accuracy pass, same model
-  -> Parse Options            validate 4, enforce 280 body / 120 CTA, ban "matters" and Not X. Not Y.
-  -> Create Social Posts      one Airtable POST, four records (Copy + CTA)
-  -> Build Social Message     numbered options, body and CTA counts, reply instructions
-  -> Send Social Posts        team group, HTML
+Every Minute
+  -> Ready for Social Posts View   Airtable search, view viw7OScgqnRQdCLJz, limit 1
+  -> Pick Episodes                 guard: status, no linked posts, title, summary
+  -> Fetch Social Prompt           Airtable Prompts row "Social Post"
+  -> Build Social Request          fill title, type, guest, summary, thumbnail caption, chapters
+  -> Draft with OpenRouter         google/gemini-3.7-flash, 4 bodies + 4 CTAs
+  -> Fetch Editor Prompt           Airtable Prompts row "Social Post Editor"
+  -> Build Edit Request            hand the four drafts and the episode spine to the editor
+  -> Edit with OpenRouter          de-slop + breadth + accuracy pass, same model
+  -> Parse Options                 validate 4, enforce 280 body / 120 CTA, ban "matters" and Not X. Not Y.
+  -> Find X Publication            Publications where Publication = "BA-xxxx - X"
+  -> X Row Exists?
+       yes -> Create Social Posts
+       no  -> Create X Publication   Platform X, Status Pending, no copy
+            -> Create Social Posts    one Airtable POST, four records (Copy + CTA)
+  -> Build Social Message          numbered options, body and CTA counts, reply instructions
+  -> Send Social Posts             team group, HTML
 ```
+
+## Why it takes one episode per run
+
+The earlier version used an Airtable Trigger and processed every row a single poll returned, while the X-row creation and `Create Social Posts` read `.first()`. A live test with three queued episodes produced 12 social post rows and only one X row. The current pattern is the same one the metadata and artwork stages adopted on 2026-11-17: a schedule trigger plus an Airtable search on the view, `limit: 1`, oldest first. One run, one episode.
+
+The X row is created **before** the social post rows, so a failure after the X row does not leave an episode with posts but no X row. If `Create Social Posts` fails, the episode stays in the view and the next minute retries; the X row is already there, so `X Row Exists?` skips the create.
 
 ## Why the guard is wide
 
@@ -113,6 +124,7 @@ The model string is in `Build Social Request` and `Build Edit Request`.
 - Pinned draft on `BA-HRwIMb`: four broad options with separate CTAs and no transcript.
 - A revision with "Make these broader and about the whole episode, not one small part. No narrow examples. No 'matters'. No 'Not X. Not Y.'" produced four broad options at body counts 278 / 263 / 234 / 275.
 - Live view-trigger test on a temporary `Approved` episode in `Ready for Social Posts` (`viw7OScgqnRQdCLJz`): execution `25365` created four rows and sent to Jonny's DM. The test transcript on the row was ignored.
+- **2026-11-17 one-per-run test:** the old Airtable-trigger version processed three queued episodes in one run, created 12 social post rows and only one X row. The schedule + `limit: 1` rebuild now takes one episode per minute and creates its X row first. The real episodes (`BA-KXqegO`, `BA-nxzPcz`) were backfilled with X rows; the temporary test episode was deleted.
 - **Not yet exercised live:** a real approved episode through the group message and a real assistant pick.
 
 ## Gotchas

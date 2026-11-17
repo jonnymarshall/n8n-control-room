@@ -172,6 +172,24 @@ The workflows do the rest: selection rejects the other three and writes the copy
 
 The reply instructions in the message use plain words (`option 2`, `revise: …`) rather than a code, per `TELEGRAM-STYLE.md` rule 9. Full feature notes: `Social Posts.md`.
 
+### X readiness and link storage (2026-11-17, LIVE)
+
+`BA - Schedule Every 2h > X Post Readiness` sends two nudges from the `Publications` table:
+
+- **`🟡 X post not chosen`** when the X row has no `Post Copy` and the episode is at `Artwork Ready`, `Ready to Publish`, `Scheduled to Publish` or `Published`.
+- **`🟡 X link needed`** when the X row has a `Post Copy`, no `URL`, and the episode is `Published`.
+
+The assistant's system message has an `X POST READINESS` section:
+
+| Reply | Behaviour |
+|---|---|
+| `resend social posts` / `show me the options` | Read the episode's `Social Posts` rows and list each Option, Angle, Body and CTA. No write. |
+| `option 2` | Normal pick rule: `Status = Selected` on that `Proposed` row. |
+| an X URL | Propose one update on the X publication row: `URL`, `Published At = today`, `Status = Published`. |
+| `skip X` / `not doing X` | Propose `Status = Skipped` on the X row. |
+
+The assistant never marks the X row `Published` without a URL. It finds the X row by the episode's `BA-xxxx` and the `Publication = "<BA-xxxx> - X"` name. If the reply has no episode anchor, it asks.
+
 ### Attaching a thumbnail image (added 2026-10-06, LIVE)
 
 Send the bot a photo and it attaches it to the episode's artwork, with no approval tap and without invoking the agent (so no OpenRouter call). This is the "I made my own thumbnail" path, an alternative to letting the artwork workflow generate options. **A photo captioned `book cover` (or just `cover`) is routed differently: see [Attaching a book cover](#attaching-a-book-cover-2026-10-22).**

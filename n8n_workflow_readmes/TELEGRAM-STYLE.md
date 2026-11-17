@@ -191,6 +191,7 @@ reply is a bug, so fix it when you see one.
 | `ntXHSW3AbNntnaj0` Episode Approved > Social Posts Drafted | 1 | ✅ 2026-11-16 |
 | `6m5s6x2sYMWJRz1s` Social Post Selected > X Publication Linked | 1 | ✅ 2026-11-16 |
 | `G4GoqVPpUMJWoEmM` Social Post Revising > Four Redrafted | 2 | ✅ 2026-11-16 |
+| `ybngTJAUMqJaDwbB` X Post Readiness | 1 | ✅ 2026-11-17 |
 | `LTmRVKn9TWJd6Gtk` Fountain Scheduled | 3 | ✅ 2026-11-12 |
 | `pvCPy320OjawDkSu` Fountain Publication Reconciled | 3 | ✅ 2026-11-12 |
 | `G1N3gUA2CUa8Q5sF` Apply Fountain Sync | 3 | ✅ 2026-11-12 |
