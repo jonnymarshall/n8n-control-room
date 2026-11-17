@@ -262,6 +262,16 @@ PR #15 unattended. The content was wanted; the merge was not the agent's to make
 
 **Never let `updateNode` replace `parameters` with a partial object.** `n8n_update_partial_workflow`'s `updateNode` takes `updates.parameters` as a **whole-object replacement**, not a merge. Sending `{ parameters: { url: "..." } }` leaves the node with *only* a `url` and silently drops `method`, `authentication`, `nodeCredentialType`, `sendBody`, `jsonBody` and everything else, which shows up as a naked `401 AUTHENTICATION_REQUIRED` from Airtable. Either send the node's complete `parameters` object with the one field changed, or use `patchNodeField` for a find/replace inside a single string field. Two live nodes were broken this way on 2026-11-17 (the assistant's agent node lost `promptType`/`text`, the artwork `Mark Generating` lost its PATCH method and credential type), both caught by diffing the refreshed snapshot against the previous one. **After any MCP node update, refresh the snapshot and diff it against the last version before trusting the run.**
 
+## RULE: Watch the execution-volume budget
+
+Every polling stage buys its reliability with a stored execution per poll. After the 2026-11-17 changes the instance writes roughly **5,300 executions a day**, about **3,900 of them from three `Every Minute` timers** in the metadata and artwork workflows (a metadata timer, an artwork-generation timer, and one shared artwork pick/revision timer). n8n keeps a bounded history (default 10,000 executions), so that is roughly two days of scrollback.
+
+- **Hard threshold: ~10,000 a day.** At that point either lengthen the poll interval (every 2 minutes halves a timer's cost and adds at most a minute of latency), or raise the server's prune limit if disk allows. Do not add a fourth minute-timer without doing one of those first.
+- **Cheaper options, in order:** one shared timer per workflow rather than one per queue (the artwork pick and revision queues already share one); a longer interval for queues nobody waits on; and only then raising the prune limit.
+- **Measure, do not estimate:** `n8n_executions` with a `limit: 100` on the list gives the newest 100 runs; the timestamps on the first and last give the real rate.
+
+---
+
 ## Related conventions enforced elsewhere
 
 - **Airtable Trigger Fields** — when restricting the Fields list, include the
