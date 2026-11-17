@@ -314,7 +314,7 @@ cover can also have the cover replaced later; the `Read Reversion 1x1` and
 | `Duration (s)` | number | Integer seconds. Written by the metadata workflow. |
 | `Record Date` | date/time | The confirmed recording slot. Written by the scheduling workflow (2b) when a booking is confirmed, read from the calendar invite; also settable by hand. |
 | `Release Date` | date | The date the episode should go live. **This is the publish date**: the Fountain publisher schedules the item for this date at `Publishing Settings.Default Publish Time` (currently `06:00`, `America/New_York`), and the ready view requires it to be **today or later**. Set by hand; written by nothing automatically. |
-| `Publications` | link -> Publications | One row per channel. `<BA-xxxx> - Fountain` carries the Fountain item id, upload ids, schedule time and any error. `<BA-xxxx> - X` carries the approved social post body in `Post Copy`, a link to the chosen `Social Posts` row, `Episode Status` / `Episode Title` lookups and `Last Nudged At`. The X row is created when the social posts are drafted, before a post is chosen. |
+| `Publications` | link -> Publications | One row per channel. `<BA-xxxx> - Fountain` carries the Fountain item id, upload ids, schedule time and any error. `<BA-xxxx> - X` carries the approved social post body in `Post Copy`, a link to the chosen `Social Posts` row, `Episode Status` / `Episode Title` / `Episode Social Posts` lookups, `Last Nudged At` and `Last Modified Time`. The X row is created when the social posts are drafted, before a post is chosen. |
 | `Social Posts` | link -> Social Posts | The four platform-neutral post options drafted after approval. One row per option; `Status` is `Proposed` / `Selected` / `Rejected` / `Revising`. Empty means the drafting workflow has not run yet. |
 | `Thumbnail Caption` | long text | The artwork headline. Set by Jonny's reply to the packaging message (`TC1`–`TC5` or his own wording). A precondition for artwork. It is typeset manually over the artwork afterwards, into the reserved top-quarter band. |
 | `Custom Image Prompt` | long text | **His free-text art direction for this episode's artwork.** Set by the same reply. **Optional. The view does not gate on it (corrected 2026-10-23).** `default` (or `none`) means "no extra direction". Fills a `{{CUSTOM}}` placeholder in the layout prompt template. `Read` is never asked for it and uses `Book Cover`. |
@@ -658,13 +658,14 @@ Three paths in one workflow.
 - **Next:** publishing (stage 5), or an artwork revision. The social post and the artwork are independent.
 
 ### 4d. X post readiness (after approval, no status change)
-- **Workflow:** `BA - Schedule Every 2h > X Post Readiness` (`ybngTJAUMqJaDwbB`, **ACTIVE**), every 2 hours.
-- **What it reads:** `Publications` where `Platform = X` and `Status = Pending`, plus the `Episode Status` / `Episode Title` lookups and `Post Copy`, `URL`, `Last Nudged At`.
-- **Copy nudge:** no `Post Copy`, `Episode Status` in `Artwork Ready`, `Ready to Publish`, `Scheduled to Publish` or `Published`. Repeats every 12 hours until a post is chosen or the X row is set `Skipped`.
+- **Workflow:** `BA - Schedule Every 2h > X Post Readiness` (`ybngTJAUMqJaDwbB`, **ACTIVE**).
+- **Triggers:** Airtable Trigger on the `X Copy Needed` (`viwCZGBwut56NnNgY`) and `X Link Needed` (`viwWvqDJ0iG5BaSK7`) views on `Publications`, `Last Modified Time`. Plus a 2-hour schedule that reads the same two views for repeats and for stage changes that do not move the publication row's timestamp.
+- **What it reads:** the two views, plus the `Episode Status`, `Episode Title` and `Episode Social Posts` lookups and `Post Copy`, `URL`, `Last Nudged At`.
+- **Copy nudge:** no `Post Copy`, `Episode Social Posts` non-empty, `Episode Status` in `Approved`, `Awaiting Thumbnail Pick`, `Artwork Ready`, `Ready to Publish`, `Scheduled to Publish` or `Published`. In `Approved` / `Awaiting Thumbnail Pick` the X row must be at least 2 hours old and the repeat is every 48 hours; later stages repeat every 12 hours. Until a post is chosen or the X row is set `Skipped`.
 - **Link nudge:** `Post Copy` present, `URL` empty, `Episode Status = Published`. Repeats every 24 hours until the link is stored or the row is set `Skipped`.
 - **It is a reminder, not a gate.** It never blocks or changes the podcast publish. The checks live on the X publication row, not on the episode, so each platform can have its own criteria. It stays quiet between 21:00 and 08:00 America/New_York.
 - **Reply handling:** `resend social posts` makes the assistant list the four options again; an X URL makes it propose `URL`, `Published At = today`, `Status = Published`; `skip X` proposes `Status = Skipped`.
-- **Verified:** copy and link nudges sent to Jonny's DM on 2026-11-17, cooldown respected, and the link nudge stopped after `URL` + `Status = Published`. See `n8n_workflow_readmes/BA - Schedule Every 2h > X Post Readiness.md`.
+- **Verified:** view trigger `27343` fired on `BA-KXqegO - X` and sent the copy nudge; schedule path `27349` read both views and sent for `BA-nxzPcz`; link nudge `26866` sent and `26871` stopped after `URL` + `Status = Published`. See `n8n_workflow_readmes/BA - Schedule Every 2h > X Post Readiness.md`.
 
 ### 5. Publishing (Fountain)
 - **Was:** `Airtable - View to Published` (`7O9z3UwcUOkHjAC2`) polled the ready view

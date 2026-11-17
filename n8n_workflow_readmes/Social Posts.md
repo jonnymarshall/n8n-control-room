@@ -157,7 +157,9 @@ One row per option. Four rows per round.
 | `Platform` | single select | `X`. The row is `BA-xxxx - X`, `Status = Pending`. |
 | `Episode Status` | lookup (`fldOOAZZlinvogIOy`) | `Status` from the linked episode. Used by the X readiness nudge to wait for the right stage. |
 | `Episode Title` | lookup (`fld8aWTMRfgsHba1D`) | `Title` from the linked episode. Used in the X readiness messages. |
-| `Last Nudged At` | date/time (`fldd98VkXSENZDbuh`) | When the X readiness nudge last sent. Throttles the copy (12h) and link (24h) reminders. |
+| `Episode Social Posts` | lookup (`fldtqhj1BqSXuFTov`) | The episode's linked `Social Posts`. The copy nudge waits until this is non-empty, so `Approved` and `Awaiting Thumbnail Pick` cannot beat the options message. |
+| `Last Nudged At` | date/time (`fldd98VkXSENZDbuh`) | When the X readiness nudge last sent. Throttles the copy (12h, or 48h in the two early stages) and link (24h) reminders. |
+| `Last Modified Time` | last modified time (`fld3kN88GMQoOTaHD`) | The trigger field for the `X Copy Needed` and `X Link Needed` views. |
 
 The `BA-xxxx - X` row is now created **when the four social posts are drafted**, with `Status = Pending`, `Platform = X` and no `Post Copy`. The selection workflow updates it. That is what lets the X readiness nudge see “not chosen yet” at all.
 
@@ -195,12 +197,14 @@ The selection workflow only writes `Post Copy` and `Social Post` on an existing 
 
 ### 4. X readiness nudges — `BA - Schedule Every 2h > X Post Readiness` (`ybngTJAUMqJaDwbB`, ACTIVE)
 
-- Fires every 2 hours.
-- Reads `Publications` where `Platform = X` and `Status = Pending`.
-- **Copy nudge:** no `Post Copy`, `Episode Status` in `Artwork Ready`, `Ready to Publish`, `Scheduled to Publish` or `Published`. Repeats every 12 hours until a post is chosen or the X row is set `Skipped`.
+- **View triggers:** `X Copy Needed` (`viwCZGBwut56NnNgY`) and `X Link Needed` (`viwWvqDJ0iG5BaSK7`) on `Publications`, `Last Modified Time`. Entering or changing a row in either view starts the workflow.
+- **Schedule:** every 2 hours, reading the same two views. A view entry fires once; the schedule repeats the reminder and catches stage changes that do not move the publication row's timestamp.
+- **Copy nudge:** no `Post Copy`, `Episode Social Posts` non-empty, `Episode Status` in `Approved`, `Awaiting Thumbnail Pick`, `Artwork Ready`, `Ready to Publish`, `Scheduled to Publish` or `Published`. Early stages wait 2 hours and repeat every 48 hours; later stages repeat every 12 hours.
 - **Link nudge:** `Post Copy` present, `URL` empty, `Episode Status = Published`. Repeats every 24 hours until the link is stored or the row is set `Skipped`.
-- Stamps `Last Nudged At` after the Telegram send succeeds.
+- Stamps `Last Nudged At` after the Telegram send succeeds. Quiet between 21:00 and 08:00 New York time.
 - It is a reminder, not a gate. It does not stop the podcast publish.
+
+The `Approved` and `Awaiting Thumbnail Pick` conditions are safe because the `Episode Social Posts` lookup is non-empty only after the four options exist, and the 2-hour age guard lets the “Social posts ready” message land first.
 
 See `BA - Schedule Every 2h > X Post Readiness.md` for the exact conditions and message shapes.
 
@@ -251,6 +255,7 @@ The assistant proposes the write; the normal approval tap still applies. It neve
 - All test rows, publications and the temporary episode were deleted.
 - **2026-11-17, one-episode-per-run:** changing the draft trigger to the house schedule + view search pattern was forced by a live test where three queued episodes produced 12 social post rows in one run but only one X row. The three episodes were real (`BA-KXqegO`, `BA-nxzPcz` and a temporary `BA-4uUwFa`). The real posts were deleted and regenerated to the group (executions `26929` and `26935`) so the “Social posts ready” message exists where the X nudge points; X rows were created for both real episodes; the temporary episode and its posts were deleted. Their `Last Nudged At` was set to now so the first X nudge waits 12 hours.
 - **2026-11-17, X readiness:** copy nudge execution `26855` sent two “X post not chosen” messages to Jonny's DM and stamped both rows; `26861` sent nothing because of the 12-hour cooldown. Link nudge `26866` sent one “X link needed” message for a temporary `Published` episode; `26871` planned nothing after `URL` and `Status = Published` were set. Test X row, temporary episode and its posts were deleted.
+- **2026-11-17, view triggers:** clearing `Last Nudged At` on `BA-KXqegO - X` fired `X Copy Needed View` (execution `27343`), saw `Episode Social Posts` non-empty and sent the copy nudge. The 2-hour schedule path (execution `27349`) read both views through `Fetch X Copy Needed` / `Fetch X Link Needed`, merged them and sent the copy nudge for `BA-nxzPcz`. The triggers would not activate until a `Last Modified Time` field was added to `Publications`.
 - **Not yet exercised:** the Telegram assistant's `option N` and `revise:` replies end to end, and the assistant's `resend social posts` / X link / skip X replies.
 
 ---
