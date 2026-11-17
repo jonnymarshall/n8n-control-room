@@ -1,18 +1,51 @@
 # BA - Ready for Metadata View Entered > AI Metadata
 
+> **2026-11-17 - the trigger is now a one-minute view poll that takes one row per run (LIVE, published).** Charlie uploaded two clips in the same minute; the Airtable trigger handed both rows to one run, every `.first()` in the pipeline resolved to the first one, and the claim wrote `Generating Metadata` onto that record twice. The trigger's timestamp cursor then moved past the second row, so Airtable never offered it again and it sat in the view for 3 days 17 hours (`BA-KXqegO`, execution 21466 on 2026-11-13; it finally ran as execution 25887 on 2026-11-17, and only because its status genuinely changed in between). Traffic was never the problem: **a poll can legitimately return several rows, and this workflow can only process one.** The fix is `Every Minute` (Schedule Trigger) → `Ready for Metadata View` (Airtable **search** of the same view, `limit 1`, oldest `Last Modified Time` first) → `Queued Episode?` (IF) → **claim** → everything else unchanged. A row in the view is now picked up on the next minute no matter what its `Last Modified Time` says, so a missed row cannot exist, and the claim moved one step earlier (before the Frame.io URL is parsed) so a row with a bad URL cannot re-alert every minute. Cost: one small stored execution per minute, because a Schedule Trigger always runs the workflow while an Airtable poll can decline to. See [Why the trigger changed](#why-the-trigger-changed-2026-11-17).
+
 > **2026-11-13 - the 2 GB guard upstream now measures the proxy, not the master, so big cuts reach this workflow.** No node, prompt or credential changed here. What changed is who can arrive: `BA - Frame.io Uploaded > Episode Marked` used to refuse any upload whose original file was over 2 GB, even when Frame.io had a small proxy. This workflow's own behaviour is unchanged, and it still downloads the `efficient` proxy.
 
 > **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published).** The packaging message now leads with 🟡 (it asks for a reply) instead of 🎬, and the metadata caption, same-cut, skipped and Audionauts notices use the house shape. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
 
 > **Find this workflow in n8n by name.** Workflow IDs change when a workflow is rebuilt from code, so the name is the stable identifier. (ID at time of writing: `jroXHciDvy0sWlRM`.) Renamed 2026-10-29 from `BA - Frame.io Uploaded > AI Metadata`, when the Frame.io webhook half moved out to its own workflow.
 
-This is **stages #6 + #7** of the Guy's Take build: transcription (#6) and AI metadata (#7). It is triggered by an episode entering the **`Ready for Metadata` view**, not by Frame.io.
+This is **stages #6 + #7** of the Guy's Take build: transcription (#6) and AI metadata (#7). It polls the **`Ready for Metadata` view** once a minute and takes **one row per run**, not by Frame.io.
 
 The Frame.io webhook, the filename checks and the `Frame.io URL` write now live in **`BA - Frame.io Uploaded > Episode Marked`** (`5ZMcCY8WPQ3bFji6`), which stamps the row and stops. Read that readme for `_Skip`, `_Bypass`, the 2 GB guard and the status gate.
 
 SDK source: `scripts/deploy/workflows/guys-take-metadata-from-view.sdk.js`.
 
 ---
+
+## Why the trigger changed (2026-11-17)
+
+**What happened.** On 2026-11-13 two clips entered the view inside the same minute. The Airtable trigger returned **both rows in one poll** (execution 21466), and every downstream node reads the first row: `$('Ready for Metadata View').first()`, `$('Resolve Frame.io File').first()`, `$('Build Outputs').first()` and so on. So:
+
+- `Set Generating Metadata` ran twice and wrote `Generating Metadata` onto **the same record twice**; `BA-KXqegO` was never touched and stayed at `Ready for Metadata`.
+- The run generated metadata and the packaging message for `BA-nxzPcz` only.
+- The trigger then moved its timestamp cursor to "now". `BA-KXqegO`'s `Last Modified Time` was already older than that, so the next poll did not include it and no later poll ever would. It sat in the view for **3 days 17 hours**.
+
+**Why the retry did nothing.** Re-saving `Status = Ready for Metadata` on a row that already holds that value is not a change. Airtable does not move `Last Modified Time` for a write that changes no value, so the cursor question still had nothing new to return. The assistant told Charlie twice that the write "advances Last Modified Time"; it did not, and the workflow stayed silent. The third attempt only worked because the row had genuinely changed value in the meantime.
+
+**Why the fix is at the trigger.** The pipeline is single-row by construction, and making it loop over N rows means a Loop Over Items wrapper, four branch ends rewired and 18 `.first()` expressions retargeted inside a live 35-node workflow. Taking one row per run gives the same guarantee (nothing can be skipped) with two nodes added and nothing else restructured.
+
+**What it is now.**
+
+```
+Every Minute (Schedule Trigger, every 1 min, misfirePolicy: skip)
+  -> Ready for Metadata View (Airtable search: same view, limit 1, sort Last Modified Time asc)
+  -> Queued Episode? (IF: $json.id is not empty)
+  -> Set Generating Metadata (claim: $json.id, Status = Generating Metadata)
+  -> Resolve Frame.io File -> Show File -> ... (unchanged)
+```
+
+The node keeps the name `Ready for Metadata View` on purpose: all 18 expressions that read the episode row still resolve, because the search returns the same `{ id, createdTime, fields }` shape the trigger did.
+
+**Consequences worth knowing.**
+
+- A row in the view is picked up on the next minute whatever its `Last Modified Time` says. Setting `Status = Ready for Metadata` is now the only lever needed to queue anything, including a row already sitting at that status (nothing to write at all in that case).
+- The claim happens **before** `Resolve Frame.io File`. Previously an unparseable `Frame.io URL` threw before the flip, which was safe only because the cursor had already moved on. With a view poll, throwing before the claim would re-fire every minute and alert every minute.
+- One small execution is stored per minute, because a Schedule Trigger always starts the workflow while the Airtable poll could decline to. Roughly 1,440 a day; the instance already records about 1,300.
+- An empty view ends the run after the search: the IF never fires and nothing is written.
 
 ## What changed 2026-10-29 (why this workflow looks different)
 
@@ -59,15 +92,15 @@ An episode enters the **`Ready for Metadata` view** (set by `BA - Frame.io Uploa
 | Item | Value |
 |---|---|
 | **Workflow ID** | `jroXHciDvy0sWlRM` |
-| **Trigger** | Airtable poll (every minute) on the Episodes view `Ready for Metadata` (`viwNSD7pdOs2sKTgR`), filtered to `Status = Ready for Metadata`. The Frame.io webhook lives in `BA - Frame.io Uploaded > Episode Marked` |
+| **Trigger** | `Every Minute` Schedule Trigger (every 1 min) → Airtable **search** of the Episodes view `Ready for Metadata` (`viwNSD7pdOs2sKTgR`), `limit 1`, oldest `Last Modified Time` first, then an IF guard. **One row per run.** The Frame.io webhook lives in `BA - Frame.io Uploaded > Episode Marked` |
 | **Media source** | Frame.io V4 Show File (`GET /v4/accounts/{account_id}/files/{file_id}?include=media_links.efficient,media_links.original,media_links.high_quality`) → the `efficient` proxy's `download_url`, else `high_quality`, else `original` (a 640x360 proxy for the 2026-11-13 `BA-HRwIMb` cut; audio has no video proxy and falls back to `original`) |
 | **Transcriber** | Gemini `gemini-2.5-flash` via the **Files API** (resumable upload → poll ACTIVE → `generateContent` with `fileData`). Long video is transcribed in 20-minute windows (`Build Chunks` → per-window `Transcribe with Gemini` → `Stitch Transcript`) |
 | **Metadata model** | `openai/gpt-5.1` via OpenRouter, `json_object`, `temperature 0.8`, structured output parser |
 | **Outputs** | Standard types: 5 titles + 5 thumbnail captions + 1 timecoded description + 1 first-person podcast summary (geared to the episode **Type** — Take/Chat/Roundtable/Clip/Read) + Podcasting 2.0 chapters JSON, delivered as a Markdown document. (Visual-idea generation was removed 2026-10-29.) Audionauts: transcript, Frame.io URL and duration only. |
 | **Delivery** | Standard types: **two** Telegram messages to the Guy's Take group (chat ID `-5254203539`, hardcoded), the Markdown file then **`Send Packaging Request`**. Audionauts: one short transcription-complete message; no metadata file or packaging request. |
-| **Episode match** | Not its job any more: the row *is* the trigger. The Frame.io file id is parsed from the last path segment of the row's `Frame.io URL` (`Resolve Frame.io File`); the account id is hardcoded. |
+| **Episode match** | Not its job any more: the queued row is the input. The Frame.io file id is parsed from the last path segment of the row's `Frame.io URL` (`Resolve Frame.io File`); the account id is hardcoded. |
 | **Airtable base** | `app8Xw9Tq0XLjhmp9` (Guy's Take), `Episodes` `tbl3uYLIvtB9APZp6` |
-| **Status transition** | On entry: `Ready for Metadata` → `Generating Metadata` (written first, so a crash cannot re-loop the trigger). Full run → `AI Analysis Complete` + `Summary`, `Chapters`, `Transcript`, `Frame.io URL`, `Duration (s)`, `<episodeId>_Chapters.json`. Audionauts → `AI Analysis Complete` + only `Transcript`, `Frame.io URL`, `Duration (s)`. Same-length re-upload → `AI Analysis Complete`, nothing regenerated. |
+| **Status transition** | On entry: `Ready for Metadata` → `Generating Metadata` (claimed first, before the Frame.io URL is parsed, so a crash can neither re-loop nor re-alert). Full run → `AI Analysis Complete` + `Summary`, `Chapters`, `Transcript`, `Frame.io URL`, `Duration (s)`, `<episodeId>_Chapters.json`. Audionauts → `AI Analysis Complete` + only `Transcript`, `Frame.io URL`, `Duration (s)`. Same-length re-upload → `AI Analysis Complete`, nothing regenerated. |
 | **Active?** | **Yes** — live; Frame.io OAuth2 credential configured |
 | **Size guard** | Moved upstream 2026-10-29: `File Over 2 GB?` lives in `BA - Frame.io Uploaded > Episode Marked`, so an oversized cut is never queued. Since 2026-11-13 it compares the size of the rendition this workflow would download, not the master. A row queued by hand with a genuinely oversized file still wastes a download. |
 | **Transient-failure cover** | `Show File`, `Download Proxy`, `Start Gemini Upload`, `Get File State`, `Transcribe with Gemini` retry 5× / 5s (~20s of cover) against Gemini 503s + DNS blips. `Fetch Mood Library` retries 3× / 5s. Telegram nodes retry. See [gotchas](#gotchas--things-to-verify-on-first-run). |
@@ -92,7 +125,7 @@ The **HTTP Request nodes are skipped by credential auto-assignment** on every pu
 - `Upload Chapters Attachment` → `Airtable PAT`.
 - **`Fetch Mood Library` → `Airtable [n8n] (PAT)`** (predefined credential type `airtableTokenApi`). New 2026-08-04. It's `neverError`, so a missing credential does **not** fail the run — the mood list just comes back empty and the packaging message says the library is empty. Check this first if the moods vanish from the message.
 
-The Airtable **node** types (`airtableTokenApi`) — the trigger plus the five update nodes — auto-assign cleanly on push.
+The Airtable **node** types (`airtableTokenApi`) — the search plus the six update nodes — auto-assign cleanly on push.
 
 ### Creating the Frame.io credential (Adobe IMS OAuth2)
 
@@ -156,7 +189,7 @@ Consequence: a same-length re-upload still does the Frame.io download + Gemini u
 
 Flow:
 1. After `Is File Active` (true), **`Parse Duration`** (Set) reads `videoMetadata.videoDuration` from the ACTIVE `Get File State` output (`$json`, so it's the final poll's value), strips non-numeric chars, and rounds to whole seconds → `durationSeconds`. Missing/unparseable → `0`.
-2. The trigger row carries the stored `Duration (s)`, read as `$('Ready for Metadata View').first().json.fields['Duration (s)']`.
+2. The queue row carries the stored `Duration (s)`, read as `$('Ready for Metadata View').first().json.fields['Duration (s)']`.
 3. `Same Length?` (IF, `typeValidation: loose`) is true only when **both**: `durationSeconds > 0` **AND** `durationSeconds == Duration (s)`. The `> 0` guard means a failed read (0) or a missing baseline can never accidentally skip the AI run.
    - **True** → `Skip to Analysed` sets `Status = AI Analysis Complete` (the metadata already on the record is still valid; the link was refreshed upstream) and `Notify Same Cut` says so. No transcription, no OpenRouter, no document.
    - **False** → the full pipeline, which finishes by writing all fields plus `Duration (s)` (via the separate `Store Duration` node), establishing/refreshing the baseline.
@@ -169,14 +202,14 @@ Rounding to whole seconds is intentional: frame-accurate re-exports of the same 
 
 ## Type-aware summary
 
-The episode's **`Type`** (Take / Chat / Roundtable / Clip / Read) and the **`Guest Name`** lookup are fed into the metadata prompt so the AI frames the summary for the format. The trigger row supplies both, from inside the Airtable `fields` wrapper:
+The episode's **`Type`** (Take / Chat / Roundtable / Clip / Read) and the **`Guest Name`** lookup are fed into the metadata prompt so the AI frames the summary for the format. The queue row supplies both, from inside the Airtable `fields` wrapper:
 
 ```
 EPISODE TYPE: {{ $('Ready for Metadata View').first().json.fields?.Type || $('Ready for Metadata View').first().json.fields?.Category || 'Unknown' }}
 GUEST: {{ $('Ready for Metadata View').first().json.fields?.['Guest Name'] ? (Array.isArray($('Ready for Metadata View').first().json.fields['Guest Name']) ? $('Ready for Metadata View').first().json.fields['Guest Name'].join(', ') : $('Ready for Metadata View').first().json.fields['Guest Name']) : 'Unknown' }}
 ```
 
-No empty-row guard is needed any more: the trigger row always exists. `Guest Name` is an array (it's a lookup), so the expression joins it. **Before 2026-10-29 these expressions read `json.Type` / `json['Guest Name']` from outside the wrapper, so the prompt always said `Unknown` and every type got the generic first-person voice.** The system prompt carries the definitions and the **voice** per type:
+The row always exists by this point: `Queued Episode?` only forwards a search result that carried an `id`. `Guest Name` is an array (it's a lookup), so the expression joins it. **Before 2026-10-29 these expressions read `json.Type` / `json['Guest Name']` from outside the wrapper, so the prompt always said `Unknown` and every type got the generic first-person voice.** The system prompt carries the definitions and the **voice** per type:
 
 - **Take** — solo episode, host's own breakdown of a topic → **first person (host)**, his personal take/argument.
 - **Chat** — longform conversation where the host sits down with the guest(s) → **first person (host)**, naming the guest ("I sit down with {GUEST}…").
@@ -220,7 +253,7 @@ Option labels are the reply codes themselves (`T1.`, `TC1.`) rather than bare nu
 
 ## How it works (node by node)
 
-**Ready for Metadata View → Resolve Frame.io File → Set Generating Metadata → Show File → Extract Episode Info → Is Video or Audio?**
+**Every Minute → Ready for Metadata View → Queued Episode? → Set Generating Metadata → Resolve Frame.io File → Show File → Extract Episode Info → Is Video or Audio?**
 - **Is Video or Audio? → False →** Notify Skipped (Non-Media) → *(end)*
 - **Is Video or Audio? → True →** Download Proxy → Start Gemini Upload → Capture Upload URL → Merge URL + Bytes → Upload Bytes to Gemini → Wait for Processing → Get File State → Is File Active → Parse Duration → Same Length?
     - **Same Length? → True →** Skip to Analysed (`Status = AI Analysis Complete`) → Notify Same Cut → *(end)*
@@ -228,9 +261,10 @@ Option labels are the reply codes themselves (`T1.`, `TC1.`) rather than bare nu
       - **Is Audionauts? → True →** Save Audionauts Transcript → Notify Audionauts Complete → *(end)*
       - **Is Audionauts? → False →** Fetch Mood Library → Generate Metadata → Build Outputs → Set Status AI Analysis Complete → Store Duration → Upload Chapters Attachment → Prepare Telegram File → Convert Markdown to File → Send Metadata to Telegram → **Send Packaging Request**
 
-1. **Ready for Metadata View** (Airtable Trigger, every minute) — rows in the `Ready for Metadata` view. The trigger row is the source of truth for `Status`, `Title`, `Type`, `Guests`, `Duration (s)` and `Frame.io URL`, all under `.fields`.
-2. **Resolve Frame.io File** (Code) — parses the file id out of the stored `Frame.io URL` (last path segment) and supplies the hardcoded account id. Throws a named error if the URL has no usable id, before the status is flipped.
-3. **Set Generating Metadata** (Airtable update) — the flip. Deliberately has no error handling: if it fails, the run must stop rather than proceed and re-fire on the next poll.
+1. **Every Minute → Ready for Metadata View** (Schedule Trigger → Airtable search) — asks Airtable for the **oldest** row in the `Ready for Metadata` view, `limit 1`, sorted by `Last Modified Time` ascending. One row per run is deliberate: every node downstream reads `.first()`, so a second row in the same run would be processed as the first and then stranded. The search row is the source of truth for `Status`, `Title`, `Type`, `Guests`, `Duration (s)` and `Frame.io URL`, all under `.fields`.
+2. **Queued Episode?** (IF) — passes the row on only when the search returned a record (`$json.id` is not empty). An empty view ends the run here, quietly.
+3. **Set Generating Metadata** (Airtable update) — the claim, and it now runs **before** the URL is parsed. Writes `Generating Metadata` to `$json.id` (the row this run took). Deliberately has no error handling: if it fails, the run must stop rather than proceed. Claiming this early is what stops a row that cannot be parsed from re-firing (and re-alerting) every minute.
+4. **Resolve Frame.io File** (Code) — parses the file id out of the stored `Frame.io URL` (last path segment) and supplies the hardcoded account id. Reads the row back from `$('Ready for Metadata View').all()`, so it does not depend on the shape of the claim node's response. Throws a named error if the URL has no usable id; the row is already at `Generating Metadata`, so it stays there until someone resets it.
 4. **Show File** (HTTP, `Adobe OAuth`) — `GET …/files/{fileId}?include=media_links.efficient,media_links.original`; returns `name`, `media_type`, `media_links`, `view_url`. (No duration — that comes from Gemini later.) *(Updated 2026-06-28: added `media_links.original` so audio files can fall back to the original-file URL when the efficient proxy `download_url` is `null`.)*
 5. **Extract Episode Info** (Code) — parses the filename into `episodeId`, picks the first rendition with a non-null `download_url` across `[efficient, high_quality, original]` (using `.find()` — **not** `||` which was fooled by `{download_url: null}` for audio files), the byte size as `fileSize` (from `data.file_size`, `0` if absent), the mime type, and a stable `webUrl` (`web_url` / `player_url` / **`view_url`** / links).
 5. **Is Video or Audio?** (IF) — gate on `mimeType` matching regex `^(video|audio)/` **AND** `downloadUrl` starting `http`. Images, PDFs, and other non-media uploads have no `efficient` proxy (`download_url` null), so they fail the URL check and route to **Notify Skipped (Non-Media)** (Telegram `sendMessage` heads-up, which prints the episode ID in a `<code>` block per the [include-record-ID rule](CONVENTIONS.md), `no-id` when the filename has no `BA-` prefix) and stop. Both video (`video/mp4`) and audio (`audio/mp3`, `audio/m4a`, etc.) pass. Prevents the *"Invalid URL"* crash on Download Proxy (exec #787). *(Updated 2026-06-25 from `startsWith 'video/'` to regex `^(video|audio)/` so audio uploads are also transcribed.)*
@@ -246,9 +280,9 @@ Option labels are the reply codes themselves (`T1.`, `TC1.`) rather than bare nu
 12b. **Stitch Transcript** (Code, added 2026-10-06): collects the per-window responses, shifts each window's relative `[MM:SS]` markers by the window's `startSeconds` into absolute episode time (re-formatting to `[H:MM:SS]` past an hour), and joins the windows in order into one `transcript`.
 13. **Extract Transcript** (Set): passes the stitched `transcript` through (the node every downstream reference still points at).
 14. **Validate Transcript Quality** (Code) — stops before Airtable is changed if the transcript is under 200 characters, implausibly short for the media duration, never reaches the end of the media according to its final timecode, or repeats one word 20 or more times in a row. Timecodes are matched with or without padding spaces (`[00:00]` and `[ 00:00 ]` both count — Gemini emits both). "Reaches the end" means the final timecode is within 120s of the runtime **or** covers at least 80% of it, so a transcript whose last marker lands a minute before the end is not failed. Audio skips the timecode check because Gemini provides no audio duration here. The thrown error includes the `BA-xxxx` ID and the exact failed checks, so the global error workflow can alert the team. *(Fixed 2026-09-24 — see the note at the top.)*
-15. **Is Audionauts?** (IF, case-insensitive) — reads `Type` from the trigger row's `fields`. True exits through the transcript-only path below; false continues into the existing metadata and packaging path.
+15. **Is Audionauts?** (IF, case-insensitive) — reads `Type` from the queue row's `fields`. True exits through the transcript-only path below; false continues into the existing metadata and packaging path.
 16. **Save Audionauts Transcript → Notify Audionauts Complete** — Audionauts only. One Airtable update writes `Status = AI Analysis Complete`, `Transcript`, `Frame.io URL`, and `Duration (s)`, preserving any existing summary or chapter fields. Telegram then confirms completion with the episode ID in a `<code>` block. No OpenRouter, chapters, metadata document, or packaging message runs.
-17. **Generate Metadata** (chain LLM + OpenRouter + structured parser) — non-Audionauts only. Returns `{ titles[5], thumbnail_captions[5], description, summary, chapters[] }`, strictly grounded in the transcript. (Visual-idea generation was removed 2026-10-29.) The summary voice is **geared to the episode `Type`** (Take/Chat/Roundtable/Clip/Read) and `Guest Name`, both read from the trigger row (see [Type-aware summary](#type-aware-summary)): first person as the host for Take/Chat/Roundtable/Read; **third person about the guest for Clip**.
+17. **Generate Metadata** (chain LLM + OpenRouter + structured parser) — non-Audionauts only. Returns `{ titles[5], thumbnail_captions[5], description, summary, chapters[] }`, strictly grounded in the transcript. (Visual-idea generation was removed 2026-10-29.) The summary voice is **geared to the episode `Type`** (Take/Chat/Roundtable/Clip/Read) and `Guest Name`, both read from the queue row (see [Type-aware summary](#type-aware-summary)): first person as the host for Take/Chat/Roundtable/Read; **third person about the guest for Clip**.
 18. **Build Outputs** (Code) — renders the Markdown deliverable, base64-encodes it, builds the Telegram caption strings plus the optional visual-ideas list, converts `chapters` to `(HH:MM:SS) - Title` text + Podcasting 2.0 JSON, and resolves `frameioUrl`.
 19. **Set Status AI Analysis Complete** (Airtable update) — writes `Status = AI Analysis Complete`, `Summary`, `Chapters`, `Transcript`, `Frame.io URL`, and `Chapters JSON: []` (clears prior attachment). One atomic update; deliberately does **not** include `Duration (s)`.
 20. **Store Duration** (Airtable update) — separate node, `continueRegularOutput`. Writes `Duration (s) = durationSeconds` (from `Parse Duration` / Gemini), establishing the baseline for next time. Isolated so a missing `Duration (s)` field can't fail the step 19 metadata write.
@@ -261,6 +295,9 @@ Option labels are the reply codes themselves (`T1.`, `TC1.`) rather than bare nu
 
 ## Gotchas / things to verify on first run
 
+- **A poll can return several rows, and this workflow can only process one.** That is why the trigger is a `limit 1` view search rather than the Airtable Trigger: the Airtable Trigger returned every row that matched in one run, and everything downstream reads `.first()`, so row 2 onwards was silently skipped while the timestamp cursor moved past it (2026-11-13, `BA-KXqegO`). Do not "optimise" this back into a bulk poll without wrapping the pipeline in a loop.
+- **One stored execution per minute is expected.** A Schedule Trigger always starts the workflow; the Airtable poll could decline to when nothing had changed. Empty runs stop after `Ready for Metadata View` (0 items, about half a second) and are harmless, but they do fill the execution list.
+- **The claim now precedes `Resolve Frame.io File`.** A row with a missing or unparseable `Frame.io URL` ends up at `Generating Metadata`, not back in the view. That is deliberate: the alternative (throw first) would re-alert every minute now that the view is polled. Fix the URL, then set `Status = Ready for Metadata` to retry, which the next minute will pick up.
 - **`Custom Image Prompt` and `Thumbnail Moods` should exist on Episodes (both Long text). The prompt is optional and is not a view gate.** Until `Custom Image Prompt` exists, the assistant's write of it 422s (Airtable rejects the **whole** record write on an unknown field name), which would silently drop the title and caption in the same PATCH. Until the **view** gates on it, artwork fires as soon as the caption lands and your art direction is ignored — see the thumbnail workflow's readme for the exact view condition.
 - **Two Telegram messages now, and the second one is the reply target.** Replying to the *document* no longer works properly: its caption only carries the title and episode ID, so the assistant can't resolve "T3" from it. Reply to the **`Send Packaging Request`** message underneath. If the document send succeeds but the packaging send fails (transient DNS/Telegram blip — it retries 4×/5s), all the Airtable writes have already happened; re-running the execution re-sends both messages but also re-transcribes unless the `_Bypass` / same-length short-circuit applies.
 - **Audionauts deliberately do not receive either standard Telegram message.** They branch immediately after transcript validation, before `Fetch Mood Library` and `Generate Metadata`, and receive only `Notify Audionauts Complete`. The route logic and node configurations are verified, but the first real Audionauts upload after 2026-09-09 still needs checking in executions and Telegram.

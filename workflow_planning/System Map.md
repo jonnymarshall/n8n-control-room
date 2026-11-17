@@ -140,8 +140,8 @@ Episode:  Script Ready
           Ready for Metadata              (set automatically by BA - Frame.io Uploaded > Episode Marked,
                                            which records the Frame.io link; only set when the status is
                                            Recorded or Edited and the file passed the name/size checks)
-             --[auto: the Ready for Metadata view fires]-->
-          Generating Metadata  (transient)
+             --[auto: the one-minute poll takes the OLDEST row in the Ready for Metadata view, one per run]-->
+          Generating Metadata  (transient, claimed before anything else)
              --[auto]-->
           AI Analysis Complete            (metadata workflow: transcript + summary + chapters, then a "Packaging for ..." message)
              --[human: ONE reply setting title, caption, guests, moods and image prompt]-->
@@ -417,10 +417,17 @@ which is why the webhook now also checks Frame.io's signature and ignores a file
 - Re-delivery of an old event is therefore harmless: the row has already left `Ready for Metadata`.
 
 **3b. `BA - Ready for Metadata View Entered > AI Metadata` (`jroXHciDvy0sWlRM`)** — the AI work.
-- **Fires:** an Episode enters the `Ready for Metadata` view (`viwNSD7pdOs2sKTgR`, one condition:
-  `Status = Ready for Metadata`).
-- **First action:** flip to `Generating Metadata`, so a crash cannot re-loop the trigger.
-- **Preconditions:** all handled by 3a. A row can be queued by hand by setting `Status = Ready for Metadata`.
+- **Fires:** a Schedule Trigger polls once a minute and takes **the oldest row** in the `Ready for Metadata`
+  view (`viwNSD7pdOs2sKTgR`, one condition: `Status = Ready for Metadata`). **One row per run**, always.
+  It is a contents poll, not a "what changed since last time" poll, so a row sitting in that status is
+  picked up on the next minute whatever its `Last Modified Time` says.
+- **First action:** claim the row as `Generating Metadata`, before the Frame.io URL is even parsed, so a
+  crash cannot re-loop and a bad URL cannot re-alert every minute.
+- **Why one row per run:** the pipeline reads `.first()` throughout. On 2026-11-13 two clips arrived in
+  the same minute, one was processed, and the other was stranded in the view for three days. Do not
+  describe this stage as "one run per upload"; it is one run per row.
+- **Preconditions:** all handled by 3a. A row can be queued by hand by setting `Status = Ready for Metadata`;
+  no timestamp trick is needed, and re-saving a status the row already holds does nothing at all.
 - **Does (full run):** transcribes the media (long video in 20-minute Gemini windows, stitched),
   generates 5 title options, 5 thumbnail-caption options, a timecoded description, a Type-aware
   `Summary`, and chapters. Writes `Status = AI Analysis Complete`, `Summary`, `Transcript`,
