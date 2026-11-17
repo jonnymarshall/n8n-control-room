@@ -38,10 +38,18 @@ PY
 : "${N8N_URL:?N8N_URL not set in .env}"
 : "${N8N_API_KEY:?N8N_API_KEY not set in .env}"
 
-WORKFLOWS="$(python3 - "$N8N_URL" "$N8N_API_KEY" <<'PY'
+# The workflow list goes through a temp FILE, not an environment variable.
+# `VAR="$(...)" cmd` has to fit the whole value into the exec environment, and the
+# full JSON for a mid-size instance is several MB: the script died with
+# "python3: Argument list too long" as soon as the instance grew past ~40
+# workflows, which silently disabled this check. A file has no such limit.
+WORKFLOWS_FILE="$(mktemp "${TMPDIR:-/tmp}/n8n-workflows.XXXXXX")"
+trap 'rm -f "$WORKFLOWS_FILE"' EXIT
+
+python3 - "$N8N_URL" "$N8N_API_KEY" "$WORKFLOWS_FILE" <<'PY'
 import json, sys, urllib.request
 
-url, key = sys.argv[1], sys.argv[2]
+url, key, dest = sys.argv[1], sys.argv[2], sys.argv[3]
 out, cursor = [], None
 while True:
     q = "?limit=250" + (f"&cursor={cursor}" if cursor else "")
@@ -53,14 +61,15 @@ while True:
     cursor = page.get("nextCursor")
     if not cursor:
         break
-print(json.dumps(out))
+with open(dest, "w") as f:
+    json.dump(out, f)
 PY
-)"
 
-WORKFLOWS="$WORKFLOWS" SDK_DIR="$SDK_DIR" python3 <<'PY'
+WORKFLOWS_FILE="$WORKFLOWS_FILE" SDK_DIR="$SDK_DIR" python3 <<'PY'
 import glob, json, os, re, sys
 
-workflows = json.loads(os.environ["WORKFLOWS"])
+with open(os.environ["WORKFLOWS_FILE"]) as f:
+    workflows = json.load(f)
 sdk_dir = os.environ["SDK_DIR"]
 
 # Snapshot identity: `workflow('<id or slug>', '<display name>', ...)`. Older files
