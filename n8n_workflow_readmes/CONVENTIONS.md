@@ -260,6 +260,8 @@ PR #15 unattended. The content was wanted; the merge was not the agent's to make
 
 ---
 
+**Never let `updateNode` replace `parameters` with a partial object.** `n8n_update_partial_workflow`'s `updateNode` takes `updates.parameters` as a **whole-object replacement**, not a merge. Sending `{ parameters: { url: "..." } }` leaves the node with *only* a `url` and silently drops `method`, `authentication`, `nodeCredentialType`, `sendBody`, `jsonBody` and everything else, which shows up as a naked `401 AUTHENTICATION_REQUIRED` from Airtable. Either send the node's complete `parameters` object with the one field changed, or use `patchNodeField` for a find/replace inside a single string field. Two live nodes were broken this way on 2026-11-17 (the assistant's agent node lost `promptType`/`text`, the artwork `Mark Generating` lost its PATCH method and credential type), both caught by diffing the refreshed snapshot against the previous one. **After any MCP node update, refresh the snapshot and diff it against the last version before trusting the run.**
+
 ## Related conventions enforced elsewhere
 
 - **Airtable Trigger Fields** — when restricting the Fields list, include the
