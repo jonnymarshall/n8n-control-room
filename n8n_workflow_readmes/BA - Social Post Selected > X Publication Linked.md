@@ -32,7 +32,9 @@ The X post has to live on the episode's `Publications` row so the posting step a
 - `Post Copy` = the full post: body (P1, P2, P3) + a blank line + CTA
 - `Social Post` = a link to the exact option row
 
-On an existing row, only those two fields are written. `Status` is deliberately left alone, so re-picking after the post is live does not reset a `Published` row to `Pending`.
+The X row is now created by the drafting workflow, before a post is chosen. This workflow updates it. If it is missing (for example an episode drafted before 2026-11-17), the create branch still creates it.
+
+On an existing row, only `Post Copy` and `Social Post` are written. `Status` is deliberately left alone, so re-picking after the post is live does not reset a `Published` row to `Pending`.
 
 The body is capped at 280 characters. The CTA and the episode link are outside that count. The link is appended when the post is sent, not stored in `Post Copy`.
 
