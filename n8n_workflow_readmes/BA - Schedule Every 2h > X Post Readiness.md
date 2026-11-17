@@ -76,6 +76,8 @@ Every nudged row gets `Last Nudged At` stamped in one Airtable PATCH **after** t
 
 The cooldowns are deliberately asymmetric: the copy nudge repeats every 12 hours because it is the one that gets forgotten; the link nudge waits 24 hours so Charlie is not pinged every two hours about a post he has not made yet.
 
+**Quiet hours:** no nudge is sent between 21:00 and 08:00 America/New_York. The schedule still runs, but `Plan Nudges` returns nothing outside that window, so a 3am run is silent and the first morning run sends.
+
 ## Assistant tie-in
 
 The Telegram Assistant has an `X POST READINESS` section:

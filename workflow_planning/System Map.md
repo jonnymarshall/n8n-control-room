@@ -662,7 +662,7 @@ Three paths in one workflow.
 - **What it reads:** `Publications` where `Platform = X` and `Status = Pending`, plus the `Episode Status` / `Episode Title` lookups and `Post Copy`, `URL`, `Last Nudged At`.
 - **Copy nudge:** no `Post Copy`, `Episode Status` in `Artwork Ready`, `Ready to Publish`, `Scheduled to Publish` or `Published`. Repeats every 12 hours until a post is chosen or the X row is set `Skipped`.
 - **Link nudge:** `Post Copy` present, `URL` empty, `Episode Status = Published`. Repeats every 24 hours until the link is stored or the row is set `Skipped`.
-- **It is a reminder, not a gate.** It never blocks or changes the podcast publish. The checks live on the X publication row, not on the episode, so each platform can have its own criteria.
+- **It is a reminder, not a gate.** It never blocks or changes the podcast publish. The checks live on the X publication row, not on the episode, so each platform can have its own criteria. It stays quiet between 21:00 and 08:00 America/New_York.
 - **Reply handling:** `resend social posts` makes the assistant list the four options again; an X URL makes it propose `URL`, `Published At = today`, `Status = Published`; `skip X` proposes `Status = Skipped`.
 - **Verified:** copy and link nudges sent to Jonny's DM on 2026-11-17, cooldown respected, and the link nudge stopped after `URL` + `Status = Published`. See `n8n_workflow_readmes/BA - Schedule Every 2h > X Post Readiness.md`.
 
