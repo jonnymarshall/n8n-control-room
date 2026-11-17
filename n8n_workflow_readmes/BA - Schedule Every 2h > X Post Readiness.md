@@ -122,7 +122,7 @@ Both verified bound on 2026-11-17.
 - Copy nudge: execution `26855` sent two “X post not chosen” messages (for `BA-KXqegO` and `BA-nxzPcz`, both `Artwork Ready`) to Jonny's DM and stamped both rows. A rerun at `26861` sent nothing because of the 12-hour cooldown.
 - Link nudge: execution `26866` sent one “X link needed” message for a temporary `Published` episode with a `Post Copy` and no URL.
 - Stopped correctly: after setting `URL` and `Status = Published` on the test X row, execution `26871` planned nothing.
-- All test data was deleted. The two real X rows (`BA-KXqegO - X`, `BA-nxzPcz - X`) were kept and their `Last Nudged At` was cleared so the first group nudge can fire.
+- All test data was deleted. The two real X rows (`BA-KXqegO - X`, `BA-nxzPcz - X`) were kept, their social posts were regenerated to the group, and their `Last Nudged At` was set to now so the first group nudge waits 12 hours.
 
 ## Gotchas
 
