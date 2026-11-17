@@ -458,10 +458,15 @@ which is why the webhook now also checks Frame.io's signature and ignores a file
 Three paths in one workflow.
 
 **Path 1 — Generate.**
-- **Fires:** an Episode enters the "ready for artwork" view, i.e. all the preconditions
-  below become true. The view does **not** filter on `Status = Approved`, but it **does**
+- **Fires:** a one-minute poll takes **the oldest episode** in the "ready for artwork" view
+  (`Ready for 16X9 Thumbnail`), **one episode per run**, i.e. all the preconditions below
+  become true. The view does **not** filter on `Status = Approved`, but it **does**
   exclude five statuses, so clearing an episode's `Thumbnails` is *not by itself* enough
   to bring it back in.
+- **One per run, by design.** Two episodes entering the view in the same minute used to
+  mean one was rendered and the other was dropped without a message. It now returns the
+  next minute. The episode is claimed as `Generating Artwork` before anything else runs,
+  so a failure cannot re-alert every minute.
 - **Preconditions checklist (Episode) — this is the answer to "what does this
   episode need before artwork is created?":**
   - [ ] `Summary` is not empty
