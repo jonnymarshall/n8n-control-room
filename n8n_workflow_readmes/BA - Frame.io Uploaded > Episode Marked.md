@@ -109,7 +109,7 @@ The list is inline in `Status Allows Metadata?`:
 ```
 {{ ['Recorded','Edited'].includes(String(($('Find Episode').first().json.fields || {}).Status || '')) }}
 ```
-Add or remove names there. Note this is separate from the **view** that triggers the metadata workflow, which filters on `Status = Ready for Metadata`.
+Add or remove names there. Note this is separate from the **view** the metadata workflow polls once a minute, which filters on `Status = Ready for Metadata`.
 
 ---
 

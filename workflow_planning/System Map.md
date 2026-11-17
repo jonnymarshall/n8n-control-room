@@ -42,7 +42,7 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
+*Last updated 2026-11-17 (two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
 broken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
 on purpose and why; see its entry below. Also fixed the same day: the Fountain publisher was
 scheduling items with no description; see stage 5).
@@ -492,10 +492,7 @@ Three paths in one workflow.
         (A code guard also strips him, but keep him out of `Guests` anyway.)
   - [ ] `Transcript is not empty` is **not** a view condition, and neither is
         `Custom Image Prompt`; older versions of this checklist said both were.
-- **A row already in the view may still not fire.** The trigger polls on
-  `Last Modified Time` advancing past its stored cursor. A record that entered via a view
-  filter change, or whose timestamp is older than the cursor, sits there with no error.
-  Touch the record to advance the timestamp.
+- **A row already in the view may still not fire — but only on the change-poll paths.** Path 1 polls the view's **contents**, so a row in it is taken on the next minute and no timestamp trick is needed. Paths 2 and 3 (and every other stage still using an Airtable Trigger) poll `Last Modified Time` against a stored cursor, so a record that entered via a view filter change, or whose timestamp is older than the cursor, sits there with no error; a genuine change to the record re-fires it. A write that sets a field to the value it already holds does **nothing**: Airtable does not move `Last Modified Time` for it, so "re-save the same status" is never the fix.
 - **⚠️ How to RE-generate artwork for an episode that already has options.** The old
   options are **not** overwritten, replaced or reused. They block the trigger: the view
   only admits an episode whose `Thumbnails` is empty, and while rows are linked the
@@ -506,8 +503,8 @@ Three paths in one workflow.
   2. **Write the episode**: the new `Custom Image Prompt` if there is one, and a `Status`
      outside all **five** excluded values (`Awaiting Thumbnail Pick` / `Generating
      Artwork` / `Published` / `Suspended` / `Artwork Ready`; `Approved` is the usual
-     choice). The genuine change to `Status` is also what advances `Last Modified Time`,
-     which the poller cursor needs.
+     choice). The status is what the view gates on; Path 1 rereads the view every minute,
+     so no timestamp nudge is needed.
   Whenever someone asks to regenerate, give all three parts in that order, count the rows
   out loud, and say the old options will be **deleted** and that it costs 4 fresh images.
   Never offer a status change on its own as the fix while rows are linked.

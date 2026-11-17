@@ -129,7 +129,7 @@ Selection is by setting a **`Thumbnails` row's `Status` to `Selected`**, not Tel
 | Item | Value |
 |---|---|
 | **Workflow ID** | `mLAn4ya2AmZoHDUk` (SDK-sourced; old `YyXiJ0lusoW7ynu9` archived) |
-| **SDK copy** | `scripts/deploy/workflows/guys-take-thumbnail-artwork.sdk.js` (reviewable local copy; live must be pulled and compared before editing; 62 nodes) |
+| **SDK copy** | `scripts/deploy/workflows/guys-take-thumbnail-artwork.sdk.js` (reviewable local copy; live must be pulled and compared before editing; 64 nodes, 3 triggers) |
 | **Trigger 1** | `Every Minute` Schedule Trigger → Airtable **search** on `Episodes` (`tbl3uYLIvtB9APZp6`), view `Ready for 16X9 Thumbnail` (`viwqgtrry8n6yNgqW`), `limit 1`, oldest first → `Generation Queued?` (IF). **One episode per run** — Path 1 Generate. *(Was an Airtable Trigger until 2026-11-17; it handed over every matched row and only the first was rendered.)* |
 | **Trigger 2** | Airtable poll on **`Thumbnails`** (`tblkcASzE4DXlxokO`), every minute, view **`Ready for 1X1 & 9X16 Thumbnails *J*`** (`viw7AHjnX9ZkvIrKo` — same view, **renamed 2026-08-20** from `Selected`) — Path 2 Select + Phase B. Filters `Status = Selected` **only**; it must carry **no episode-type filter**, because it drives the reject/status branch too (which must run for every type). Per-type variation rules live in the `Artwork Settings` table instead. *(A type filter was briefly added here on 2026-10-06 and reverted the same day; see the 2026-08-20 gotcha.)* |
 | **Trigger 3 (revisions)** | Airtable poll on **`Thumbnails`** (`tblkcASzE4DXlxokO`), every minute, view **`Revision Requested`** (`viwGVYiheuTD2pPlx`, filters `Status = Revising`) — Path 3 Revision |
