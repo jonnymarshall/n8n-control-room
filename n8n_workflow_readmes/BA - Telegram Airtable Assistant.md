@@ -155,6 +155,21 @@ Each numbered item in the notification names its target field after an arrow (`5
 
 **The gate worth knowing about:** for every non-Read episode artwork starts as soon as the packaging write lands; `Custom Image Prompt` is optional and is **not** a view gate (corrected 2026-10-23). A `Read` is different: its only gate is **`Book Cover`**, so if a reply answers everything except the cover, the agent proposes the write as normal and **reminds Jonny the Read's artwork hasn't started**. It never fills in `Custom Image Prompt` or `Book Cover` on his behalf.
 
+### Social posts (2026-11-16, LIVE)
+
+After approval, `BA - Episode Approved > Social Posts Drafted` posts a **"Social posts ready"** message with four numbered, platform-neutral options. The agent's system message has a `SOCIAL POSTS` section that turns a reply into one Airtable write on the `Social Posts` table (`tbly8EpeOlYrXHYNE`).
+
+| Reply | Write |
+|---|---|
+| `option 2` / `2` / `the second one` | On the episode's row with `Option = 2` and `Status = Proposed`: set `Status = Selected`. |
+| `revise: lead with the wine story, less formal` | On the row with `Option = 1` and `Status = Proposed`: set `Revision Brief` to the reply verbatim and `Status = Revising`. |
+
+The workflows do the rest: selection rejects the other three and writes the copy onto the episode's `BA-xxxx - X` row in `Publications`; revision rewrites all four options in place and posts them again.
+
+**The agent never writes `Copy`, `Angle` or `Characters`, and never writes the Publication row itself.** It also never picks a row that is not `Proposed`. If the reply has no `BA-` anchor and is not a reply to the social message, it asks which episode. If asked which post was chosen, it reads the X publication row and quotes `Post Copy`.
+
+The reply instructions in the message use plain words (`option 2`, `revise: …`) rather than a code, per `TELEGRAM-STYLE.md` rule 9. Full feature notes: `Social Posts.md`.
+
 ### Attaching a thumbnail image (added 2026-10-06, LIVE)
 
 Send the bot a photo and it attaches it to the episode's artwork, with no approval tap and without invoking the agent (so no OpenRouter call). This is the "I made my own thumbnail" path, an alternative to letting the artwork workflow generate options. **A photo captioned `book cover` (or just `cover`) is routed differently: see [Attaching a book cover](#attaching-a-book-cover-2026-10-22).**
@@ -276,5 +291,6 @@ The model is set on the `OpenRouter Sonnet 4.6` node; anything tool-capable on O
 
 - **BA: Guy's Take Weekly Research & Shortlisting** (`BA - Guy's Take Weekly Research & Shortlisting.md` in this folder): the Friday YouTube research digest writing to the same Guy's Take base
 - **BA: Guy's Take Thumbnail Artwork** (`BA - Guy's Take Thumbnail Artwork.md`): uses this workflow's `pick:rec…` callback hook for thumbnail selection
+- **Social posts** (`Social Posts.md`): four options after approval; this assistant turns `option 2` and `revise: …` into the one write that drives selection or redraft
 - **Airtable: Episode status changed → Telegram** (`GbFwXLACjj1O6spS`): Phase 0 pipe notifying on Episode record changes
 - **Planning doc:** `/Users/jonny/code/n8n-control-room/workflow_planning/Guys Take Workflow.md`

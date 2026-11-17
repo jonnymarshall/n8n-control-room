@@ -42,7 +42,7 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
+*Last updated 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off and
 broken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
 on purpose and why; see its entry below. Also fixed the same day: the Fountain publisher was
 scheduling items with no description; see stage 5).
@@ -216,6 +216,7 @@ Episode:  Script Ready
    optional and is **not** a view gate; a `Read` is gated on its **book cover** instead.
    Then set the episode to `Approved`.
 5. Pick one of the 4 thumbnail options (set a Thumbnails row to `Selected`).
+5b. **Pick one of the four social post options** (reply `option 2` to the "Social posts ready" message, or set that `Social Posts` row to `Selected`), **or reply `revise: ...`** for four new ones. This is optional and does not change the Episode `Status`; the chosen copy lands on the episode's X publication row. See stage 4c.
 6. **Set the episode to `Ready to Publish`** once the artwork is picked and the `Release
    Date` is right. Nothing promotes `Artwork Ready` to `Ready to Publish` on its own — that
    one status flip is the "publish it" instruction, and it starts the Fountain upload. See
@@ -313,7 +314,8 @@ cover can also have the cover replaced later; the `Read Reversion 1x1` and
 | `Duration (s)` | number | Integer seconds. Written by the metadata workflow. |
 | `Record Date` | date/time | The confirmed recording slot. Written by the scheduling workflow (2b) when a booking is confirmed, read from the calendar invite; also settable by hand. |
 | `Release Date` | date | The date the episode should go live. **This is the publish date**: the Fountain publisher schedules the item for this date at `Publishing Settings.Default Publish Time` (currently `06:00`, `America/New_York`), and the ready view requires it to be **today or later**. Set by hand; written by nothing automatically. |
-| `Publications` | link -> Publications | One row per channel. `<BA-xxxx> - Fountain` carries the Fountain item id, upload ids, schedule time and any error. |
+| `Publications` | link -> Publications | One row per channel. `<BA-xxxx> - Fountain` carries the Fountain item id, upload ids, schedule time and any error. `<BA-xxxx> - X` carries the approved social post body in `Post Copy` and a link to the chosen `Social Posts` row. |
+| `Social Posts` | link -> Social Posts | The four platform-neutral post options drafted after approval. One row per option; `Status` is `Proposed` / `Selected` / `Rejected` / `Revising`. Empty means the drafting workflow has not run yet. |
 | `Thumbnail Caption` | long text | The artwork headline. Set by Jonny's reply to the packaging message (`TC1`–`TC5` or his own wording). A precondition for artwork. It is typeset manually over the artwork afterwards, into the reserved top-quarter band. |
 | `Custom Image Prompt` | long text | **His free-text art direction for this episode's artwork.** Set by the same reply. **Optional. The view does not gate on it (corrected 2026-10-23).** `default` (or `none`) means "no extra direction". Fills a `{{CUSTOM}}` placeholder in the layout prompt template. `Read` is never asked for it and uses `Book Cover`. |
 | `Thumbnail Moods` | long text | Comma-separated mood names he picked, e.g. `confident, shocked`. Matched by name (case-insensitively) against the `Thumbnail References` library and cycled across the 4 artwork options **in the order given** — one mood means all four use it, two means they alternate. **Empty or all-unmatched uses `Neutral` for all four** (since 2026-10-22), so a typo never breaks the run; the whole library is only used if the `Neutral` row has no photo. Not a gate. **On a `Read` this field is the facial expression** (2026-10-28); empty means `Neutral`. |
@@ -612,6 +614,30 @@ Three paths in one workflow.
   message. A new "done" status must be added in both places.
 - **Next:** a human sets `Status = Ready to Publish` (stage 5).
 
+### 4c. Social posts (after approval, no status change)
+- **Workflows:** `BA - Episode Approved > Social Posts Drafted` (`ntXHSW3AbNntnaj0`, **ACTIVE**), `BA - Social Post Selected > X Publication Linked` (`6m5s6x2sYMWJRz1s`, **ACTIVE**), `BA - Social Post Revising > Four Redrafted` (`G4GoqVPpUMJWoEmM`, **ACTIVE**).
+- **Fires:** the drafting workflow polls the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`) on Episodes. The view carries `Status` in (`Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`), `Social Posts` empty, `Title` not empty and `Summary` not empty. Do not explain it as `Status = Approved`: artwork moves that status on within seconds, so the real gate is the empty link.
+- **Preconditions checklist (Episode):**
+  - [ ] `Title` is set and is not the placeholder `[Clip]`
+  - [ ] `Summary` is non-empty
+  - [ ] `Social Posts` is empty
+  - [ ] `Status` is one of the five values above
+  - [ ] (`Thumbnail Caption` and `Chapters` are used when present, but are not gates)
+- **Does (draft):** fetches the `Social Post` prompt from the `Prompts` table, writes four options from the episode's `Title`, `Type`, `Summary`, `Thumbnail Caption`, `Chapters` and guest, runs the `Social Post Editor` prompt as a second anti-slop pass, validates them, writes four `Social Posts` rows (`Status = Proposed`, `Round = 1`) and posts one "Social posts ready" message to the group.
+- **No transcript.** The writer and editor are not given it. It caused two failures on 2026-11-16: a Gary North book attribution became the subject of all four posts, and a "punchier" run produced four narrow single-topic posts, one of which invented a position the host never took. The summary is the through-line, the chapters are the arc, the thumbnail caption is the packaged hook.
+- **The shape:** `P1` a poignant question or statement; `P2` relate it to the listener and the stakes; `P3` a direct reference to the content and what to expect; `CTA` a separate short line. See `n8n_workflow_readmes/Social Posts.md` for the full house pattern from the ten recent posts.
+- **Breadth:** every option must be about the whole episode's theme, not one example, chapter, comment or statistic. Each option must include one concrete detail from the summary or chapters to keep it specific. The editor checks both.
+- **Accuracy:** no invented opinions or actions. No "gave up", "stopped", "admitted", "decided" or "realised" unless the supplied fields say so. No naming a book, author, article, show, company or person the fields do not name.
+- **Length:** `Copy` is the body, capped at **280 characters**. `CTA` is a separate field, max 120, and is not part of the 280 count. `Characters` counts the body only. Every message shows `Body N / 280 · CTA M`. The link is appended when the post is sent and is outside both counts.
+- **The four options are different, not paraphrases:** a curious question, a blunt or contrarian statement, a personal story or confession, and a shared-frustration "you" observation. The `Angle` label names the approach.
+- **Picking one:** reply `option 2` (or `2`, `the second one`) to the message, or set that `Social Posts` row to `Selected`. The selection workflow rejects the other three and writes body + blank line + CTA to `Post Copy` on the episode's `BA-xxxx - X` row in `Publications`, plus a `Social Post` link. It does not change the Episode `Status`.
+- **Revising:** reply `revise: broader, no narrow examples, no 'matters'` (or set `Revision Brief` on the `Option = 1` row and `Status = Revising`). The revision workflow rewrites all four rows in place, increments `Round`, clears the brief and posts the new options. The brief changes tone, angle and length, not the subject. It refuses if a row is already `Selected`; clear the selection first.
+- **The assistant's rules:** proposing `Status = Selected` on a `Proposed` row is the pick; proposing `Revision Brief` + `Status = Revising` on the `Option = 1` row is the redraft. It never writes `Copy`, `CTA`, `Angle` or `Characters`, and never touches the Publication row itself.
+- **Model:** `google/gemini-3.7-flash` via OpenRouter for both writer and editor. It beat `openai/gpt-6-astra` on breadth and variety in the 2026-11-16 comparison and is about 20x cheaper.
+- **⚠️ X publication:** `Publications.Platform` contains `X`. The selection workflow creates `<BA-xxxx> - X` with `Status = Pending`, `Post Copy` = body + blank line + CTA, and a `Social Post` link. The full path was tested live on 2026-11-16.
+- **Not yet exercised end to end:** the assistant's `option N` / `revise:` replies. The view trigger, drafting, revision and X selection paths have all been run live or pinned.
+- **Next:** publishing (stage 5), or an artwork revision. The social post and the artwork are independent.
+
 ### 5. Publishing (Fountain)
 - **Was:** `Airtable - View to Published` (`7O9z3UwcUOkHjAC2`) polled the ready view
   `viwDfPHHKrgggdw20` and set `Status = Ready to Publish`. **Archived 2026-09-29.**
@@ -719,6 +745,7 @@ this exactly.
 - **Failure:** Episode `Publishing Failed`, Publication `Failed`, Telegram with the reason
   and execution id. Read the `Publications` row's `Error`, fix it, then set the episode back
   to `Ready to Publish`.
+- **X is a separate row, not part of this publisher.** Stage 4c creates `BA-xxxx - X` with the chosen `Post Copy` and `Status = Pending`. Nothing posts to X yet; the per-channel fan-out is still Phase 3. The social copy is prepared early so it is ready when the posting step lands.
 - **Still being built out:** the per-channel fan-out beyond Fountain (Phase 3 in the Build
   Status). The content sync is already platform-neutral — it routes each `Publications` row
   by `Platform` — so new channels plug in as adapters.
