@@ -1,6 +1,6 @@
 # BA - Episode Approved > Social Posts Drafted
 
-Writes four platform-neutral social post options after an episode's AI metadata is signed off, writes them to the `Social Posts` table as `Proposed`, and posts them to the team group.
+Writes four platform-neutral social post options after an episode's AI metadata is signed off, writes them to the `Social Posts` table as `Proposed`, and posts them to the team group. The message also explains how to submit exact custom copy through the Telegram assistant.
 
 - **Workflow ID:** `ntXHSW3AbNntnaj0` (stable identifier: the name)
 - **Trigger:** Schedule every minute + Airtable search on the `Episodes` view `Ready for Social Posts` (`viw7OScgqnRQdCLJz`), `limit: 1`, sorted by `Last Modified Time` ascending

@@ -238,8 +238,9 @@ The Telegram Assistant's `Airtable Agent` system message has a `SOCIAL POSTS` se
 
 - `option 2` / `2` / `the second one` → set that row's `Status = Selected`.
 - `revise: lead with the wine story, less formal` → set Option 1's `Revision Brief` and `Status = Revising`.
+- `custom: your exact post` or `use this copy: your exact post` → replace the proposed Option 1 body with that exact wording, mark it `Selected`, and reject the other three. Add a separate `CTA: your call to action` line if needed.
 
-The assistant proposes the write; the normal approval tap still applies. It never writes `Copy`, `CTA`, `Angle` or `Characters`, and it does not touch the Publication row itself.
+The assistant proposes the write; the normal approval tap still applies. For a custom post only, it writes `Copy`, optional `CTA`, `Angle = Custom copy`, `Characters`, and `Status = Selected` on the proposed Option 1 row. It does not touch the Publication row itself.
 
 ---
 

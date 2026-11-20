@@ -171,12 +171,13 @@ After approval, `BA - Episode Approved > Social Posts Drafted` posts a **"Social
 |---|---|
 | `option 2` / `2` / `the second one` | On the episode's row with `Option = 2` and `Status = Proposed`: set `Status = Selected`. |
 | `revise: lead with the wine story, less formal` | On the row with `Option = 1` and `Status = Proposed`: set `Revision Brief` to the reply verbatim and `Status = Revising`. |
+| `custom: your exact post` / `use this copy: your exact post` | On the proposed Option 1 row: preserve the supplied body exactly, optionally take a separate `CTA:` line, set `Angle = Custom copy`, count the body characters, and set `Status = Selected`. |
 
 The workflows do the rest: selection rejects the other three and writes the copy onto the episode's `BA-xxxx - X` row in `Publications`; revision rewrites all four options in place and posts them again.
 
-**The agent never writes `Copy`, `Angle` or `Characters`, and never writes the Publication row itself.** It also never picks a row that is not `Proposed`. If the reply has no `BA-` anchor and is not a reply to the social message, it asks which episode. If asked which post was chosen, it reads the X publication row and quotes `Post Copy`.
+**For a custom-copy request only, the agent writes `Copy`, optional `CTA`, `Angle` and `Characters` on the proposed Option 1 row.** It never writes the Publication row itself and never picks a row that is not `Proposed`. If the reply has no `BA-` anchor and is not a reply to the social message, it asks which episode. If asked which post was chosen, it reads the X publication row and quotes `Post Copy`.
 
-The reply instructions in the message use plain words (`option 2`, `revise: …`) rather than a code, per `TELEGRAM-STYLE.md` rule 9. Full feature notes: `Social Posts.md`.
+The reply instructions in the message use plain words (`option 2`, `custom: your exact post`, `revise: …`) rather than a code, per `TELEGRAM-STYLE.md` rule 9. Full feature notes: `Social Posts.md`.
 
 ### X readiness and link storage (2026-11-17, LIVE)
 
