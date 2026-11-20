@@ -1,5 +1,7 @@
 # BA: Telegram Airtable Assistant
 
+> **2026-11-20 - photo attachments now retry a temporary Telegram disconnect (LIVE, published).** A photo captioned `set as 16x9 artwork for BA-X1UJTh` reached the attachment path but Telegram reset the file-download connection (`ECONNRESET`) before any Airtable write began. The final artwork was unchanged. `Get Telegram File` now retries up to five times with a five-second wait, covering short Telegram or network outages before the photo upload is abandoned. A genuinely persistent failure still reaches the existing workflow-failed alert. The failed photo must be sent again because its original Telegram update cannot be replayed.
+
 > **Renamed 2026-08-04** from `BA - Telegram Airtable Assistant.md` to match the workflow's actual display name in n8n (`BA: Telegram Airtable Assistant`). The file previously carried the old `Pod21:` name it was built under.
 
 > **Find this workflow in n8n by name.** Workflow IDs change whenever the workflow is rebuilt from code (credential bindings don't survive API updates, so structural changes are done as create-new + archive-old). The name is the stable identifier.
