@@ -1,6 +1,6 @@
 # BA - Social Post Revising > Four Redrafted
 
-Redrafts all four social post options from a written brief, in place, without re-picking or re-drafting the episode from scratch.
+Redrafts all four social post options from a written brief, in place, without re-picking or re-drafting the episode from scratch. The resulting message also explains how to submit exact custom copy through the Telegram assistant.
 
 - **Workflow ID:** `G4GoqVPpUMJWoEmM` (stable identifier: the name)
 - **Trigger:** Airtable poll every minute on the `Social Posts` table, `Last Modified Time`
