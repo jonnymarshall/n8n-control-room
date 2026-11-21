@@ -88,6 +88,7 @@ The `n8n-skills` knowledge base (from `github.com/czlonkowski/n8n-skills`, MIT) 
 
 - **Never merge a pull request.** Create the branch and the PR, report the URL, and stop. Jonny merges. "I'm ready to merge this", "push and merge" and "create a PR" are readiness, not authorisation; "merge it", "merge the PR", "go ahead and merge" and "you can merge" are. Enforced by `.opencode/plugins/merge-guard.js` and `.claude/hooks/merge-guard.py`.
 - Never commit secrets (`.env`, tokens). `.gitignore` already covers these.
+- **Never print a secret value, from anywhere, and never paste one into chat.** That includes the macOS Keychain (`security find-generic-password -w`, `dump-keychain`, `export`), which leaked the n8n MCP access token on 2026-11-21. If Jonny needs a value, give him the command and have him run it himself with the `!` prefix. Enforced for shell commands by `.opencode/plugins/block-secrets.js` and `~/.claude/hooks/block-secrets.py`; no guard can stop you pasting a value you already hold, so don't.
 - Never give the n8n agent write endpoints; read-only tools only.
 - Never trigger a workflow stage from the previous stage's workflow; trigger off Airtable state.
 - Never put a second Telegram Trigger on `@pod21_n8n_agent_bot`.
