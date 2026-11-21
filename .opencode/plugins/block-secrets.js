@@ -69,6 +69,12 @@ const ENV_DUMP_PATTERNS = [
 ]
 const ENV_DUMP_RE = new RegExp(ENV_DUMP_PATTERNS.join("|"))
 
+// macOS Keychain reads that print a secret value: -w / -g on find-*-password,
+// plus dump-keychain / export / find-key. Metadata-only lookups stay allowed.
+// Added 2026-11-21 after the n8n MCP token was printed via the Keychain.
+const KEYCHAIN_READ_RE =
+  /(?:^|[\s;|&`$(])security\s+(?:dump-keychain\b|export\b|find-key\b|find-(?:generic|internet)-password\b[^\n;|&]*?\s-[A-Za-z]*[wg])/
+
 // Heredoc bodies are text content (commit messages, PR bodies, doc strings),
 // never interpreted as file paths. Strip them before path matching so
 // mentioning ".env" in a commit message doesn't trip the file check.
@@ -140,6 +146,13 @@ export default Plugin.define({
           throw blocked(
             "shell command would print environment/shell variable values " +
             "(printenv / env / set / export / declare -p); a secret could leak to stdout"
+          )
+        }
+        if (KEYCHAIN_READ_RE.test(cmd)) {
+          throw blocked(
+            "shell command would print a secret from the macOS Keychain " +
+            "(security find-generic-password -w / dump-keychain / export); " +
+            "ask the user to run it themselves and never paste the value into chat"
           )
         }
         // Strip text-content regions, then provably-inert segments, before the
