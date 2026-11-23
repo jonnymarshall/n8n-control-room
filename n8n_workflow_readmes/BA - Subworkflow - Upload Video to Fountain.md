@@ -1,5 +1,7 @@
 # BA - Subworkflow - Upload Video to Fountain
 
+> **2026-11-23 - the upload now keeps the Frame.io filename (LIVE, published).** `POST /uploads` takes an optional `filename` for `ITEM_VIDEO`, shown on the episode in Fountain on the web and impossible to change afterwards. `Choose Source` sends the `name` Frame.io holds for the file, verbatim (unsafe filename characters stripped; the extension kept, or added when Frame.io omits it), so a re-cut can be matched between Frame.io and Fountain. If Frame.io returns no name it falls back to `item-<itemId>` plus the real extension. **Not yet exercised by a real upload** - Fountain had not documented the parameter when this shipped.
+
 > **Find this workflow in n8n by name.** Workflow IDs change when a workflow is rebuilt from code, so the name is the stable identifier. (ID at time of writing: `XY4WfJ2XaBA9bPKY`.) Created 2026-10-29, extracted from the publisher's upload chain.
 
 Uploads one video to Fountain, end to end, and hands back the upload id. **It never schedules, never PATCHes the item, and never touches Airtable status** beyond recording the upload id. Callers decide what to do with the result.
@@ -21,7 +23,7 @@ SDK source: `scripts/deploy/workflows/guys-take-fountain-upload-video.sdk.js`.
 
 ## Output
 
-`{ uploadId, mediaId, status, videoBytes, videoType }`.
+`{ uploadId, mediaId, status, videoBytes, videoType, videoFilename }`.
 
 ## Flow
 
@@ -38,7 +40,7 @@ Input → Resolve Frame.io Media → Probe Frame.io Video → Validate Video
 1. **Resolve Frame.io Media** — `GET /v4/accounts/{acct}/files/{id}?include=media_links.efficient,media_links.original,media_links.high_quality` with `Adobe OAuth`. The id is parsed from `videoUrl`, so the caller never has to know Frame.io's object ids.
 2. **Probe Renditions** — one 1 MB `Range` request per copy for the true total (`Content-Range`), MIME type, and width/height from the `moov`/`tkhd` atom. Do not use `HEAD` here: the `stream-download.frame.io` copies answer `HEAD` with 18 bytes of `text/plain` and only report the real size to a `Range` GET.
 3. **Choose Source** — the smallest copy at 1920x1080, else the smallest at 1280x720, else it throws with everything it measured. Since 2026-11-04 the master is not uploaded when a 1080p copy exists, and nothing measured below 720p is ever uploaded. `Note Upload Started` then writes the choice (rendition, resolution, size) into `Publications.Notes`.
-4. **Start Fountain Video Upload** — `POST /v1/uploads` (`kind: ITEM_VIDEO`, `access: DEFAULT`).
+4. **Start Fountain Video Upload**: `POST /v1/uploads` (`kind: ITEM_VIDEO`, `access: DEFAULT`, plus the `filename` from `Choose Source`, which is the Frame.io file's own name, e.g. `BA-HRwIMb_Enshitification_1080p.mp4`).
 5. **Build Video Part Jobs** — one item per multipart URL. Each carries a shell command that fetches that byte range from Frame.io and `PUT`s it to Fountain, with 20 attempts and exponential backoff. This node is copied verbatim from the publisher, which is the tested implementation.
 6. **Upload Fountain Video Parts** — `Execute Command`, one process per part. Runs on the n8n host, so it needs `node` on PATH and outbound access to both Frame.io and Fountain.
 7. **Save Video Upload ID** — `Publications.Video Upload ID` + `Status = Processing`. `onError: continueRegularOutput`, so bookkeeping cannot kill an upload that is already running.
@@ -52,7 +54,7 @@ The publisher's `Update Fountain Item` PATCHes the item with:
 { title, description, explicit, video_default_id: <upload id>, image_id: <artwork upload id> }
 ```
 
-So a content sync that re-uploads a newer cut uploads it here, then PATCHes **only** `video_default_id` on the existing item. No draft recreation, no republish. This was confirmed against the live publisher node, not guessed.
+A content sync that re-uploads a newer cut uploads it here, then PATCHes `{ audio_default_id: null, video_default_id: <new upload id> }` on the existing item, in one request. The `null` matters: Fountain only gives a new video its extracted audio when the audio slot is empty, so clearing it is what makes the new audio replace the old track (Fountain support, 2026-11-23). No draft recreation and no republish; the episode page and RSS feed update when the PATCH lands.
 
 ## Gotchas
 
