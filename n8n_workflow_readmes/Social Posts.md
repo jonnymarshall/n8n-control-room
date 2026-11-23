@@ -235,7 +235,7 @@ See `BA - Schedule Every 2h > X Post Readiness.md` for the exact conditions and 
 
 ### 5. Audionauts draft — `BA - Audionauts Transcript Ready > Keet and Telegram Post Drafted` (`jDEHmj4d0R4PPsiN`, ACTIVE)
 
-- Fires every minute, then searches `Episodes` with a filter formula: `Type = Audionauts`, `Status = AI Analysis Complete`, `Transcript` not empty, `Social Posts` empty, `Audionauts Post Tried` empty, `Title` not empty. `maxRecords=1`, oldest first.
+- Fires every minute, then searches the shared `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), up to 20 rows, oldest first. `Pick Clip` takes the oldest row with `Type = Audionauts`, `Status = AI Analysis Complete`, `Transcript` not empty, `Social Posts` empty, `Audionauts Post Tried` empty and `Title` not empty. The view must include `AI Analysis Complete` in its Status filter.
 - Reads the parent episode (from `Associated Episode`) for the proper title and guest names, then drafts one rundown from the clip transcript with `Audionauts Post` + `Social Post Humanizer`.
 - Writes one `Proposed` row, `Platform = Keet + Telegram`, `Option = 1`, and posts `🟡 Audionauts post ready`.
 - Stamps `Audionauts Post Tried` on success and on failure, so a bad run cannot loop.
@@ -255,21 +255,24 @@ See `BA - Schedule Every 2h > X Post Readiness.md` for the exact conditions and 
 
 ## What triggers the draft workflow
 
-The drafting workflow uses the house **schedule + view search** pattern:
+Both drafting workflows use the house **schedule + view search** pattern on the same view, `Ready for Social Posts` (`viw7OScgqnRQdCLJz`):
 
 - `Every Minute` schedule trigger
-- `Ready for Social Posts View` Airtable search on `Episodes`, view `viw7OScgqnRQdCLJz`, `limit: 1`, sorted by `Last Modified Time` ascending
+- X draft: `Ready for Social Posts View` Airtable search on `Episodes`, up to 20 rows, sorted by `Last Modified Time` ascending, then `Pick Episodes` keeps the oldest eligible row and skips `Type = Audionauts`
+- Audionauts draft: the same view, up to 20 rows, then `Pick Clip` scans for the oldest row that is an Audionauts clip at `AI Analysis Complete`
 
-That takes **one episode per run**. The earlier Airtable-trigger version accepted every row a single poll returned, while the X-row creation read `.first()`, so three queued episodes produced 12 social post rows and only one X row. The schedule + limit 1 pattern removes that class of bug.
+Each takes **one episode per run**, and neither can be starved by a row belonging to the other flow. The earlier X version accepted every row a single poll returned, while the X-row creation read `.first()`, so three queued episodes produced 12 social post rows and only one X row. One-per-run removes that class of bug.
 
 The view carries the guard:
 
-- `Status` is any of `Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`
+- `Status` is any of `Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`, and **`AI Analysis Complete`** (added 2026-11-23 so Audionauts clips enter the shared view)
 - `Social Posts` is empty
 - `Title` is not empty
 - `Summary` is not empty
 
-The Code node repeats the same checks as a backstop.
+The Code nodes repeat the same checks as a backstop.
+
+**Check the `Summary` condition.** Audionauts clips can reach `AI Analysis Complete` with only a transcript and no summary. If that condition is left in the view, those clips never arrive. The X code already refuses an episode with no summary, so the condition is redundant for X and can be removed; that is the safer configuration now that both flows share the view.
 
 The selection and revision workflows poll the `Social Posts` table on `Last Modified Time`. That table only has the four option rows, so the volume is tiny.
 

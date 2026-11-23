@@ -13,7 +13,7 @@ Writes the short rundown that goes with an Audionauts clip once its transcript i
 
 ## What it picks, and why
 
-The search is a filter formula rather than a view, because Airtable's API cannot create views:
+It searches the same view as the X draft: `Ready for Social Posts` (`viw7OScgqnRQdCLJz`) on `Episodes`, up to 20 rows, oldest `Last Modified Time` first. `Pick Clip` then takes the oldest row that passes all of these:
 
 ```text
 Type = 'Audionauts'
@@ -24,9 +24,11 @@ Audionauts Post Tried is empty
 Title is not empty
 ```
 
-`maxRecords=1`, oldest `Last Modified Time` first. One clip per run.
+**The view must include `AI Analysis Complete` in its Status filter.** It was added by hand on 2026-11-23. Without it, an Audionauts clip at that status never appears, regardless of Type.
 
 `AI Analysis Complete` is the status the transcription workflow writes when it finishes an Audionauts clip, and it is the first moment the transcript exists. Nothing else touches an Audionauts episode, so this is the whole lifecycle up to Jonny sending the clip.
+
+**The view is shared with the X draft, so it can hold rows this flow does not own.** The search fetches a batch and `Pick Clip` scans it for the oldest matching Audionauts row, rather than taking the first row in the view. The X draft does the mirror image: it skips `Type = Audionauts` and processes only its oldest eligible episode. Neither queue can be blocked by a row that belongs to the other.
 
 `Audionauts Post Tried` is the loop guard. The workflow stamps it on success **and** on failure. A failure therefore cannot re-alert every minute, and clearing the field on the episode is the retry.
 
@@ -36,8 +38,8 @@ Title is not empty
 
 ```text
 Every Minute
-  -> Find Audionauts Clip      Episodes search, filter above, limit 1
-  -> Pick Clip                 one job, or no items and the run ends quietly
+  -> Find Audionauts Clip      Ready for Social Posts view, 20 rows, oldest first
+  -> Pick Clip                 oldest matching Audionauts row, or no items and the run ends quietly
   -> Resolve Parent Episode    Episodes search on ID = Associated Episode
   -> Fetch Audionauts Prompts  "Audionauts Post" + "Social Post Humanizer"
   -> Build Audionauts Request  fill title, guests, transcript, house rules
@@ -127,9 +129,9 @@ Test rows, publications and episode were deleted.
 
 ## Gotchas
 
+- **The shared view is the gate.** `Ready for Social Posts` must include `AI Analysis Complete` in its Status filter, or nothing reaches this workflow. Airtable's API cannot read or edit view filters, so that is a manual UI change and has to be checked after any view edit.
 - **The search needs `Last Modified Time` to sort.** It exists on `Episodes` (`fld3Z4xdI4s2wVnRa`).
 - **One row per clip.** Revisions rewrite the same row; they do not create four.
 - **A failure is one message, not a loop.** Clear `Audionauts Post Tried` to retry after fixing the cause.
 - **The transcript goes to the model in full.** That is what the format needs; a long clip costs more tokens than an X post.
-- **Do not add a view.** Airtable's API cannot create one, and this filter is the source of truth.
 - `versionId == activeVersionId`, active, `availableInMCP`, error workflow `9PMI1kuBjLW2YHwb` as of 2026-11-23.

@@ -1,5 +1,7 @@
 # BA - Episode Approved > Social Posts Drafted
 
+> **2026-11-23 - the view is shared with the Audionauts draft (LIVE, published).** `Ready for Social Posts` now also carries Audionauts clips at `AI Analysis Complete`, so the search fetches up to 20 rows and `Pick Episodes` keeps the oldest eligible episode, skipping `Type = Audionauts`. That keeps one episode per run and stops an Audionauts row from blocking the X queue. The view's `Summary` condition is now redundant for X (the code requires it) and can be removed if Audionauts clips arrive without one.
+
 > **2026-11-23 - the shared humanizer is now a separate prompt row (LIVE, published).** The voice, rhythm, accuracy and banned-word rules moved out of `Social Post` and `Social Post Editor` and into `Social Post Humanizer` (`reciUfBMWFqmBMDd6`). A new `Fetch Humanizer Prompt` node runs after `Fetch Social Prompt`, and `Build Social Request` and `Build Edit Request` substitute `{{HUMANIZER}}` before the model call. The same row feeds the Audionauts writer, so one edit changes every social automation. Verified on a scratch copy against a temporary `Approved` episode: the assembled request contained the humanizer, no placeholder survived, and the four options passed `Parse Options`.
 
 Writes four platform-neutral social post options after an episode's AI metadata is signed off, writes them to the `Social Posts` table as `Proposed`, and posts them to the team group. The message also explains how to submit exact custom copy through the Telegram assistant.
