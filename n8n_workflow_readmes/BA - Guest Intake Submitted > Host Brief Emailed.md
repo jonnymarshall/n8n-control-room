@@ -243,6 +243,32 @@ rows). The only cost was a red alert that looked like a real failure.
 seconds apart, the same shape as `Mark Brief Sent`. Both are reads, so retrying them can
 never send a second email or write twice.
 
+### 2026-11-22: one run stopped before it started (n8n pre-flight regex timeout)
+
+Execution `60195` (22 November, 14:00:45 UTC) failed with `Regular expression execution
+timed out` and `Failed node: unknown`. It never ran a node: zero executed nodes, zero items,
+no run data. The error came from n8n's own check of the workflow's settings
+(`checkReadyForExecution`), which runs before the trigger, not from anything this workflow
+does.
+
+n8n gives its internal validation regexes a hardcoded 250 ms **wall-clock** budget and runs
+them in a `node:vm` sandbox. A brief CPU stall (a co-scheduled execution, a GC pause, a
+container CPU quota) can make a trivial pattern overrun that budget, and the sandbox aborts
+the run without naming a node. It is n8n behaviour, not this workflow: `BA - Ready for
+Metadata View Entered > AI Metadata` hit the same error twice the same day (executions
+`59231` and `61247`), and this workflow has no other error in roughly 60,000 runs. Upstream:
+n8n issue `#44319`, fix PR `#44419` (open at the time of writing).
+
+Nothing was lost. The only intake row, `BA-X1UJTh`, was already stamped on 6 November, so no
+brief was pending; the 14:05 run and every five-minute run since succeeded. If it happens
+while a row is waiting, that row stays unstamped and goes out on the next tick, the same as
+any other pre-send failure.
+
+There is nothing to change in the workflow: the 250 ms is hardcoded and not exposed as a
+setting. The shared error workflow now recognises this exact shape (`Failed node: unknown`
+plus that message), titles the alert "harmless, nothing to fix" instead of letting it look
+like a real failure, and logs it to the Ops Log with `(harmless, no action)`.
+
 ---
 
 ## Edge cases
@@ -267,6 +293,11 @@ never send a second email or write twice.
   errors and the Telegram alert fires, and because nothing was stamped the next five-minute
   run picks the row up again. A failed read means no email was sent for that row, never a
   duplicate.
+- **Run stops before the first node (`Regular expression execution timed out`, `Failed node:
+  unknown`).** n8n's 250 ms pre-flight regex guard tripped during a CPU stall on the host.
+  Nothing executed and nothing was stamped, so a waiting row retries on the next tick. The
+  alert labels this shape harmless. It is not a workflow fault and cannot be fixed here; see
+  the 2026-11-22 note above.
 - **More than ten pending rows.** The first ten go out; the rest wait for the next run.
 - **OpenRouter unavailable, blocked or truncated.** The run fails before sending, the row
   stays unstamped, the next tick retries, and the error workflow alerts. A blank or
