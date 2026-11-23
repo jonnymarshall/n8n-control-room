@@ -790,6 +790,10 @@ this exactly.
 - **Quiet for noise:** a transient DNS blip on a poller, or a Telegram rate limit
   (`Too Many Requests` / 429), is written to the Ops Log only. Alerting about a
   throttled group would only add messages to the throttled group.
+- **Explains harmless noise:** if n8n's own regex safety check times out before a
+  workflow starts (so no step ran), the alert says `harmless, nothing to fix` and
+  that a scheduled workflow will try again on its next run. Nothing for anyone to
+  clean up.
 
 ### 8. Public API (client access, not a pipeline stage)
 - **What it is:** a token-authenticated, **read-only** webhook (`POST /webhook/api`) that lets an external client read the Episodes table only. It never writes and cannot reach another table. It is not part of the production pipeline; it exists so a third party can read episode data without ever seeing our credentials.
