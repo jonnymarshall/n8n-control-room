@@ -14,6 +14,7 @@ A discriminated union on `kind`, shared by the Publishing and Social APIs. The e
 - `content_type` (string, required) — The file MIME type. Image: `image/jpeg`, `image/png`, `image/webp`. Audio: `audio/mpeg`, `audio/m4a`, `audio/x-m4a`. Video (`ITEM_VIDEO`, `SOCIAL_POST_VIDEO`): `video/mp4`, `video/quicktime`, `video/webm`.
 - `access` ('DEFAULT' | 'PAID', optional) — For `ITEM_AUDIO`/`ITEM_VIDEO`: which slot the upload can later attach to — `DEFAULT` (free) or `PAID` (subscriber-only). Defaults to `DEFAULT`.
 - `num_bytes` (number, required) — File size in bytes. Max: image 10 MB, audio 400 MB, item video 20 GB, social video 16 GB.
+- `filename` (string, optional): Display name for an `ITEM_AUDIO` or `ITEM_VIDEO` upload, shown on the episode in Fountain on the web. Only those two kinds support it; do not send it for `ITEM_IMAGE`, `FEED_*` or `SOCIAL_POST_VIDEO`. A name cannot be changed after the upload starts. Not yet in Fountain's published API reference; confirmed by Fountain support on 2026-11-23.
 
 ```json
 {
@@ -21,7 +22,8 @@ A discriminated union on `kind`, shared by the Publishing and Social APIs. The e
   "feed_id": "a1b2c3d4",
   "item_id": "e5f6g7h8",
   "content_type": "audio/mpeg",
-  "num_bytes": 48218112
+  "num_bytes": 48218112,
+  "filename": "BA-HRwIMb - The Genesis Block.mp3"
 }
 ```
 
@@ -58,5 +60,5 @@ A discriminated union on `kind`, shared by the Publishing and Social APIs. The e
 curl -X POST "https://api.fountain.fm/v1/uploads" \
   -H "Authorization: Bearer $FOUNTAIN_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"kind":"ITEM_AUDIO","feed_id":"a1b2c3d4","item_id":"e5f6g7h8","content_type":"audio/mpeg","num_bytes":48218112}'
+  -d '{"kind":"ITEM_AUDIO","feed_id":"a1b2c3d4","item_id":"e5f6g7h8","content_type":"audio/mpeg","num_bytes":48218112,"filename":"BA-HRwIMb - The Genesis Block.mp3"}'
 ```

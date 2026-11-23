@@ -2,7 +2,7 @@
 
 > `PATCH https://api.fountain.fm/v1/feeds/{feed_id}/items/{item_id}`
 
-Edit an item. The body *is* the patch: a value sets the field, `null` clears it, an absent key leaves it unchanged. The `*_id` fields attach `READY` uploads of the matching type: a `*_paid_id` upload must have been created with `access: "PAID"`, a `*_default_id` with `access: "DEFAULT"`. Attaching a video also uses its extracted audio for the *same* slot unless that slot's audio is already set. Enabling any paid feature needs `audio_paid_id` and prices a one-time product at `price_usd_cents` (defaults to `100` on first enable). The monetization variant is locked once the item is `PUBLISHED`, and a published item's required media can't be cleared.
+Edit an item. The body *is* the patch: a value sets the field, `null` clears it, an absent key leaves it unchanged. The `*_id` fields attach `READY` uploads of the matching type: a `*_paid_id` upload must have been created with `access: "PAID"`, a `*_default_id` with `access: "DEFAULT"`. Attaching a video also uses its extracted audio for the *same* slot unless that slot's audio is already set. **To replace both on an item that already has audio, send `{"audio_default_id": null, "video_default_id": "<new id>"}` in one request.** Two requests do not work on a published item, because it cannot be left without audio between them. Enabling any paid feature needs `audio_paid_id` and prices a one-time product at `price_usd_cents` (defaults to `100` on first enable). The monetization variant is locked once the item is `PUBLISHED`, and a published item's required media can't be cleared.
 
 ## Path parameters
 
