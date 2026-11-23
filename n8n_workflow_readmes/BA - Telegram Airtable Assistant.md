@@ -1,5 +1,7 @@
 # BA: Telegram Airtable Assistant
 
+> **2026-11-23 - language model moved from Sonnet 4.6 to Sonnet 5.5 (LIVE, published `17acc2d6`).** OpenRouter's Model Intelligence, priced on this key's own traffic, recommended the switch: 5.5 is the direct successor to 4.6 and costs $2/$10 per million tokens against $3/$15, with the same 1M context. The only functional change is `parameters.model` on the `OpenRouter Sonnet 5.5` node (`anthropic/claude-sonnet-5.5`); the node was renamed from `OpenRouter Sonnet 4.6` so the canvas matches, temperature stays `0.2`, and no expression referenced the old name. Nothing else in the 52 nodes changed. `versionId` = `activeVersionId`, active with `availableInMCP: true`, credential bindings intact, snapshot refreshed, `sdk-drift.sh` clean. **Not yet exercised by a real Telegram message** - the next chat is the test. If the JSON envelope or the tool calls misbehave, roll back by setting the model to `anthropic/claude-sonnet-4.6` and publishing; no other node needs touching.
+
 > **2026-11-20 - approval buttons now survive a short DNS or Telegram outage (LIVE, published).** Execution `20899` failed at `Answer Button Tap` when the host could not resolve Telegram's DNS, so the workflow stopped before an approved Airtable write could run. The retained execution has since expired, but a separate Telegram connection reset on 2026-11-20 confirmed this class of brief network failure still occurs. `Answer Button Tap` now retries up to five times with a five-second wait. The callback acknowledgement is retried before any Airtable write, so a momentary outage no longer discards the approval; a persistent outage still reaches the existing workflow-failed alert.
 
 > **2026-11-20 - photo attachments now retry a temporary Telegram disconnect (LIVE, published).** A photo captioned `set as 16x9 artwork for BA-X1UJTh` reached the attachment path but Telegram reset the file-download connection (`ECONNRESET`) before any Airtable write began. The final artwork was unchanged. `Get Telegram File` now retries up to five times with a five-second wait, covering short Telegram or network outages before the photo upload is abandoned. A genuinely persistent failure still reaches the existing workflow-failed alert. The failed photo must be sent again because its original Telegram update cannot be replayed.
@@ -79,7 +81,7 @@ Reads need no approval. Writes always do. The agent has no write tools at all, s
 | **Authorized users** | Jonny (`1512868522`) and Charlie (`8923732358`), enforced by the `From Jonny or Charlie?` IF gate; both are also write approvers |
 | **Addressing** | Groups: only an `@mention` of the bot or a reply to the bot. Private chats: any message (`Addressed to bot?` gate, third condition `chat.type === 'private'`) |
 | **Issue log** | Automation Upgrades — base `appwcz1Bux9YLcZYm` (n8n-pod21), table `tblja27Lsn7qXJfZM` |
-| **LLM** | Claude Sonnet 4.6 via OpenRouter (`anthropic/claude-sonnet-4.6`, temp 0.2) |
+| **LLM** | Claude Sonnet 5.5 via OpenRouter (`anthropic/claude-sonnet-5.5`, temp 0.2) |
 | **Scope** | Every Airtable base the PAT has access to (dynamic discovery, nothing hardcoded) |
 | **Memory** | Rolling 20-turn conversation buffer, keyed per chat (DM and group have separate threads) |
 
@@ -116,7 +118,7 @@ The **Airtable PAT** should have `schema.bases:read`, `data.records:read`, and `
    - prefixes it with `[Message from Jonny]` / `[Message from Charlie]`, resolved from `from.id`. The agent node is only ever handed `promptText`, so without this tag it has **no idea who is talking to it** — this is what lets it fill `Reported By` on an issue report,
    - strips the `@pod21_n8n_agent_bot` mention from the text, and
    - **if the message is a reply**, wraps the bot's earlier message plus the new instruction into one prompt so words like "this" / "it" resolve to the record the earlier message described. This is what lets "delete this episode" work as a reply, even though the button-approved create never entered the agent's memory.
-5. **AI Agent** (Sonnet 4.6) runs with four read-only tools:
+5. **AI Agent** (Sonnet 5.5) runs with four read-only tools:
    - `list_airtable_bases` — GET `/v0/meta/bases`
    - `get_base_schema` — GET `/v0/meta/bases/{baseId}/tables`
    - `airtable_read` — generic GET with any path/query (records, filters, single record)
@@ -312,7 +314,7 @@ The agent's behaviour lives almost entirely in the **system message** on the `Ai
 
 The user-message prompt (mention-stripping + reply-context injection) is built in the **`Prep Agent Input`** Code node. When editing Code nodes on this instance, use template literals for multi-line strings and loop `$input.all()` rather than `$input.first()`.
 
-The model is set on the `OpenRouter Sonnet 4.6` node; anything tool-capable on OpenRouter can be swapped in, but weaker models fumble the JSON contract and multi-step lookups more often.
+The model is set on the `OpenRouter Sonnet 5.5` node; anything tool-capable on OpenRouter can be swapped in, but weaker models fumble the JSON contract and multi-step lookups more often. Sonnet 5.5 is the current pick: it is the direct successor to 4.6 at $2/$10 per million tokens instead of $3/$15, same 1M context, and only the model id and the node name differ from the 4.6 setup.
 
 ---
 
