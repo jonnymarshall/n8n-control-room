@@ -1,5 +1,7 @@
 # BA - Social Post Selected > X Publication Linked
 
+> **2026-11-23 - ignores Audionauts rows (LIVE, published).** `Pick Selected` now processes only rows whose `Platform` is `Default` or `X`. Audionauts copy lives in the same table with `Platform = Keet + Telegram` and has its own selection workflow, which writes the Keet and Telegram rows. Without the filter this workflow would have linked an Audionauts pick to an X publication.
+
 Takes the chosen social post option, links it to the episode's X row in `Publications`, rejects the other three options, and confirms in Telegram.
 
 - **Workflow ID:** `6m5s6x2sYMWJRz1s` (stable identifier: the name)
