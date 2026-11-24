@@ -6,6 +6,18 @@ Instructions for any AI coding agent (opencode, Claude Code, Cursor, etc.) worki
 
 The admin side of a self-hosted n8n automation server. It runs the **Guy's Take / Pod21 content machine** (Airtable is the state machine, n8n executes, Telegram is the team interface). This repo holds admin shell scripts, per-workflow SDK source files, per-workflow readmes, and the planning docs.
 
+## Pending housekeeping (check first)
+
+**Airtable cleanup, 2026-11-24.** Five retired claim statuses are waiting to be deleted. **Remind Jonny about them near the start of a session**; he asked to be prompted because he will forget. Delete each only after its stage has had **one clean real run**, and only Jonny can do it, because Airtable's API cannot edit select choices.
+
+- `Generating Metadata` (`Episodes.Status`) after one clean metadata run
+- `Generating Artwork` (`Episodes.Status`) after one clean artwork run
+- `Publishing` (`Episodes.Status`) after one clean publish
+- `Processing` (`Thumbnails.Status`) after one clean pick and one clean revision
+- `Syncing` (`Publications.Sync Status`) after one clean content sync
+
+The exact success signal for each, and what has already been deleted, is at the top of `workflow_planning/Workflow Lock Migration.md`. Check the live schema before saying a status is still there, and update the tracker when one is deleted.
+
 ## Read before touching anything
 
 1. **`workflow_planning/Guys Take Build Status.md` → Part 0.** Orientation for implementers: the design rules, the key IDs/credentials, and the 20 non-negotiable platform constraints (hard-won; violating them has caused real breakage). Read it before building or changing any workflow.
