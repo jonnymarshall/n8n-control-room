@@ -128,6 +128,7 @@ per-slot composition directions).*
 - If an episode is not moving and nothing looks wrong, read the lock. A stuck lock is a dead run, not a missing trigger.
 - To retry, clear `Workflow Lock` and make sure the episode is back at the status the stage expects.
 - The Audionauts draft (`jDEHmj4d0R4PPsiN`), the X social draft (`ntXHSW3AbNntnaj0`, Stage 1), the metadata run (`jroXHciDvy0sWlRM`, Stage 2) and artwork Path 1 (`mLAn4ya2AmZoHDUk`, Stage 3) claim with it. The publisher, the thumbnail queues and the content sync still use `<Stage> In Progress` statuses; they will migrate next.
+- **Pending Airtable cleanup (checked 2026-11-24):** `Generating Metadata` and `Generating Artwork` can be deleted from `Episodes.Status` after their next clean run; neither has had one yet. `Scheduled`, `Transcript Ready` and the `Audionauts Post Tried` field are already deleted. `Publishing`, `Thumbnails.Processing` and `Publications.Syncing` wait for their stages. Full tracker: `workflow_planning/Workflow Lock Migration.md`.
 
 ---
 

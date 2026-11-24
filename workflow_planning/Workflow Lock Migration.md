@@ -5,6 +5,43 @@ Written 2026-11-24. Last updated 2026-11-24 after Stage 3 shipped. The rule that
 
 ---
 
+## Airtable cleanup tracker (start here)
+
+**Last checked 2026-11-24 22:45 UTC.** A status is deleted only after its stage has had **one clean real run**. Do not delete it in the same change that stops writing it; a rollback may need it.
+
+### Pending right now
+
+| Item | Where | Delete when | State |
+|---|---|---|---|
+| `Generating Metadata` | `Episodes.Status` | after one clean metadata run (Stage 2) | **PENDING.** No clean run since Stage 2 shipped at 20:31 UTC; no episode has moved through it. |
+| `Generating Artwork` | `Episodes.Status` | after one clean artwork run (Stage 3) | **PENDING.** No clean run since Stage 3 shipped at 22:37 UTC; no episode has moved through it. |
+
+**How to confirm the run was clean:**
+
+- **Metadata:** an episode moved from `Ready for Metadata` to `AI Analysis Complete`, `Workflow Lock` is empty, and the execution succeeded.
+- **Artwork:** an episode reached `Awaiting Thumbnail Pick` (four `Thumbnails` rows) or `Awaiting Manual Artwork`, `Workflow Lock` is empty, and the execution succeeded.
+
+Then delete the status from `Episodes.Status`. Airtable removes it from any view filter that mentions it.
+
+### Already deleted
+
+- `Scheduled` from `Episodes.Status` (2026-11-24)
+- `Transcript Ready` from `Episodes.Status` (2026-11-24)
+- `Audionauts Post Tried` field from `Episodes` (2026-11-24)
+
+### Not due yet
+
+| Item | Where | Delete when |
+|---|---|---|
+| `Publishing` | `Episodes.Status` | after Stage 4, one clean publish run |
+| `Processing` | `Thumbnails.Status` | after Stage 5, one clean pick and one clean revision |
+| `Syncing` | `Publications.Sync Status` | after Stage 6, one clean content sync |
+| `Edited` | `Episodes.Status` | optional: delete if you never use it (only the upload guard mentions it) |
+| `Research Ready` | `Episodes.Status` | optional: only the AgentMail guard mentions it |
+| `Stories Picked` | `Episodes.Status` | optional: same |
+
+---
+
 ## Why
 
 `Episodes.Status` is doing two jobs: it tells a human (and the assistant) where an episode is, and it acts as the lock for whichever workflow currently owns the row. That is why the list keeps growing: `Generating Metadata`, `Generating Artwork`, `Publishing`, and so on. Each one exists only to take the row out of a view while a workflow runs.
