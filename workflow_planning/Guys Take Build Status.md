@@ -125,7 +125,7 @@ Supporting workflows (same instance, not pipeline stages):
 
 > **▶ NEXT PROJECT (set 2026-11-23): migrate every view-triggered workflow to `Workflow Lock`.** One generic claim field instead of a `<Stage> In Progress` status per stage. The Audionauts draft is the first user and the pattern is in `n8n_workflow_readmes/CONVENTIONS.md`. **Full per-stage plan, testing and rollback, plus the status audit: `workflow_planning/Workflow Lock Migration.md`.**
 >
-> **Already done:** `Episodes.Workflow Lock` exists (single line text), the Audionauts draft claims with it and ends at `Audionauts Post Ready`, and the X social draft claims with `x-social <timestamp>`, clears on success and leaves it on failure (Stage 1). The old `Audionauts Post Tried` field is deleted.
+> **Already done:** `Episodes.Workflow Lock` exists (single line text). The Audionauts draft claims with it and ends at `Audionauts Post Ready` (Stage 0). The X social draft claims with `x-social <timestamp>`, clears on success and leaves it on failure (Stage 1). The metadata run claims with `metadata <timestamp>`, leaves `Status` at `Ready for Metadata`, and clears the lock on every success exit (Stage 2). The old `Audionauts Post Tried` field is deleted.
 >
 > **To migrate, one stage at a time:**
 > 1. Add `Workflow Lock is empty` to the stage's trigger view, and to the code guard as a backstop.
@@ -424,6 +424,14 @@ Channels: { Pod feed, X, YouTube, Rumble, Keet, Instagram, Nostr }.
 ---
 
 ## Change log
+
+- 2026-11-24 (Workflow Lock Stage 2, metadata) - **The metadata run now claims its episode with `Workflow Lock` and no longer writes `Generating Metadata`.**
+  - `Queued Episode?` now also requires `Workflow Lock` empty. `Set Generating Metadata` is replaced by `Claim Metadata`, which writes `metadata <ISO timestamp>` and leaves `Status` at `Ready for Metadata`.
+  - All three success exits clear the lock in the same PATCH that sets `AI Analysis Complete`: `Set Status AI Analysis Complete`, `Save Audionauts Transcript`, and `Skip to Analysed` (same-length re-upload). A failure leaves the lock; clear it to retry. `Skip to Analysed` no longer swallows a failed status write (`onError` changed from `continueRegularOutput` to stop), so a failure there now alerts instead of leaving a silent lock.
+  - The `Ready for Metadata` view must add `Workflow Lock is empty`. Until it does, `Queued Episode?` still refuses a locked row, but the row stays in the view while the run works.
+  - Published (`versionId == activeVersionId`), active, credentials intact, 43 nodes, validation clean, snapshot refreshed.
+  - **Airtable cleanup:** nothing to delete yet. Once one real metadata run has completed cleanly, delete the `Generating Metadata` option from `Episodes.Status`. The two Airtable node dropdown caches may still list it; that is cosmetic.
+  - **Untested:** no real upload has run through the claim. The next Frame.io upload is the happy-path test. The failure path is the same lock-stays pattern as Stage 1 but has not been forced here.
 
 - 2026-11-24 (Workflow Lock Stage 1, X social draft) - **The X social draft now claims its episode with `Workflow Lock`, and the last references to the deleted `Scheduled` status are gone.**
   - **Stage 1.** `Pick Episodes` skips any row with a non-empty `Workflow Lock`. The new `Claim Post` writes `x-social <ISO timestamp>` before the prompt fetches and model calls. The new `Clear Lock` clears it after `Create Social Posts`. Error outputs from the draft, the editor, the X-row create, the post create and the clear route to `Build X Failure` -> `Send X Failure`, which names the episode and says to clear the lock. No status changes; the four `Social Posts` rows remain the outcome. Published (`versionId == activeVersionId`), active, credentials intact, 21 nodes, validation clean, snapshot refreshed.
