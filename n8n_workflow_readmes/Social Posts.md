@@ -173,7 +173,7 @@ One row per option. Four rows per round.
 
 `Workflow Lock` (`fldM4aHJ0qhD1CQBp`, single line text, added 2026-11-23) is the generic claim the Audionauts draft uses. A workflow writes `<stage> <ISO timestamp>` before it starts and clears it on success. A non-empty lock means a run owns the row or died; clearing it is the retry. Every trigger view should require `Workflow Lock is empty`. The rest of the fleet still uses claim statuses and will migrate to this (see `CONVENTIONS.md`).
 
-`Audionauts Post Ready` is a new `Episodes.Status` value, set on success by the Audionauts draft. It means the copy exists and the clip is waiting to be sent. The old `Audionauts Post Tried` field was retired the same day.
+`Audionauts Post Ready` is a new `Episodes.Status` value, set on success by the Audionauts draft. It means the copy exists and the clip is waiting to be sent. `Audionauts Post Tried` was deleted on 2026-11-24.
 
 ### Publications
 
@@ -196,7 +196,7 @@ The selection workflow only writes `Post Copy` and `Social Post` on an existing 
 
 ---
 
-## The four workflows
+## The workflows
 
 ### 1. Draft — `BA - Episode Approved > Social Posts Drafted` (`ntXHSW3AbNntnaj0`, ACTIVE)
 
@@ -321,7 +321,7 @@ The assistant proposes the write; the normal approval tap still applies. For a c
 - **2026-11-17, X readiness:** copy nudge execution `26855` sent two “X post not chosen” messages to Jonny's DM and stamped both rows; `26861` sent nothing because of the 12-hour cooldown. Link nudge `26866` sent one “X link needed” message for a temporary `Published` episode; `26871` planned nothing after `URL` and `Status = Published` were set. Test X row, temporary episode and its posts were deleted.
 - **2026-11-17, view triggers:** clearing `Last Nudged At` on `BA-KXqegO - X` fired `X Copy Needed View` (execution `27343`), saw `Episode Social Posts` non-empty and sent the copy nudge. The 2-hour schedule path (execution `27349`) read both views through `Fetch X Copy Needed` / `Fetch X Link Needed`, merged them and sent the copy nudge for `BA-nxzPcz`. The triggers would not activate until a `Last Modified Time` field was added to `Publications`.
 - **2026-11-23, Audionauts flow:** a temporary Audionauts clip (`BA-S3aB4q`, parent `BA-QxQCXc`, real 4,701-character transcript) was created at `AI Analysis Complete`. A scratch copy of the draft workflow (Telegram to Jonny's DM) produced a 558-character rundown and the `Keet + Telegram` row; a scratch copy of the selection workflow created `BA-S3aB4q - Keet` and `BA-S3aB4q - Telegram` with the same copy; a scratch copy of the revision workflow, given `Make it shorter and lead with the BIP 110 question. Keep the multisig point.`, rewrote the row to 450 characters at `Round 2` and returned it to `Proposed`. All test rows, publications, episodes and scratch workflows were deleted.
-- **2026-11-23, X after the humanizer extraction:** a scratch copy of the X draft workflow (Telegram to Jonny's DM) ran on a temporary `Approved` episode. `Build Social Request` contained the humanizer with no `{{HUMANIZER}}` left, and the four options passed `Parse Options` and reached the DM. The temporary episode, its four rows and its X publication were deleted. The live workflow was left untouched during the test and republished afterwards.
+- **2026-11-23, X after the humanizer extraction:** a scratch copy of the X draft workflow (Telegram to Jonny's DM) ran on a temporary `Approved` episode. `Build Social Request` contained the humanizer with no `{{HUMANIZER}}` left, and the four options passed `Parse Options` and reached the DM. The temporary episode, its four rows and its X publication were deleted. The live workflow was left untouched during the test and republished afterwards. **Side effect:** the temporary episode was created at `Approved`, so the artwork workflow picked it up and posted a real "Pick a thumbnail" message before it was deleted. That is why test episodes must be created at a status no other view watches; see the test-data rule in `CONVENTIONS.md`.
 - **Not yet exercised:** the Telegram assistant's `option N` and `revise:` replies end to end, the assistant's Audionauts replies, and the assistant's `resend social posts` / X link / skip X replies.
 
 ---

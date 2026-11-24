@@ -175,7 +175,24 @@ A workflow that a view triggers owns one row at a time. Claim it with the generi
 
 **Why not one universal status?** `Status` answers "where is this episode" for Jonny and the assistant. Using it as the lock too is what produced all the stage-specific statuses, and a generic `In Progress` would lose which stage is stuck. The lock keeps the two jobs separate.
 
-**Migration status (2026-11-24):** the Audionauts draft and the X social draft claim with the lock. Metadata, artwork, thumbnail pick/revision, the Fountain publisher and the content sync still claim with `Generating Metadata`, `Generating Artwork`, `Processing` and `Publishing`. Migrate one stage at a time; add `Workflow Lock is empty` to a view when you touch it even before that stage is migrated. The plan lives at the top of Part 2 in `workflow_planning/Guys Take Build Status.md`.
+**Migration status (2026-11-24):** the Audionauts draft and the X social draft claim with the lock. Metadata, artwork, thumbnail pick/revision, the Fountain publisher and the content sync still claim with `Generating Metadata`, `Generating Artwork`, `Processing` and `Publishing`. Migrate one stage at a time; add `Workflow Lock is empty` to a view when you touch it even before that stage is migrated. The full staged plan is `workflow_planning/Workflow Lock Migration.md`.
+
+**Rollout rule.** One stage per branch and PR. The view condition and the workflow claim ship together. Retire the old claim status only after the stage has run cleanly in production. Never clear a lock while an execution is live: check the execution first, then clear it.
+
+**The lock is not a status.** Do not expose it as a stage, do not let the assistant treat it as one, and do not use it in place of the human statuses (`Ready to Publish`, `Awaiting Thumbnail Pick`, `Published`).
+
+---
+
+## RULE: Test rows must be invisible to every poller
+
+A temporary episode is still a real row, and every view poller sees it. Create test data at a status that no view watches.
+
+- **Safe default:** `Recorded`, with a `TEST` prefix in the title.
+- **Never** create a test episode at `Approved`, `Ready for Metadata`, `AI Analysis Complete`, `Artwork Ready` or `Ready to Publish`. Each of those opens a different workflow.
+- If the test must exercise a specific view, flip the status at the last moment, keep the `TEST` title, and delete the row and every child record in the same session: `Social Posts`, `Publications`, `Thumbnails`, and any attachment. Deleting the episode does not always delete the children.
+- Telegram cannot be unsent. Route test messages to Jonny's DM, never the group.
+
+**Why.** On 2026-11-23 a temporary `Approved` episode created only to test the X social writer entered the `Ready for 16X9 Thumbnail` view. The artwork workflow generated four thumbnail options and posted a real "Pick a thumbnail" message during the session. The episode was deleted, but the thumbnail rows and the message were real, and the rows had to be cleaned up by hand.
 
 ---
 
