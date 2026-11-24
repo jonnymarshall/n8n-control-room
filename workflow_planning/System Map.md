@@ -42,7 +42,7 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-24 (the X social draft now claims its row with `Workflow Lock` and clears it on success, Stage 1 of the migration. Also on 2026-11-23: stage 4e added, an Audionauts clip now gets one rundown when its transcript is saved, and picking it writes the same copy to the episode's Keet and Telegram publication rows. The voice and anti-slop rules live in one shared `Social Post Humanizer` prompt row used by the X writer, the X editor and the Audionauts writer. The shared `Ready for Social Posts` view is two OR-joined groups and requires `Workflow Lock is empty`; the Audionauts draft claims with that lock and ends at `Audionauts Post Ready`. Previously 2026-11-23 (the failure alert now explains n8n's harmless pre-flight regex timeout and says no action is needed). Previously 2026-11-17 (stage 4d added: X has its own readiness nudge on `Publications`. The draft stage now takes one episode per run from `Ready for Social Posts` and creates the `BA-xxxx - X` row before the social posts. `BA - Schedule Every 2h > X Post Readiness` reminds the team to pick the X post before publish and to store the X link after publish. Also on 2026-11-17, two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Artwork Paths 2 and 3 followed the same day: one pick or revision per run, claimed as `Thumbnails.Status = Processing` before the work starts. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off andbroken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
+*Last updated 2026-11-24 (Stage 2: the metadata run now claims its row with `Workflow Lock` and leaves `Status` at `Ready for Metadata`; `Generating Metadata` is no longer written. Stage 1: the X social draft claims with the lock and clears it on success. Also on 2026-11-23: stage 4e added, an Audionauts clip now gets one rundown when its transcript is saved, and picking it writes the same copy to the episode's Keet and Telegram publication rows. The voice and anti-slop rules live in one shared `Social Post Humanizer` prompt row used by the X writer, the X editor and the Audionauts writer. The shared `Ready for Social Posts` view is two OR-joined groups and requires `Workflow Lock is empty`; the Audionauts draft claims with that lock and ends at `Audionauts Post Ready`. Previously 2026-11-23 (the failure alert now explains n8n's harmless pre-flight regex timeout and says no action is needed). Previously 2026-11-17 (stage 4d added: X has its own readiness nudge on `Publications`. The draft stage now takes one episode per run from `Ready for Social Posts` and creates the `BA-xxxx - X` row before the social posts. `BA - Schedule Every 2h > X Post Readiness` reminds the team to pick the X post before publish and to store the X link after publish. Also on 2026-11-17, two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Artwork Paths 2 and 3 followed the same day: one pick or revision per run, claimed as `Thumbnails.Status = Processing` before the work starts. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off andbroken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
 on purpose and why; see its entry below. Also fixed the same day: the Fountain publisher was
 scheduling items with no description; see stage 5).
 Previously 2026-11-12 (stage 4b is now documented: `BA - Publish Readiness View Entered >
@@ -127,7 +127,7 @@ per-slot composition directions).*
 - Every trigger view should require `Workflow Lock is empty`.
 - If an episode is not moving and nothing looks wrong, read the lock. A stuck lock is a dead run, not a missing trigger.
 - To retry, clear `Workflow Lock` and make sure the episode is back at the status the stage expects.
-- The Audionauts draft (`jDEHmj4d0R4PPsiN`) and the X social draft (`ntXHSW3AbNntnaj0`, Stage 1) claim with it. The other stages still use `<Stage> In Progress` statuses; they will migrate next.
+- The Audionauts draft (`jDEHmj4d0R4PPsiN`), the X social draft (`ntXHSW3AbNntnaj0`, Stage 1) and the metadata run (`jroXHciDvy0sWlRM`, Stage 2) claim with it. Artwork, the publisher, the thumbnail queues and the content sync still use `<Stage> In Progress` statuses; they will migrate next.
 
 ---
 
@@ -153,9 +153,9 @@ Episode:  Script Ready
                                            which records the Frame.io link; only set when the status is
                                            Recorded or Edited and the file passed the name/size checks)
              --[auto: the one-minute poll takes the OLDEST row in the Ready for Metadata view, one per run]-->
-          Generating Metadata  (transient, claimed before anything else)
+          Workflow Lock = "metadata <now>"  (transient claim; Status stays Ready for Metadata)
              --[auto]-->
-          AI Analysis Complete            (metadata workflow: transcript + summary + chapters, then a "Packaging for ..." message)
+          AI Analysis Complete            (metadata workflow: transcript + summary + chapters, then a "Packaging for ..." message; the lock is cleared in the same PATCH)
              |--[Audionauts clip: the copy workflow claims with Workflow Lock and drafts one rundown]-->
              |  Audionauts Post Ready      (copy in Social Posts; the clip is sent by hand; no artwork, no publisher)
              '--[human: ONE reply setting title, caption, guests, moods and image prompt]-->
@@ -209,11 +209,12 @@ Episode:  Script Ready
   throughout.
 - `Edited` / `Transcript Ready` / `Recorded` are the pre-upload states. Since
   2026-10-29 the upload workflow stamps `Ready for Metadata` and the metadata
-  workflow moves it to `Generating Metadata` and then `AI Analysis Complete`, so
+  workflow claims it with `Workflow Lock` and moves it to `AI Analysis Complete`, so
   an episode is only left at `Recorded`/`Edited` if the upload did not qualify
   (or nobody has uploaded a cut yet).
-- `Generating Metadata` is transient. If an episode is sitting there, a run failed
-  or is in flight; check the Error Log before assuming it is working.
+- A `Ready for Metadata` episode with a non-empty `Workflow Lock` has a metadata run
+  in flight or one that died. Check the Error Log, then clear the lock to retry.
+  `Generating Metadata` is no longer written (Stage 2, 2026-11-24).
 
 **Human handoffs (the only steps a person must do):**
 1. Pick a Shortlist topic (`Shortlisted` -> `Picked`).
@@ -436,8 +437,10 @@ which is why the webhook now also checks Frame.io's signature and ignores a file
   view (`viwNSD7pdOs2sKTgR`, one condition: `Status = Ready for Metadata`). **One row per run**, always.
   It is a contents poll, not a "what changed since last time" poll, so a row sitting in that status is
   picked up on the next minute whatever its `Last Modified Time` says.
-- **First action:** claim the row as `Generating Metadata`, before the Frame.io URL is even parsed, so a
-  crash cannot re-loop and a bad URL cannot re-alert every minute.
+- **First action:** claim the row with `Workflow Lock = "metadata <now>"`, before the Frame.io URL is
+  even parsed, so a crash cannot re-loop and a bad URL cannot re-alert every minute. `Status` stays at
+  `Ready for Metadata` until the run finishes. `Queued Episode?` also refuses a row whose lock is set,
+  and the view must require `Workflow Lock is empty`.
 - **Why one row per run:** the pipeline reads `.first()` throughout. On 2026-11-13 two clips arrived in
   the same minute, one was processed, and the other was stranded in the view for three days. Do not
   describe this stage as "one run per upload"; it is one run per row.
@@ -461,8 +464,9 @@ which is why the webhook now also checks Frame.io's signature and ignores a file
      default `Neutral`) and the **book cover** ask.
   Every message ends with the workflow id and execution id, so a wrong message can be traced to a run.
   Replying to the *file* instead of the packaging message will not work properly.
-- **If a run fails:** the row sits at `Generating Metadata` and the error workflow names it.
-  Set `Status = Ready for Metadata` to retry.
+- **If a run fails:** the row keeps its `Workflow Lock` and the status stays `Ready for Metadata`; the
+  error workflow names it. Clear `Workflow Lock` to retry. Every success exit clears the lock in the
+  same PATCH that sets `AI Analysis Complete`.
 - **Never queue a published episode.** Setting `Ready for Metadata` on an episode that is
   already `Approved` or beyond re-runs everything, rewrites `Summary`/`Transcript`/`Chapters`
   and knocks `Status` back to `AI Analysis Complete`, which invalidates the Fountain

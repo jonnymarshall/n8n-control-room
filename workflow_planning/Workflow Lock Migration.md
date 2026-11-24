@@ -1,7 +1,7 @@
 # Workflow Lock migration
 
-**Status: Stages 0 and 1 are live. Stages 2 to 7 are planned and not started.**
-Written 2026-11-24. Last updated 2026-11-24 after Stage 1 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
+**Status: Stages 0, 1 and 2 are live. Stages 3 to 7 are planned and not started.**
+Written 2026-11-24. Last updated 2026-11-24 after Stage 2 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
 
 ---
 
@@ -44,7 +44,7 @@ Table scope:
 |---|---|---|---|---|---|
 | Audionauts copy | `jDEHmj4d0R4PPsiN` | `Ready for Social Posts` view | `Workflow Lock` (done) | `Audionauts Post Ready` | none |
 | X social draft | `ntXHSW3AbNntnaj0` | `Ready for Social Posts` view | `Workflow Lock` (done 2026-11-24) | four `Social Posts` rows | none |
-| Metadata | `jroXHciDvy0sWlRM` (metadata branch) | `Ready for Metadata` view | `Generating Metadata` | `AI Analysis Complete` | `Generating Metadata` |
+| Metadata | `jroXHciDvy0sWlRM` (metadata branch) | `Ready for Metadata` view | `Workflow Lock` (done 2026-11-24) | `AI Analysis Complete` | `Generating Metadata` |
 | Artwork Path 1 | `mLAn4ya2AmZoHDUk` | `Ready for 16X9 Thumbnail` view | `Generating Artwork` | `Awaiting Thumbnail Pick` / `Awaiting Manual Artwork` | `Generating Artwork` |
 | Thumbnail pick | `mLAn4ya2AmZoHDUk` (Path 2) | `Thumbnails.Status = Selected` | `Thumbnails.Status = Processing` | `Final` / `Rejected` | `Processing` |
 | Thumbnail revision | `mLAn4ya2AmZoHDUk` (Path 3) | `Thumbnails.Status = Revising` | `Thumbnails.Status = Processing` | `Proposed` (new round) | `Processing` |
@@ -97,11 +97,13 @@ Watch for: the view is shared with the Audionauts branch. A claimed X row leaves
 
 ## Stage 2: Metadata
 
-- **Branch:** `feat/lock-metadata`
+- **Status:** **done, 2026-11-24.** Branch `feat/lock-metadata`.
 - **Workflow:** `jroXHciDvy0sWlRM`, metadata branch only.
-- **View:** `Ready for Metadata`.
+- **View:** `Ready for Metadata`. `Workflow Lock is empty` still to add in the UI.
 
-Changes:
+Shipped: `Queued Episode?` refuses a row whose `Workflow Lock` is set. `Set Generating Metadata` is replaced by `Claim Metadata`, which writes `metadata <timestamp>` and leaves `Status` at `Ready for Metadata`. All three success exits clear the lock in the same PATCH that sets `AI Analysis Complete`: `Set Status AI Analysis Complete`, `Save Audionauts Transcript`, and `Skip to Analysed`. A failure leaves the lock. Happy path and failure are still to be exercised by the next real upload; metadata cannot be tested without a real Frame.io file and a transcription run.
+
+Original checklist:
 
 1. Add `Workflow Lock is empty` to the view.
 2. Claim immediately after the view search and the claim guard: `Workflow Lock = "metadata <now>"`.
@@ -231,7 +233,7 @@ Counts are across all 88 Episodes. "Writer" is the workflow that sets the status
 | `Transcript Ready` | none | 0 | **Remove.** No writer, no reader, only appears in select lists. |
 | `Edited` | manual | 0 | **Remove or keep.** Only used by the upload guard (`Recorded`/`Edited`). Remove if you never use it. |
 | `Ready for Metadata` | Episode Marked | 0 | **Keep.** The metadata queue. |
-| `Generating Metadata` | metadata | 0 | **Retire in Stage 2.** |
+| `Generating Metadata` | metadata | 0 | **Retired in Stage 2 (2026-11-24).** Delete it from `Episodes.Status` after the first clean metadata run. |
 | `AI Analysis Complete` | metadata | 0 | **Keep.** Metadata outcome and Audionauts entry. |
 | `Approved` | manual | 0 | **Keep.** Artwork and social triggers. |
 | `Awaiting Thumbnail Pick` | artwork | 0 | **Keep.** |
