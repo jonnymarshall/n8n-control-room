@@ -42,7 +42,7 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-24 (Stage 2: the metadata run now claims its row with `Workflow Lock` and leaves `Status` at `Ready for Metadata`; `Generating Metadata` is no longer written. Stage 1: the X social draft claims with the lock and clears it on success. Also on 2026-11-23: stage 4e added, an Audionauts clip now gets one rundown when its transcript is saved, and picking it writes the same copy to the episode's Keet and Telegram publication rows. The voice and anti-slop rules live in one shared `Social Post Humanizer` prompt row used by the X writer, the X editor and the Audionauts writer. The shared `Ready for Social Posts` view is two OR-joined groups and requires `Workflow Lock is empty`; the Audionauts draft claims with that lock and ends at `Audionauts Post Ready`. Previously 2026-11-23 (the failure alert now explains n8n's harmless pre-flight regex timeout and says no action is needed). Previously 2026-11-17 (stage 4d added: X has its own readiness nudge on `Publications`. The draft stage now takes one episode per run from `Ready for Social Posts` and creates the `BA-xxxx - X` row before the social posts. `BA - Schedule Every 2h > X Post Readiness` reminds the team to pick the X post before publish and to store the X link after publish. Also on 2026-11-17, two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Artwork Paths 2 and 3 followed the same day: one pick or revision per run, claimed as `Thumbnails.Status = Processing` before the work starts. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off andbroken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
+*Last updated 2026-11-24 (Stage 3: artwork Path 1 now claims with `Workflow Lock`, leaves `Status` alone and clears it on both success exits; `Generating Artwork` is no longer written. Stage 2: the metadata run claims with the lock and leaves `Status` at `Ready for Metadata`. Stage 1: the X social draft claims with the lock. Also on 2026-11-23: stage 4e added, an Audionauts clip now gets one rundown when its transcript is saved, and picking it writes the same copy to the episode's Keet and Telegram publication rows. The voice and anti-slop rules live in one shared `Social Post Humanizer` prompt row used by the X writer, the X editor and the Audionauts writer. The shared `Ready for Social Posts` view is two OR-joined groups and requires `Workflow Lock is empty`; the Audionauts draft claims with that lock and ends at `Audionauts Post Ready`. Previously 2026-11-23 (the failure alert now explains n8n's harmless pre-flight regex timeout and says no action is needed). Previously 2026-11-17 (stage 4d added: X has its own readiness nudge on `Publications`. The draft stage now takes one episode per run from `Ready for Social Posts` and creates the `BA-xxxx - X` row before the social posts. `BA - Schedule Every 2h > X Post Readiness` reminds the team to pick the X post before publish and to store the X link after publish. Also on 2026-11-17, two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Artwork Paths 2 and 3 followed the same day: one pick or revision per run, claimed as `Thumbnails.Status = Processing` before the work starts. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off andbroken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
 on purpose and why; see its entry below. Also fixed the same day: the Fountain publisher was
 scheduling items with no description; see stage 5).
 Previously 2026-11-12 (stage 4b is now documented: `BA - Publish Readiness View Entered >
@@ -127,7 +127,7 @@ per-slot composition directions).*
 - Every trigger view should require `Workflow Lock is empty`.
 - If an episode is not moving and nothing looks wrong, read the lock. A stuck lock is a dead run, not a missing trigger.
 - To retry, clear `Workflow Lock` and make sure the episode is back at the status the stage expects.
-- The Audionauts draft (`jDEHmj4d0R4PPsiN`), the X social draft (`ntXHSW3AbNntnaj0`, Stage 1) and the metadata run (`jroXHciDvy0sWlRM`, Stage 2) claim with it. Artwork, the publisher, the thumbnail queues and the content sync still use `<Stage> In Progress` statuses; they will migrate next.
+- The Audionauts draft (`jDEHmj4d0R4PPsiN`), the X social draft (`ntXHSW3AbNntnaj0`, Stage 1), the metadata run (`jroXHciDvy0sWlRM`, Stage 2) and artwork Path 1 (`mLAn4ya2AmZoHDUk`, Stage 3) claim with it. The publisher, the thumbnail queues and the content sync still use `<Stage> In Progress` statuses; they will migrate next.
 
 ---
 
@@ -161,7 +161,7 @@ Episode:  Script Ready
              '--[human: ONE reply setting title, caption, guests, moods and image prompt]-->
           Approved
              --[auto, if artwork preconditions met]-->
-          Generating Artwork  (transient)
+          Workflow Lock = "artwork <now>"  (transient claim; Status stays Approved/Artwork Ready)
              --[auto]-->
           Awaiting Thumbnail Pick          (4 options posted to Telegram)
              --[human: set one Thumbnails row to Selected]-->
@@ -484,15 +484,17 @@ Three paths in one workflow.
   to bring it back in.
 - **One per run, by design.** Two episodes entering the view in the same minute used to
   mean one was rendered and the other was dropped without a message. It now returns the
-  next minute. The episode is claimed as `Generating Artwork` before anything else runs,
-  so a failure cannot re-alert every minute.
+  next minute. The episode is claimed with `Workflow Lock = "artwork <now>"` before anything
+  else runs, and `Status` stays where it was, so a failure cannot re-alert every minute.
 - **Preconditions checklist (Episode) — this is the answer to "what does this
   episode need before artwork is created?":**
   - [ ] `Summary` is not empty
   - [ ] `Thumbnail Caption` is not empty  *(set by the packaging reply)*
   - [ ] `Thumbnails` is empty (no artwork generated yet)
+  - [ ] `Workflow Lock` is empty (no run owns the row)
   - [ ] `Status` is **none of** `Awaiting Thumbnail Pick` / `Generating Artwork` /
-        `Published` / `Suspended` / `Artwork Ready`
+        `Published` / `Suspended` / `Artwork Ready` (`Generating Artwork` stays in the list
+        until the status is deleted after a clean run; Path 1 no longer writes it)
   - [ ] **Either** `Type` is one of `Take` / `2 Sats` / `Read` / `Clip`, **or**
         `Guests` is not empty
         *(this is how `Chat` and `Roundtable` qualify — they must have a guest linked.
@@ -533,11 +535,12 @@ Three paths in one workflow.
   Whenever someone asks to regenerate, give all three parts in that order, count the rows
   out loud, and say the old options will be **deleted** and that it costs 4 fresh images.
   Never offer a status change on its own as the fix while rows are linked.
-- **Does:** sets `Generating Artwork`, generates 4 sixteen-by-nine options (layout
-  by Type), creates 4 `Thumbnails` rows (`Proposed`), posts them as a Telegram
-  album, then sets the episode to `Awaiting Thumbnail Pick`. If the type's
+- **Does:** claims with `Workflow Lock = "artwork <now>"`, generates 4 sixteen-by-nine
+  options (layout by Type), creates 4 `Thumbnails` rows (`Proposed`), posts them as a Telegram
+  album, then sets the episode to `Awaiting Thumbnail Pick` and clears the lock. If the type's
   `Generate 16x9` box in `Artwork Settings` is off (or the type has no row), it instead
-  sets `Awaiting Manual Artwork` and asks for manual art.
+  sets `Awaiting Manual Artwork`, clears the lock and asks for manual art. A failure leaves
+  the lock; clear it to retry.
 - **Note the view and the table can disagree about `Type`.** The view admits `Take` /
   `2 Sats` / `Read` / `Clip` (plus any type with a guest linked), but `Plan Generate` only
   builds options when the type's `Generate 16x9` box is checked. So `Read` enters the view

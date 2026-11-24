@@ -125,7 +125,7 @@ Supporting workflows (same instance, not pipeline stages):
 
 > **▶ NEXT PROJECT (set 2026-11-23): migrate every view-triggered workflow to `Workflow Lock`.** One generic claim field instead of a `<Stage> In Progress` status per stage. The Audionauts draft is the first user and the pattern is in `n8n_workflow_readmes/CONVENTIONS.md`. **Full per-stage plan, testing and rollback, plus the status audit: `workflow_planning/Workflow Lock Migration.md`.**
 >
-> **Already done:** `Episodes.Workflow Lock` exists (single line text). The Audionauts draft claims with it and ends at `Audionauts Post Ready` (Stage 0). The X social draft claims with `x-social <timestamp>`, clears on success and leaves it on failure (Stage 1). The metadata run claims with `metadata <timestamp>`, leaves `Status` at `Ready for Metadata`, and clears the lock on every success exit (Stage 2). The old `Audionauts Post Tried` field is deleted.
+> **Already done:** `Episodes.Workflow Lock` exists (single line text). The Audionauts draft claims with it and ends at `Audionauts Post Ready` (Stage 0). The X social draft claims with `x-social <timestamp>`, clears on success and leaves it on failure (Stage 1). The metadata run claims with `metadata <timestamp>`, leaves `Status` at `Ready for Metadata`, and clears the lock on every success exit (Stage 2). Artwork Path 1 claims with `artwork <timestamp>`, leaves `Status` alone and clears the lock on both success exits (Stage 3). The old `Audionauts Post Tried` field is deleted.
 >
 > **To migrate, one stage at a time:**
 > 1. Add `Workflow Lock is empty` to the stage's trigger view, and to the code guard as a backstop.
@@ -424,6 +424,15 @@ Channels: { Pod feed, X, YouTube, Rumble, Keet, Instagram, Nostr }.
 ---
 
 ## Change log
+
+- 2026-11-24 (Workflow Lock Stage 3, artwork Path 1) - **Artwork generation now claims with `Workflow Lock` and no longer writes `Generating Artwork`.**
+  - `Generation Queued?` now also requires `Workflow Lock` empty. `Mark Generating` is replaced by `Claim Artwork`, which writes `artwork <ISO timestamp>` and leaves `Status` unchanged.
+  - Both success exits clear the lock in the same PATCH: `Mark Awaiting Pick` (auto branch) and `Mark Manual Artwork` (manual branch). A failure leaves the lock; clear it to retry.
+  - The `Ready for 16X9 Thumbnail` view must add `Workflow Lock is empty`. The existing `Thumbnails is empty` gate still does the long-term exclusion once rows exist.
+  - Paths 2 and 3 of the same workflow are unchanged; their `Processing` claim is Stage 5.
+  - Published (`versionId == activeVersionId`), active, 67 nodes, credentials intact, validation clean, snapshot refreshed.
+  - **Airtable cleanup:** after one clean generation run, delete `Generating Artwork` from `Episodes.Status`.
+  - **Untested:** no real artwork run since the change; the next Approved episode that enters the view is the test.
 
 - 2026-11-24 (Workflow Lock Stage 2, metadata) - **The metadata run now claims its episode with `Workflow Lock` and no longer writes `Generating Metadata`.**
   - `Queued Episode?` now also requires `Workflow Lock` empty. `Set Generating Metadata` is replaced by `Claim Metadata`, which writes `metadata <ISO timestamp>` and leaves `Status` at `Ready for Metadata`.

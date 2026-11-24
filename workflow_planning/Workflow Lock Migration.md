@@ -1,7 +1,7 @@
 # Workflow Lock migration
 
-**Status: Stages 0, 1 and 2 are live. Stages 3 to 7 are planned and not started.**
-Written 2026-11-24. Last updated 2026-11-24 after Stage 2 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
+**Status: Stages 0, 1, 2 and 3 are live. Stages 4 to 7 are planned and not started.**
+Written 2026-11-24. Last updated 2026-11-24 after Stage 3 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
 
 ---
 
@@ -45,7 +45,7 @@ Table scope:
 | Audionauts copy | `jDEHmj4d0R4PPsiN` | `Ready for Social Posts` view | `Workflow Lock` (done) | `Audionauts Post Ready` | none |
 | X social draft | `ntXHSW3AbNntnaj0` | `Ready for Social Posts` view | `Workflow Lock` (done 2026-11-24) | four `Social Posts` rows | none |
 | Metadata | `jroXHciDvy0sWlRM` (metadata branch) | `Ready for Metadata` view | `Workflow Lock` (done 2026-11-24) | `AI Analysis Complete` | `Generating Metadata` |
-| Artwork Path 1 | `mLAn4ya2AmZoHDUk` | `Ready for 16X9 Thumbnail` view | `Generating Artwork` | `Awaiting Thumbnail Pick` / `Awaiting Manual Artwork` | `Generating Artwork` |
+| Artwork Path 1 | `mLAn4ya2AmZoHDUk` | `Ready for 16X9 Thumbnail` view | `Workflow Lock` (done 2026-11-24) | `Awaiting Thumbnail Pick` / `Awaiting Manual Artwork` | `Generating Artwork` |
 | Thumbnail pick | `mLAn4ya2AmZoHDUk` (Path 2) | `Thumbnails.Status = Selected` | `Thumbnails.Status = Processing` | `Final` / `Rejected` | `Processing` |
 | Thumbnail revision | `mLAn4ya2AmZoHDUk` (Path 3) | `Thumbnails.Status = Revising` | `Thumbnails.Status = Processing` | `Proposed` (new round) | `Processing` |
 | Fountain publisher | `LTmRVKn9TWJd6Gtk` | `Ready for Publishing` view | `Publishing` | `Scheduled to Publish` / `Publishing Failed` | `Publishing` |
@@ -118,11 +118,13 @@ Watch for: the metadata workflow has branches (Audionauts, same-length skip, ful
 
 ## Stage 3: Artwork Path 1
 
-- **Branch:** `feat/lock-artwork`
+- **Status:** **done, 2026-11-24.** Branch `feat/lock-artwork`.
 - **Workflow:** `mLAn4ya2AmZoHDUk`, Path 1 only.
-- **View:** `Ready for 16X9 Thumbnail`.
+- **View:** `Ready for 16X9 Thumbnail`. `Workflow Lock is empty` still to add in the UI.
 
-Changes:
+Shipped: `Generation Queued?` refuses a locked row. `Mark Generating` is replaced by `Claim Artwork`, which writes `artwork <timestamp>` and leaves `Status` alone. `Mark Awaiting Pick` and `Mark Manual Artwork` clear the lock in the same PATCH that sets the outcome status. A failure leaves the lock. Paths 2 and 3 are unchanged. The next Approved episode that enters the view is the test.
+
+Original checklist:
 
 1. Add `Workflow Lock is empty` to the view.
 2. Claim with `Workflow Lock = "artwork <now>"` before the image requests.
@@ -237,7 +239,7 @@ Counts are across all 88 Episodes. "Writer" is the workflow that sets the status
 | `AI Analysis Complete` | metadata | 0 | **Keep.** Metadata outcome and Audionauts entry. |
 | `Approved` | manual | 0 | **Keep.** Artwork and social triggers. |
 | `Awaiting Thumbnail Pick` | artwork | 0 | **Keep.** |
-| `Generating Artwork` | artwork | 0 | **Retire in Stage 3.** |
+| `Generating Artwork` | artwork | 0 | **Retired in Stage 3 (2026-11-24).** Delete it from `Episodes.Status` after one clean generation run. |
 | `Artwork Ready` | artwork | 0 | **Keep.** |
 | `Ready to Publish` | readiness / assistant | 0 | **Keep.** The publisher queue. |
 | `Scheduled to Publish` | publisher | 0 | **Keep.** |
