@@ -20,17 +20,19 @@ Type = 'Audionauts'
 Status = 'AI Analysis Complete'
 Transcript is not empty
 Social Posts is empty
-Audionauts Post Tried is empty
+Workflow Lock is empty
 Title is not empty
 ```
 
-**The view must include `AI Analysis Complete` in its Status filter.** It was added by hand on 2026-11-23. Without it, an Audionauts clip at that status never appears, regardless of Type.
+**The view must include `AI Analysis Complete` in its Status filter.** It was added by hand on 2026-11-23. Without it, an Audionauts clip at that status never appears, regardless of Type. The view must also require `Workflow Lock is empty`, so a claimed clip leaves the view.
 
 `AI Analysis Complete` is the status the transcription workflow writes when it finishes an Audionauts clip, and it is the first moment the transcript exists. Nothing else touches an Audionauts episode, so this is the whole lifecycle up to Jonny sending the clip.
 
 **The view is shared with the X draft, so it can hold rows this flow does not own.** The search fetches a batch and `Pick Clip` scans it for the oldest matching Audionauts row, rather than taking the first row in the view. The X draft does the mirror image: it skips `Type = Audionauts` and processes only its oldest eligible episode. Neither queue can be blocked by a row that belongs to the other.
 
-`Audionauts Post Tried` is the loop guard. The workflow stamps it on success **and** on failure. A failure therefore cannot re-alert every minute, and clearing the field on the episode is the retry.
+**`Workflow Lock` is the claim.** `Claim Clip` writes `audionauts-post <ISO timestamp>` before any work, so the row leaves the view immediately and a failure cannot re-alert every minute. On success `Complete Clip` sets `Status = Audionauts Post Ready` and clears the lock in one PATCH. On failure the lock stays and the Telegram message carries the reason; clearing `Workflow Lock` on the episode is the retry.
+
+This is the first workflow to use the generic lock instead of a claim status. The rest of the fleet still uses `<Stage> In Progress` statuses; the migration plan is in `workflow_planning/Guys Take Build Status.md` and the rule is in `n8n_workflow_readmes/CONVENTIONS.md`.
 
 ---
 
@@ -40,18 +42,19 @@ Title is not empty
 Every Minute
   -> Find Audionauts Clip      Ready for Social Posts view, 20 rows, oldest first
   -> Pick Clip                 oldest matching Audionauts row, or no items and the run ends quietly
+  -> Claim Clip                Workflow Lock = "audionauts-post <now>"
   -> Resolve Parent Episode    Episodes search on ID = Associated Episode
   -> Fetch Audionauts Prompts  "Audionauts Post" + "Social Post Humanizer"
   -> Build Audionauts Request  fill title, guests, transcript, house rules
   -> Draft Audionauts Post     google/gemini-3.7-flash, JSON object
   -> Parse Audionauts Draft    validate limits and banned moves
   -> Create Audionauts Social Post   one row, Platform "Keet + Telegram"
-  -> Mark Audionauts Post Tried      Episodes.Audionauts Post Tried = now
+  -> Complete Clip             Status = "Audionauts Post Ready", Workflow Lock = ""
   -> Build Audionauts Message
   -> Send Audionauts Post      team group
 ```
 
-Every fallible step routes to `Build Audionauts Failure` -> `Mark Audionauts Post Failed` -> `Notify Audionauts Failure`.
+Every fallible step after the claim routes to `Build Audionauts Failure` -> `Notify Audionauts Failure`. Nothing writes the failure to Airtable: the lock left on the row is the signal, and the reason is in Telegram and the failure alert.
 
 ---
 
@@ -79,7 +82,9 @@ If the parent is missing or has no guests, it falls back to the clip title and `
 - the `matters` ban, the AI-word list and the banned-move list
 - trims at the last sentence boundary if the body is slightly over 1000; fails if there is no boundary
 
-A failure writes nothing except the `Audionauts Post Tried` stamp and the Telegram reason, so the run cannot loop.
+A failure writes nothing to the Social Posts table; the claim stays on the episode and the failure message carries the reason, so the run cannot loop.
+
+Because the claim happens before the model call, a crash at any point after `Claim Clip` leaves `Workflow Lock` on the episode. That is the intended signal: the row is out of the view, so it cannot retry itself, and clearing the lock is the deliberate retry.
 
 ---
 
@@ -109,7 +114,7 @@ The Telegram message is `🟡 Audionauts post ready`, the BA code and title, the
 
 | Node | Credential |
 |---|---|
-| `Find Audionauts Clip`, `Resolve Parent Episode`, `Fetch Audionauts Prompts`, `Create Audionauts Social Post`, `Mark Audionauts Post Tried`, `Mark Audionauts Post Failed` | `Airtable PAT` (Bearer) |
+| `Find Audionauts Clip`, `Claim Clip`, `Resolve Parent Episode`, `Fetch Audionauts Prompts`, `Create Audionauts Social Post`, `Complete Clip` | `Airtable PAT` (Bearer) |
 | `Draft Audionauts Post` | `OpenRouter [n8n]` |
 | `Send Audionauts Post`, `Notify Audionauts Failure` | `Telegram [pod21_n8n_agent_bot]` |
 
@@ -121,17 +126,20 @@ End-to-end on a temporary Audionauts episode (`BA-S3aB4q`, parent `BA-QxQCXc`, r
 
 - produced a 558-character rundown with the greeting, the multisig and BIP 110 points, and the `Enjoy the preview.` sign-off
 - wrote the `Keet + Telegram` row with `Round 1`, `Proposed`
-- stamping and the failure branch both exercised (the first two runs failed on a Code-node syntax error, which is what the stamp is for)
+- the failure branch was exercised when the first two runs died on a Code-node syntax error
 
-Test rows, publications and episode were deleted.
+That test used the old `Audionauts Post Tried` stamp. **The claim / lock / `Audionauts Post Ready` path was added after it and has not been run end to end yet:** it needs the corrected view filter (below), which is a manual UI change. Test rows, publications and episode were deleted.
+
+`versionId == activeVersionId`, active, `availableInMCP`, credentials bound, validation clean, snapshot refreshed as of 2026-11-23.
 
 ---
 
 ## Gotchas
 
-- **The shared view is the gate.** `Ready for Social Posts` must include `AI Analysis Complete` in its Status filter, or nothing reaches this workflow. Airtable's API cannot read or edit view filters, so that is a manual UI change and has to be checked after any view edit.
+- **The shared view is the gate.** `Ready for Social Posts` must include `AI Analysis Complete` in its Status filter and `Workflow Lock is empty`, or nothing reaches this workflow / a claimed clip does not leave it. Airtable's API cannot read or edit view filters, so that is a manual UI change and has to be checked after any view edit.
 - **The search needs `Last Modified Time` to sort.** It exists on `Episodes` (`fld3Z4xdI4s2wVnRa`).
 - **One row per clip.** Revisions rewrite the same row; they do not create four.
-- **A failure is one message, not a loop.** Clear `Audionauts Post Tried` to retry after fixing the cause.
+- **A failure is one message, not a loop.** Clear `Workflow Lock` on the episode to retry after fixing the cause. The status stays at `AI Analysis Complete` unless the failure happened at `Complete Clip`.
+- **A stuck `Workflow Lock` always means a run died.** That is deliberate: it is the only way a failed run cannot retry itself every minute.
 - **The transcript goes to the model in full.** That is what the format needs; a long clip costs more tokens than an X post.
 - `versionId == activeVersionId`, active, `availableInMCP`, error workflow `9PMI1kuBjLW2YHwb` as of 2026-11-23.

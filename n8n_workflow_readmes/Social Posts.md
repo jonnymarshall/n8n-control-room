@@ -171,7 +171,9 @@ One row per option. Four rows per round.
 
 `Social Posts` (`fldJ5giVD2wQAz5Ix`) is the reverse link. It is how the drafting workflow knows an episode already has options, and it stops the poller re-drafting on every later edit.
 
-`Audionauts Post Tried` (`fld9CfYgra0h73wWh`, date/time, added 2026-11-23) is the Audionauts draft workflow's loop guard. It is stamped on success and on failure; the search requires it to be empty, so a failure cannot re-alert every minute. Clear it on the episode to retry.
+`Workflow Lock` (`fldM4aHJ0qhD1CQBp`, single line text, added 2026-11-23) is the generic claim the Audionauts draft uses. A workflow writes `<stage> <ISO timestamp>` before it starts and clears it on success. A non-empty lock means a run owns the row or died; clearing it is the retry. Every trigger view should require `Workflow Lock is empty`. The rest of the fleet still uses claim statuses and will migrate to this (see `CONVENTIONS.md`).
+
+`Audionauts Post Ready` is a new `Episodes.Status` value, set on success by the Audionauts draft. It means the copy exists and the clip is waiting to be sent. The old `Audionauts Post Tried` field was retired the same day.
 
 ### Publications
 
@@ -235,10 +237,10 @@ See `BA - Schedule Every 2h > X Post Readiness.md` for the exact conditions and 
 
 ### 5. Audionauts draft — `BA - Audionauts Transcript Ready > Keet and Telegram Post Drafted` (`jDEHmj4d0R4PPsiN`, ACTIVE)
 
-- Fires every minute, then searches the shared `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), up to 20 rows, oldest first. `Pick Clip` takes the oldest row with `Type = Audionauts`, `Status = AI Analysis Complete`, `Transcript` not empty, `Social Posts` empty, `Audionauts Post Tried` empty and `Title` not empty. The view must include `AI Analysis Complete` in its Status filter.
+- Fires every minute, then searches the shared `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), up to 20 rows, oldest first. `Pick Clip` takes the oldest row with `Type = Audionauts`, `Status = AI Analysis Complete`, `Transcript` not empty, `Social Posts` empty, `Workflow Lock` empty and `Title` not empty. The view must include `AI Analysis Complete` in its Status filter and require `Workflow Lock is empty`.
 - Reads the parent episode (from `Associated Episode`) for the proper title and guest names, then drafts one rundown from the clip transcript with `Audionauts Post` + `Social Post Humanizer`.
 - Writes one `Proposed` row, `Platform = Keet + Telegram`, `Option = 1`, and posts `🟡 Audionauts post ready`.
-- Stamps `Audionauts Post Tried` on success and on failure, so a bad run cannot loop.
+- Claims the row with `Workflow Lock` before the model call. On success it sets `Status = Audionauts Post Ready` and clears the lock; on failure the lock stays and the reason goes to Telegram, so a bad run cannot loop. Clear the lock to retry.
 
 ### 6. Audionauts select — `BA - Audionauts Post Selected > Keet and Telegram Linked` (`e8tczdCg5MB0RSVP`, ACTIVE)
 
@@ -261,18 +263,33 @@ Both drafting workflows use the house **schedule + view search** pattern on the 
 - X draft: `Ready for Social Posts View` Airtable search on `Episodes`, up to 20 rows, sorted by `Last Modified Time` ascending, then `Pick Episodes` keeps the oldest eligible row and skips `Type = Audionauts`
 - Audionauts draft: the same view, up to 20 rows, then `Pick Clip` scans for the oldest row that is an Audionauts clip at `AI Analysis Complete`
 
-Each takes **one episode per run**, and neither can be starved by a row belonging to the other flow. The earlier X version accepted every row a single poll returned, while the X-row creation read `.first()`, so three queued episodes produced 12 social post rows and only one X row. One-per-run removes that class of bug.
+Each takes **one episode per run**, and neither can be starved by a row belonging to the other flow. The earlier X version accepted every row a single poll returned, while the X-row creation read `.first()`, so three queued episodes produced 12 social post rows and only one X row. One-per-run removes that class of bug. Both branches also require `Workflow Lock is empty`, so a claimed row leaves the view even before its status changes.
 
 The view carries the guard:
 
-- `Status` is any of `Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`, and **`AI Analysis Complete`** (added 2026-11-23 so Audionauts clips enter the shared view)
+The view is **two AND groups joined by OR**, so each condition applies only to the flow that needs it:
+
+**Group 1, X episodes:**
+
+- `Status` is any of `Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`
+- `Type` is not `Audionauts`
+- `Summary` is not empty
 - `Social Posts` is empty
 - `Title` is not empty
-- `Summary` is not empty
+- `Workflow Lock` is empty
+
+**Group 2, Audionauts clips:**
+
+- `Status` is `AI Analysis Complete`
+- `Type` is `Audionauts`
+- `Transcript` is not empty
+- `Social Posts` is empty
+- `Title` is not empty
+- `Workflow Lock` is empty
 
 The Code nodes repeat the same checks as a backstop.
 
-**Check the `Summary` condition.** Audionauts clips can reach `AI Analysis Complete` with only a transcript and no summary. If that condition is left in the view, those clips never arrive. The X code already refuses an episode with no summary, so the condition is redundant for X and can be removed; that is the safer configuration now that both flows share the view.
+**Do not put `Summary is not empty` in group 2.** An Audionauts clip reaches `AI Analysis Complete` with only a transcript, because the transcription branch skips metadata generation. In group 1 it is required and safe; the X code enforces it too.
 
 The selection and revision workflows poll the `Social Posts` table on `Last Modified Time`. That table only has the four option rows, so the volume is tiny.
 
@@ -322,3 +339,4 @@ The assistant proposes the write; the normal approval tap still applies. For a c
 - **Two flows share one table, routed by `Platform`.** `Default`/`X` rows are X options; `Keet + Telegram` rows are Audionauts. Both selection workflows and both revision workflows filter on that field. Never strip the filter; two workflows acting on one row would write an X publication and a Keet/Telegram pair from the same pick.
 - **Airtable's API cannot add single-select options.** On 2026-11-23 `Keet` and `Telegram` were added to `Publications.Platform` and `Keet + Telegram` to `Social Posts.Platform` by hand. Creating a field works through the API; changing an existing select's choices returns `INVALID_REQUEST_UNKNOWN`. Plan a manual step into any future platform.
 - **The Audionauts draft is deliberately one option.** `option 1` still works through the assistant; do not generate four rundowns.
+- **`Workflow Lock` is the claim, and a stuck lock is a dead run.** The Audionauts draft is the first workflow to use it. It writes `audionauts-post <timestamp>` before the model call, clears it on success and leaves it on failure. Clear the field to retry. The rest of the fleet still claims with `<Stage> In Progress` statuses; the migration is the next roadmap item.

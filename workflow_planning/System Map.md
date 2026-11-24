@@ -121,6 +121,17 @@ per-slot composition directions).*
 
 ---
 
+## `Workflow Lock` (added 2026-11-23)
+
+`Episodes.Workflow Lock` is a text field that means "a workflow has claimed this row". A workflow writes `<stage> <ISO timestamp>` before it starts work and clears it on success. A non-empty lock means a run owns the row, or a run died holding it.
+
+- Every trigger view should require `Workflow Lock is empty`.
+- If an episode is not moving and nothing looks wrong, read the lock. A stuck lock is a dead run, not a missing trigger.
+- To retry, clear `Workflow Lock` and make sure the episode is back at the status the stage expects.
+- The Audionauts draft (`jDEHmj4d0R4PPsiN`) is the first user. The other stages still use `<Stage> In Progress` statuses; they will migrate next.
+
+---
+
 ## The episode lifecycle (state machine)
 
 An episode moves through these `Status` values. Each arrow is either **[auto]**
@@ -635,7 +646,7 @@ Three paths in one workflow.
 
 ### 4c. Social posts (after approval, no status change)
 - **Workflows:** `BA - Episode Approved > Social Posts Drafted` (`ntXHSW3AbNntnaj0`, **ACTIVE**), `BA - Social Post Selected > X Publication Linked` (`6m5s6x2sYMWJRz1s`, **ACTIVE**), `BA - Social Post Revising > Four Redrafted` (`G4GoqVPpUMJWoEmM`, **ACTIVE**).
-- **Fires:** `Every Minute` schedule trigger + Airtable search on the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`) on Episodes, up to 20 rows, oldest first; the code keeps the oldest eligible episode. The view carries `Status` in (`Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`, and `AI Analysis Complete` since 2026-11-23 so Audionauts clips enter it), `Social Posts` empty, `Title` not empty and `Summary` not empty. Do not explain it as `Status = Approved`: artwork moves that status on within seconds, so the real gate is the empty link. It takes **one episode per run**.
+- **Fires:** `Every Minute` schedule trigger + Airtable search on the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`) on Episodes, up to 20 rows, oldest first; the code keeps the oldest eligible episode. The view is two AND groups joined by OR. The X group: `Status` in (`Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`), `Type` is not `Audionauts`, `Summary` not empty, `Social Posts` empty, `Title` not empty, `Workflow Lock` empty. The Audionauts group: `Status = AI Analysis Complete`, `Type = Audionauts`, `Transcript` not empty, `Social Posts` empty, `Title` not empty, `Workflow Lock` empty (stage 4e). Do not explain it as `Status = Approved`: artwork moves that status on within seconds, so the real gate is the empty link. It takes **one episode per run**.
 - **Preconditions checklist (Episode):**
   - [ ] `Title` is set and is not the placeholder `[Clip]`
   - [ ] `Summary` is non-empty
@@ -669,13 +680,13 @@ Three paths in one workflow.
 
 ### 4e. Audionauts copy (Keet + Telegram, no status change)
 - **Workflows:** `BA - Audionauts Transcript Ready > Keet and Telegram Post Drafted` (`jDEHmj4d0R4PPsiN`, **ACTIVE**), `BA - Audionauts Post Selected > Keet and Telegram Linked` (`e8tczdCg5MB0RSVP`, **ACTIVE**), `BA - Audionauts Post Revising > Redrafted` (`aRwDA0qtQnjXR0sr`, **ACTIVE**).
-- **Fires:** every minute, then a search of the same `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), up to 20 rows, oldest first. `Pick Clip` takes the oldest row with `Type = Audionauts`, `Status = AI Analysis Complete`, `Transcript` not empty, `Social Posts` empty, `Audionauts Post Tried` empty and `Title` not empty. The view must include `AI Analysis Complete` in its Status filter (added by hand on 2026-11-23). One clip per run. `AI Analysis Complete` is what the transcription workflow writes for an Audionauts clip, so the copy is ready before the clip is sent out.
+- **Fires:** every minute, then a search of the same `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), up to 20 rows, oldest first. `Pick Clip` takes the oldest row with `Type = Audionauts`, `Status = AI Analysis Complete`, `Transcript` not empty, `Social Posts` empty, `Workflow Lock` empty and `Title` not empty. The view must include `AI Analysis Complete` in its Status filter and `Workflow Lock is empty` (both added by hand on 2026-11-23). One clip per run. `AI Analysis Complete` is what the transcription workflow writes for an Audionauts clip, so the copy is ready before the clip is sent out.
 - **Shared view, no starvation:** the X draft skips `Type = Audionauts` and processes its oldest eligible row; this flow scans the batch for its own. A row belonging to one flow never blocks the other.
-- **Does (draft):** reads the parent episode named in `Associated Episode` for the real title and guest names, then drafts **one** rundown under 1000 characters from the clip transcript, using the `Audionauts Post` prompt plus the shared `Social Post Humanizer` rules. It writes one `Social Posts` row with `Platform = Keet + Telegram`, `Status = Proposed`, `Option = 1`, and posts "Audionauts post ready" to the group. No Episode status change.
+- **Does (draft):** claims the clip by writing `Workflow Lock = "audionauts-post <now>"`, reads the parent episode named in `Associated Episode` for the real title and guest names, then drafts **one** rundown under 1000 characters from the clip transcript, using the `Audionauts Post` prompt plus the shared `Social Post Humanizer` rules. It writes one `Social Posts` row with `Platform = Keet + Telegram`, `Status = Proposed`, `Option = 1`, sets `Status = Audionauts Post Ready`, clears the lock, and posts "Audionauts post ready" to the group.
 - **Picking one:** reply `option 1` (or set that row to `Selected`). The selection workflow creates or updates `BA-xxxx - Keet` and `BA-xxxx - Telegram` in `Publications`, both `Status = Pending` and both with the same `Post Copy`. Nothing is posted to either platform: Keet has no API and Telegram is manual.
 - **Revising:** reply `revise: shorter, lead with the spam question`. The row is rewritten in place and `Round` increments. There is one option, not four.
-- **Failure:** a failed draft stamps `Audionauts Post Tried` and sends the reason once, so it cannot repeat every minute. Clear that field on the Episode to retry.
-- **Tested on a temporary clip on 2026-11-23:** draft 558 characters, both publication rows created, revision to `Round 2` at 450 characters. **Not yet exercised end to end:** the assistant's `option 1` / `revise:` replies for one of these rows.
+- **Failure:** the lock stays on the clip and the reason goes to Telegram once, so the run cannot repeat every minute. Clear `Workflow Lock` on the Episode to retry. The status stays at `AI Analysis Complete` unless the failure was at the final status write.
+- **Tested on a temporary clip on 2026-11-23:** draft 558 characters, both publication rows created, revision to `Round 2` at 450 characters. The claim/lock path was added afterwards and is not yet run end to end. **Not yet exercised end to end:** the assistant's `option 1` / `revise:` replies for one of these rows.
 - **Never call it an X post.** It is the Audionauts group copy, sent to Keet and Telegram.
 
 ### 5. Publishing (Fountain)
