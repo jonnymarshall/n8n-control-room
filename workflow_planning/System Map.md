@@ -42,7 +42,7 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-24 (Stage 3: artwork Path 1 now claims with `Workflow Lock`, leaves `Status` alone and clears it on both success exits; `Generating Artwork` is no longer written. Stage 2: the metadata run claims with the lock and leaves `Status` at `Ready for Metadata`. Stage 1: the X social draft claims with the lock. Also on 2026-11-23: stage 4e added, an Audionauts clip now gets one rundown when its transcript is saved, and picking it writes the same copy to the episode's Keet and Telegram publication rows. The voice and anti-slop rules live in one shared `Social Post Humanizer` prompt row used by the X writer, the X editor and the Audionauts writer. The shared `Ready for Social Posts` view is two OR-joined groups and requires `Workflow Lock is empty`; the Audionauts draft claims with that lock and ends at `Audionauts Post Ready`. Previously 2026-11-23 (the failure alert now explains n8n's harmless pre-flight regex timeout and says no action is needed). Previously 2026-11-17 (stage 4d added: X has its own readiness nudge on `Publications`. The draft stage now takes one episode per run from `Ready for Social Posts` and creates the `BA-xxxx - X` row before the social posts. `BA - Schedule Every 2h > X Post Readiness` reminds the team to pick the X post before publish and to store the X link after publish. Also on 2026-11-17, two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Artwork Paths 2 and 3 followed the same day: one pick or revision per run, claimed as `Thumbnails.Status = Processing` before the work starts. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off andbroken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
+*Last updated 2026-11-24 (Stage 4: the Fountain publisher now claims with `Workflow Lock`, leaves `Status` at `Ready to Publish` and clears it on success; `Publishing` is no longer written. Stage 3: artwork Path 1 claims with the lock. Stage 2: the metadata run claims with the lock. Stage 1: the X social draft claims with the lock. Also on 2026-11-23: stage 4e added, an Audionauts clip now gets one rundown when its transcript is saved, and picking it writes the same copy to the episode's Keet and Telegram publication rows. The voice and anti-slop rules live in one shared `Social Post Humanizer` prompt row used by the X writer, the X editor and the Audionauts writer. The shared `Ready for Social Posts` view is two OR-joined groups and requires `Workflow Lock is empty`; the Audionauts draft claims with that lock and ends at `Audionauts Post Ready`. Previously 2026-11-23 (the failure alert now explains n8n's harmless pre-flight regex timeout and says no action is needed). Previously 2026-11-17 (stage 4d added: X has its own readiness nudge on `Publications`. The draft stage now takes one episode per run from `Ready for Social Posts` and creates the `BA-xxxx - X` row before the social posts. `BA - Schedule Every 2h > X Post Readiness` reminds the team to pick the X post before publish and to store the X link after publish. Also on 2026-11-17, two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Artwork Paths 2 and 3 followed the same day: one pick or revision per run, claimed as `Thumbnails.Status = Processing` before the work starts. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off andbroken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
 on purpose and why; see its entry below. Also fixed the same day: the Fountain publisher was
 scheduling items with no description; see stage 5).
 Previously 2026-11-12 (stage 4b is now documented: `BA - Publish Readiness View Entered >
@@ -127,14 +127,14 @@ per-slot composition directions).*
 - Every trigger view should require `Workflow Lock is empty`.
 - If an episode is not moving and nothing looks wrong, read the lock. A stuck lock is a dead run, not a missing trigger.
 - To retry, clear `Workflow Lock` and make sure the episode is back at the status the stage expects.
-- The Audionauts draft (`jDEHmj4d0R4PPsiN`), the X social draft (`ntXHSW3AbNntnaj0`, Stage 1), the metadata run (`jroXHciDvy0sWlRM`, Stage 2) and artwork Path 1 (`mLAn4ya2AmZoHDUk`, Stage 3) claim with it. The publisher, the thumbnail queues and the content sync still use `<Stage> In Progress` statuses; they will migrate next.
-- **Pending Airtable cleanup (checked 2026-11-24):** `Generating Metadata` and `Generating Artwork` can be deleted from `Episodes.Status` after their next clean run; neither has had one yet. `Scheduled`, `Transcript Ready` and the `Audionauts Post Tried` field are already deleted. `Publishing`, `Thumbnails.Processing` and `Publications.Syncing` wait for their stages. Full tracker: `workflow_planning/Workflow Lock Migration.md`.
+- The Audionauts draft (`jDEHmj4d0R4PPsiN`), the X social draft (`ntXHSW3AbNntnaj0`, Stage 1), the metadata run (`jroXHciDvy0sWlRM`, Stage 2), artwork Path 1 (`mLAn4ya2AmZoHDUk`, Stage 3) and the Fountain publisher (`LTmRVKn9TWJd6Gtk`, Stage 4) claim with it. The thumbnail queues and the content sync still use `<Stage> In Progress` statuses; they will migrate next.
+- **Pending Airtable cleanup (checked 2026-11-24):** `Generating Metadata`, `Generating Artwork` and `Publishing` can be deleted from `Episodes.Status` after their next clean run; none has had one yet. `Scheduled`, `Transcript Ready` and the `Audionauts Post Tried` field are already deleted. `Thumbnails.Processing` and `Publications.Syncing` wait for their stages. Full tracker: `workflow_planning/Workflow Lock Migration.md`.
 
 ---
 
 ## The episode lifecycle (state machine)
 
-From 2026-11-23 the transient claim statuses shown below (`Generating Metadata`, `Generating Artwork`, `Publishing`) are being replaced by the generic `Workflow Lock`, one stage at a time. Until a stage is migrated, its claim status is still what takes the row out of the view. See `workflow_planning/Workflow Lock Migration.md`.
+From 2026-11-23 the transient claim statuses shown below (`Generating Metadata`, `Generating Artwork`, `Publishing`) are being replaced by the generic `Workflow Lock`, one stage at a time. All three are already no longer written; they stay in the select until their cleanup. Until a stage is migrated, its claim status is still what takes the row out of the view. See `workflow_planning/Workflow Lock Migration.md`.
 
 An episode moves through these `Status` values. Each arrow is either **[auto]**
 (an automation advances it) or **[human]** (someone sets it by hand, in Airtable
@@ -171,7 +171,7 @@ Episode:  Script Ready
           Ready to Publish
              --[auto: the Fountain publisher claims it, uploads the video + 1x1 artwork and
                  schedules the Fountain item]-->
-          Publishing  (transient)
+          Workflow Lock = "publishing <now>"  (transient claim; Status stays Ready to Publish)
              --[auto: the publisher uploads the video + artwork, schedules the Fountain item,
                  and marks the episode]-->
           Scheduled to Publish            (Fountain holds it; the Publication row is `Scheduled`)
@@ -185,9 +185,10 @@ Episode:  Script Ready
   already handed to **Fountain** is `Scheduled to Publish` (has a `Publications` row with
   `Scheduled For`, no `Record Date` meaning). Before 2026-10-29 both were the single word
   `Scheduled`, which is exactly how a publishing question got answered off the wrong state.
-- `Publishing` — transient. The Fountain publisher claims the episode with this status so it
-  leaves the ready view before the (long) upload starts. It should never sit here for hours;
-  if it does, the publisher run is still working or died before its failure writer could fire.
+- `Publishing` — **no longer written since Stage 4 (2026-11-24).** The Fountain publisher claims
+  the episode with `Workflow Lock = "publishing <now>"` and leaves `Status` at `Ready to Publish`,
+  so it leaves the ready view before the long upload starts. A `Ready to Publish` episode with a
+  non-empty lock has a run in flight or one that died; clear the lock to retry.
 - `Publishing Failed` — the Fountain publisher failed. The reason and execution id are in the
   Telegram message and on the `Publications` row. Fix the cause, then set the episode back to
   `Ready to Publish` to retry. See stage 5.
@@ -707,8 +708,9 @@ Three paths in one workflow.
   `viwDfPHHKrgggdw20` and set `Status = Ready to Publish`. **Archived 2026-09-29.**
 - **Now:** three workflows own this gate (all created/updated 2026-09-30, live 2026-10-01):
   - **Publisher** — `BA - Ready for Publishing View Entered > Fountain Scheduled`
-    (`LTmRVKn9TWJd6Gtk`), **ACTIVE**. Watches the ready view, claims the episode, uploads
-    the video and the square (1x1) artwork to Fountain, PATCHes the item, then schedules it.
+    (`LTmRVKn9TWJd6Gtk`), **ACTIVE**. Watches the ready view, claims the episode with
+    `Workflow Lock`, uploads the video and the square (1x1) artwork to Fountain, PATCHes the
+    item, then schedules it and clears the lock.
   - **Reconciler** — `BA - Schedule Every 15m > Fountain Publication Reconciled`
     (`pvCPy320OjawDkSu`), **INACTIVE as of 2026-10-01**. Marks the Episode `Published` once
     Fountain actually publishes.
@@ -733,6 +735,7 @@ Three paths in one workflow.
   - [ ] `Type` is **not** `Clip` and **not** `Audionauts` (added 2026-10-07)
   - [ ] `1x1 Thumbnail Count` is **greater than 0** (added 2026-10-07)
   - [ ] `Status` is `Ready to Publish`
+  - [ ] `Workflow Lock` is empty (no other run owns the row)
   - [ ] `Release Date` is **on or after `today`** (relative filter, America/New_York)
 - **The `Release Date` filter is relative**, so an episode whose date passes while it sits
   in the view drops out and is not picked up. That is deliberate: it keeps a past-dated
@@ -741,7 +744,7 @@ Three paths in one workflow.
 - **The 1x1 guard is a helper rollup:** `1x1 Thumbnail Count` (`fldL2ttmgchk8y40J`) counts non-empty `1x1` attachments across the linked `Thumbnails` rows (`COUNTA(values)`); it is `0` when no linked row has a 1x1. The workflow reads only the **first** linked row, so on a rare multi-row episode the filter and the workflow can disagree.
 - **Retry after a failure:** a failure sets the Episode to `Publishing Failed` and the
   Fountain `Publications` row to `Failed`, with a Telegram message carrying the reason and
-  the execution id. To retry, fix the problem and set the episode back to `Ready to Publish`
+  the execution id. To retry, fix the problem, clear `Workflow Lock`, and set the episode back to `Ready to Publish`
   (the guard accepts a `Failed`/`Needs Attention` Publication, so nothing else needs
   resetting).
 - **`Published` is set by the reconciler**, which is ACTIVE as of 2026-10-29. After a
@@ -770,7 +773,7 @@ this exactly.
      `Release Date` in the same write if it is empty or already past. Use a real future
      date and say which one you used.
   4. In the summary, say what happens next: the publisher picks it up **within about a
-     minute**, sets `Publishing`, uploads the video from `Frame.io URL` (the smallest
+     minute**, claims it with `Workflow Lock` (leaving `Status` at `Ready to Publish`), uploads the video from `Frame.io URL` (the smallest
      1080p copy Frame.io holds for that file, else the smallest 720p, else the original
      when its dimensions cannot be read) and the **1x1** artwork, and **schedules** the
      Fountain item. So the link must point at the cut that should be published, not at a

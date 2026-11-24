@@ -125,7 +125,7 @@ Supporting workflows (same instance, not pipeline stages):
 
 > **▶ NEXT PROJECT (set 2026-11-23): migrate every view-triggered workflow to `Workflow Lock`.** One generic claim field instead of a `<Stage> In Progress` status per stage. The Audionauts draft is the first user and the pattern is in `n8n_workflow_readmes/CONVENTIONS.md`. **Full per-stage plan, testing and rollback, plus the status audit: `workflow_planning/Workflow Lock Migration.md`. The statuses still pending deletion are tracked at the top of that doc.**
 >
-> **Already done:** `Episodes.Workflow Lock` exists (single line text). The Audionauts draft claims with it and ends at `Audionauts Post Ready` (Stage 0). The X social draft claims with `x-social <timestamp>`, clears on success and leaves it on failure (Stage 1). The metadata run claims with `metadata <timestamp>`, leaves `Status` at `Ready for Metadata`, and clears the lock on every success exit (Stage 2). Artwork Path 1 claims with `artwork <timestamp>`, leaves `Status` alone and clears the lock on both success exits (Stage 3). The old `Audionauts Post Tried` field is deleted.
+> **Already done:** `Episodes.Workflow Lock` exists (single line text). The Audionauts draft claims with it and ends at `Audionauts Post Ready` (Stage 0). The X social draft claims with `x-social <timestamp>`, clears on success and leaves it on failure (Stage 1). The metadata run claims with `metadata <timestamp>`, leaves `Status` at `Ready for Metadata`, and clears the lock on every success exit (Stage 2). Artwork Path 1 claims with `artwork <timestamp>`, leaves `Status` alone and clears the lock on both success exits (Stage 3). The Fountain publisher claims with `publishing <timestamp>`, leaves `Status` at `Ready to Publish` and clears the lock on success (Stage 4). The old `Audionauts Post Tried` field is deleted.
 >
 > **To migrate, one stage at a time:**
 > 1. Add `Workflow Lock is empty` to the stage's trigger view, and to the code guard as a backstop.
@@ -424,6 +424,15 @@ Channels: { Pod feed, X, YouTube, Rumble, Keet, Instagram, Nostr }.
 ---
 
 ## Change log
+
+- 2026-11-24 (Workflow Lock Stage 4, Fountain publisher) - **The publisher now claims with `Workflow Lock` and no longer writes `Publishing`.**
+  - The flow is `Ready for Publishing View` -> `Find Fountain Publication` -> `Guard Fountain Publication` -> `Should Run Fountain`. The true branch passes a new `Lock Free?` check, then `Claim Publishing` writes `publishing <ISO timestamp>` and leaves `Status` at `Ready to Publish`.
+  - `Mark Episode Scheduled to Publish` sets `Scheduled to Publish` and clears the lock in one PATCH. `Mark Episode Publishing Failed` sets `Publishing Failed` and leaves the lock; clear it and set the episode back to `Ready to Publish` to retry.
+  - The old `Claim Episode as Publishing` is removed. `Should Run Fountain` false still restores the guarded status; no claim has happened on that branch.
+  - **The `Ready for Publishing` view must add `Workflow Lock is empty`.** The `Lock Free?` step is the code backstop until then. The view was empty when this shipped, so no row was stranded by the re-baseline.
+  - Published (`versionId == activeVersionId`), active, 58 nodes, credentials intact, validation clean apart from the known `executeOnce` false positive, snapshot refreshed.
+  - **Airtable cleanup:** after one clean publish, delete `Publishing` from `Episodes.Status`.
+  - **Untested:** no real publish since the change; the next episode that enters the view is the happy-path test.
 
 - 2026-11-24 (Workflow Lock Stage 3, artwork Path 1) - **Artwork generation now claims with `Workflow Lock` and no longer writes `Generating Artwork`.**
   - `Generation Queued?` now also requires `Workflow Lock` empty. `Mark Generating` is replaced by `Claim Artwork`, which writes `artwork <ISO timestamp>` and leaves `Status` unchanged.
