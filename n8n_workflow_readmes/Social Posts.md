@@ -202,7 +202,7 @@ The selection workflow only writes `Post Copy` and `Social Post` on an existing 
 
 - Fires on any change to an Episodes row whose `Status` is one of `Approved`, `Generating Artwork`, `Awaiting Thumbnail Pick`, `Awaiting Manual Artwork`, `Artwork Ready`, **and** whose `Social Posts` link is empty.
 - Skips a placeholder title (`[Clip]`), a missing title, and an episode with no summary.
-- Fetches the `Social Post` prompt, drafts four, runs the `Social Post Editor` pass, validates, writes four `Proposed` rows and posts one Telegram message.
+- Claims the episode with `Workflow Lock` (`x-social <timestamp>`) before the model calls, fetches the `Social Post` prompt, drafts four, runs the `Social Post Editor` pass, validates, writes four `Proposed` rows, clears the lock and posts one Telegram message.
 - **Does not change the Episode `Status`.** Social copy is a side stage, like the publish-readiness checklist. Artwork and publishing are untouched.
 
 ### 2. Select — `BA - Social Post Selected > X Publication Linked` (`6m5s6x2sYMWJRz1s`, ACTIVE)
@@ -339,4 +339,4 @@ The assistant proposes the write; the normal approval tap still applies. For a c
 - **Two flows share one table, routed by `Platform`.** `Default`/`X` rows are X options; `Keet + Telegram` rows are Audionauts. Both selection workflows and both revision workflows filter on that field. Never strip the filter; two workflows acting on one row would write an X publication and a Keet/Telegram pair from the same pick.
 - **Airtable's API cannot add single-select options.** On 2026-11-23 `Keet` and `Telegram` were added to `Publications.Platform` and `Keet + Telegram` to `Social Posts.Platform` by hand. Creating a field works through the API; changing an existing select's choices returns `INVALID_REQUEST_UNKNOWN`. Plan a manual step into any future platform.
 - **The Audionauts draft is deliberately one option.** `option 1` still works through the assistant; do not generate four rundowns.
-- **`Workflow Lock` is the claim, and a stuck lock is a dead run.** The Audionauts draft is the first workflow to use it. It writes `audionauts-post <timestamp>` before the model call, clears it on success and leaves it on failure. Clear the field to retry. The rest of the fleet still claims with `<Stage> In Progress` statuses; the migration is the next roadmap item.
+- **`Workflow Lock` is the claim, and a stuck lock is a dead run.** The Audionauts draft writes `audionauts-post <timestamp>` and the X draft writes `x-social <timestamp>` before their model calls; both clear it on success and leave it on failure. Clear the field to retry. The rest of the fleet still claims with `<Stage> In Progress` statuses; the migration is the next roadmap item.

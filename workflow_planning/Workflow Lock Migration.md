@@ -1,7 +1,7 @@
 # Workflow Lock migration
 
-**Status: planning only. Not started, except Stage 0, which is live.**
-Written 2026-11-24. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
+**Status: Stages 0 and 1 are live. Stages 2 to 7 are planned and not started.**
+Written 2026-11-24. Last updated 2026-11-24 after Stage 1 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
 
 ---
 
@@ -43,7 +43,7 @@ Table scope:
 | Stage | Workflow | Trigger | Claim today | Outcome | Status to retire |
 |---|---|---|---|---|---|
 | Audionauts copy | `jDEHmj4d0R4PPsiN` | `Ready for Social Posts` view | `Workflow Lock` (done) | `Audionauts Post Ready` | none |
-| X social draft | `ntXHSW3AbNntnaj0` | `Ready for Social Posts` view | none (Social Posts link is the gate) | four `Social Posts` rows | none |
+| X social draft | `ntXHSW3AbNntnaj0` | `Ready for Social Posts` view | `Workflow Lock` (done 2026-11-24) | four `Social Posts` rows | none |
 | Metadata | `jroXHciDvy0sWlRM` (metadata branch) | `Ready for Metadata` view | `Generating Metadata` | `AI Analysis Complete` | `Generating Metadata` |
 | Artwork Path 1 | `mLAn4ya2AmZoHDUk` | `Ready for 16X9 Thumbnail` view | `Generating Artwork` | `Awaiting Thumbnail Pick` / `Awaiting Manual Artwork` | `Generating Artwork` |
 | Thumbnail pick | `mLAn4ya2AmZoHDUk` (Path 2) | `Thumbnails.Status = Selected` | `Thumbnails.Status = Processing` | `Final` / `Rejected` | `Processing` |
@@ -74,11 +74,13 @@ The reconciler and the notification workflows do not own a row for a long-runnin
 
 ## Stage 1: X social draft
 
-- **Branch:** `feat/lock-x-social-draft`
+- **Status:** **done, 2026-11-24.** Branch `feat/lock-x-social-draft`, PR #56.
 - **Workflow:** `ntXHSW3AbNntnaj0`
-- **View:** `Ready for Social Posts`, group 1 (X episodes).
+- **View:** `Ready for Social Posts`, group 1 (X episodes). `Workflow Lock is empty` is now in the view.
 
-Changes:
+Shipped: `Pick Episodes` skips locked rows, `Claim Post` writes `x-social <timestamp>` before the prompts and model calls, `Clear Lock` clears it after the four rows are written, and error outputs from the draft, editor, X-row create, post create and clear route to `Build X Failure` -> `Send X Failure`. Happy path and forced failure are still to be exercised by the first real X episode.
+
+Original checklist:
 
 1. Add `Workflow Lock is empty` to group 1 of the view.
 2. In `Pick Episodes`, require `Workflow Lock` empty as a backstop.

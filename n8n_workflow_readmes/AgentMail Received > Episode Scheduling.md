@@ -1,5 +1,7 @@
 # AgentMail Received > Episode Scheduling
 
+> **2026-11-24 - blocked-message wording matches the status rename (LIVE, published).** The canceled guard's blocked message said `acts on: Scheduled`, and the confirmed guard's list said `Scheduled`. Both conditions already use `Recording Scheduled`; only the Telegram strings were stale. They now say `Recording Scheduled`, after the old `Scheduled` option was deleted from `Episodes.Status`. Text-only change, no structure or logic. Snapshot refreshed.
+
 > **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published).** Canceled ✅, poll sent ⏳, scheduled ✅, and the three status-guard notices now end with a 🟡 action line. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
 
 > **Find this workflow in n8n by name.** Workflow IDs change when a workflow is rebuilt, so the name is the stable identifier. (ID at time of writing: `DFkl8armVlXqBWWD`.)

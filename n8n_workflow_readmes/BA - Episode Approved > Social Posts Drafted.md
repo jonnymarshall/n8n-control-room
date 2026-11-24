@@ -1,6 +1,8 @@
 # BA - Episode Approved > Social Posts Drafted
 
-> **2026-11-23 - the view is shared with the Audionauts draft (LIVE, published).** `Ready for Social Posts` now also carries Audionauts clips at `AI Analysis Complete`, so the search fetches up to 20 rows and `Pick Episodes` keeps the oldest eligible episode, skipping `Type = Audionauts`. That keeps one episode per run and stops an Audionauts row from blocking the X queue. The view is now two AND groups joined by OR, so `Summary is not empty` applies only to the X group (group 1). The Audionauts group does not require a summary, because those clips reach `AI Analysis Complete` with only a transcript.
+> **2026-11-24 - the draft now claims the episode with `Workflow Lock` (LIVE, published, Stage 1 of the migration).** `Pick Episodes` skips any row whose `Workflow Lock` is not empty. `Claim Post` writes `x-social <timestamp>` before the prompt fetches and the model calls. `Clear Lock` clears it after `Create Social Posts`. Error outputs from the draft, the editor, the X-row create, the post create and the clear route to `Build X Failure` -> `Send X Failure`, which names the episode and tells you to clear the lock. The X group of `Ready for Social Posts` now requires `Workflow Lock is empty` (added 2026-11-24). No status changes. `versionId == activeVersionId`, active, credentials intact.
+
+> **2026-11-23 - the view is shared with the Audionauts draft (LIVE, published).** `Ready for Social Posts` now also carries Audionauts clips at `AI Analysis Complete`, so the search fetches up to 20 rows and `Pick Episodes` keeps the oldest eligible episode, skipping `Type = Audionauts`. That keeps one episode per run and stops an Audionauts row from blocking the X queue. The view is two AND groups joined by OR, so `Summary is not empty` applies only to the X group (group 1). The Audionauts group does not require a summary, because those clips reach `AI Analysis Complete` with only a transcript.
 
 > **2026-11-23 - the shared humanizer is now a separate prompt row (LIVE, published).** The voice, rhythm, accuracy and banned-word rules moved out of `Social Post` and `Social Post Editor` and into `Social Post Humanizer` (`reciUfBMWFqmBMDd6`). A new `Fetch Humanizer Prompt` node runs after `Fetch Social Prompt`, and `Build Social Request` and `Build Edit Request` substitute `{{HUMANIZER}}` before the model call. The same row feeds the Audionauts writer, so one edit changes every social automation. Verified on a scratch copy against a temporary `Approved` episode: the assembled request contained the humanizer, no placeholder survived, and the four options passed `Parse Options`.
 
@@ -18,8 +20,8 @@ Writes four platform-neutral social post options after an episode's AI metadata 
 ```text
 Every Minute
   -> Ready for Social Posts View   Airtable search, view viw7OScgqnRQdCLJz, up to 20 rows
-  -> Pick Episodes                 oldest eligible X episode (skips Audionauts)
-  -> Pick Episodes                 guard: status, no linked posts, title, summary
+  -> Pick Episodes                 oldest eligible X episode (skips Audionauts and locked rows; status, summary and title guards)
+  -> Claim Post                    Workflow Lock = "x-social <now>"
   -> Fetch Social Prompt           Airtable Prompts row "Social Post"
   -> Fetch Humanizer Prompt        Airtable Prompts row "Social Post Humanizer"
   -> Build Social Request          fill title, type, guest, summary, thumbnail caption, chapters, house rules
@@ -33,9 +35,12 @@ Every Minute
        yes -> Create Social Posts
        no  -> Create X Publication   Platform X, Status Pending, no copy
             -> Create Social Posts    one Airtable POST, four records (Copy + CTA)
+  -> Clear Lock                    Workflow Lock = ""
   -> Build Social Message          numbered options, body and CTA counts, reply instructions
   -> Send Social Posts             team group, HTML
 ```
+
+Failures from `Draft with OpenRouter`, `Edit with OpenRouter`, `Create X Publication`, `Create Social Posts` or `Clear Lock` route to `Build X Failure` -> `Send X Failure`. The lock stays on the episode, the message names the `BA-` code and the reason, and clearing `Workflow Lock` is the retry.
 
 ## Why it takes one episode per run
 
@@ -110,9 +115,9 @@ A body over 280 is trimmed at the last sentence boundary at or below 280. If no 
 | Node | Credential |
 |---|---|
 | `Episodes Changed` | `Airtable [n8n] (PAT)` |
-| `Fetch Social Prompt`, `Fetch Humanizer Prompt`, `Fetch Editor Prompt`, `Create Social Posts` | `Airtable PAT` (Bearer) |
+| `Fetch Social Prompt`, `Fetch Humanizer Prompt`, `Fetch Editor Prompt`, `Claim Post`, `Create Social Posts`, `Clear Lock` | `Airtable PAT` (Bearer) |
 | `Draft with OpenRouter`, `Edit with OpenRouter` | `OpenRouter [n8n]` |
-| `Send Social Posts` | `Telegram [pod21_n8n_agent_bot]` |
+| `Send Social Posts`, `Send X Failure` | `Telegram [pod21_n8n_agent_bot]` |
 
 All verified bound on 2026-11-16. HTTP nodes are the ones to re-check after any push.
 
