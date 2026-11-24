@@ -1,5 +1,9 @@
 # BA - Episode Approved > Social Posts Drafted
 
+> **2026-11-23 - the view is shared with the Audionauts draft (LIVE, published).** `Ready for Social Posts` now also carries Audionauts clips at `AI Analysis Complete`, so the search fetches up to 20 rows and `Pick Episodes` keeps the oldest eligible episode, skipping `Type = Audionauts`. That keeps one episode per run and stops an Audionauts row from blocking the X queue. The view's `Summary` condition is now redundant for X (the code requires it) and can be removed if Audionauts clips arrive without one.
+
+> **2026-11-23 - the shared humanizer is now a separate prompt row (LIVE, published).** The voice, rhythm, accuracy and banned-word rules moved out of `Social Post` and `Social Post Editor` and into `Social Post Humanizer` (`reciUfBMWFqmBMDd6`). A new `Fetch Humanizer Prompt` node runs after `Fetch Social Prompt`, and `Build Social Request` and `Build Edit Request` substitute `{{HUMANIZER}}` before the model call. The same row feeds the Audionauts writer, so one edit changes every social automation. Verified on a scratch copy against a temporary `Approved` episode: the assembled request contained the humanizer, no placeholder survived, and the four options passed `Parse Options`.
+
 Writes four platform-neutral social post options after an episode's AI metadata is signed off, writes them to the `Social Posts` table as `Proposed`, and posts them to the team group. The message also explains how to submit exact custom copy through the Telegram assistant.
 
 - **Workflow ID:** `ntXHSW3AbNntnaj0` (stable identifier: the name)
@@ -16,7 +20,8 @@ Every Minute
   -> Ready for Social Posts View   Airtable search, view viw7OScgqnRQdCLJz, limit 1
   -> Pick Episodes                 guard: status, no linked posts, title, summary
   -> Fetch Social Prompt           Airtable Prompts row "Social Post"
-  -> Build Social Request          fill title, type, guest, summary, thumbnail caption, chapters
+  -> Fetch Humanizer Prompt        Airtable Prompts row "Social Post Humanizer"
+  -> Build Social Request          fill title, type, guest, summary, thumbnail caption, chapters, house rules
   -> Draft with OpenRouter         google/gemini-3.7-flash, 4 bodies + 4 CTAs
   -> Fetch Editor Prompt           Airtable Prompts row "Social Post Editor"
   -> Build Edit Request            hand the four drafts and the episode spine to the editor
@@ -104,7 +109,7 @@ A body over 280 is trimmed at the last sentence boundary at or below 280. If no 
 | Node | Credential |
 |---|---|
 | `Episodes Changed` | `Airtable [n8n] (PAT)` |
-| `Fetch Social Prompt`, `Fetch Editor Prompt`, `Create Social Posts` | `Airtable PAT` (Bearer) |
+| `Fetch Social Prompt`, `Fetch Humanizer Prompt`, `Fetch Editor Prompt`, `Create Social Posts` | `Airtable PAT` (Bearer) |
 | `Draft with OpenRouter`, `Edit with OpenRouter` | `OpenRouter [n8n]` |
 | `Send Social Posts` | `Telegram [pod21_n8n_agent_bot]` |
 

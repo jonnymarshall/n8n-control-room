@@ -161,6 +161,24 @@ First workflow on this model: **Guy's Take Thumbnail Artwork**
 
 ---
 
+## RULE: Claim a row with `Workflow Lock`, not a stage status
+
+A workflow that a view triggers owns one row at a time. Claim it with the generic lock, not a `<Stage> In Progress` status.
+
+- **Field:** `Episodes.Workflow Lock` (`fldM4aHJ0qhD1CQBp`, single line text). Value: `<stage> <ISO timestamp>`, for example `audionauts-post 2026-11-23T22:10:00Z`.
+- **Every trigger view requires `Workflow Lock is empty`.** The code guard repeats it as a backstop.
+- **Claim after the pick and before any model call, upload or multi-step work.** The row then leaves the view immediately.
+- **On success, clear the lock and set the outcome status in one PATCH.**
+- **On failure, leave the lock and send the reason to Telegram.** A failed run must not retry itself every minute.
+- **Recovery is one action:** clear the lock, and put the episode back at the status the stage expects if a later step changed it.
+- **A non-empty lock always means a run owns the row or died.** That is the whole point; do not "fix" it by clearing the lock automatically.
+
+**Why not one universal status?** `Status` answers "where is this episode" for Jonny and the assistant. Using it as the lock too is what produced all the stage-specific statuses, and a generic `In Progress` would lose which stage is stuck. The lock keeps the two jobs separate.
+
+**Migration status (2026-11-23):** the Audionauts draft is the first user. Metadata, artwork, thumbnail pick/revision, the Fountain publisher and the content sync still claim with `Generating Metadata`, `Generating Artwork`, `Processing` and `Publishing`. Migrate one stage at a time; add `Workflow Lock is empty` to a view when you touch it even before that stage is migrated. The plan lives at the top of Part 2 in `workflow_planning/Guys Take Build Status.md`.
+
+---
+
 ## RULE: Every workflow has an `.sdk.js` snapshot
 
 **Every non-archived workflow on the server must have a snapshot file in

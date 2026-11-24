@@ -1,5 +1,7 @@
 # BA - Social Post Revising > Four Redrafted
 
+> **2026-11-23 - shared humanizer, and Audionauts rows are ignored (LIVE, published).** `Pick Revising` now processes only rows whose `Platform` is `Default` or `X`; Audionauts copy (`Keet + Telegram`) is redrafted by its own workflow, which writes one post instead of four. A new `Fetch Humanizer Prompt` node runs after `Fetch Social Prompt`, and `Build Revision Request` and `Build Edit Request` substitute `{{HUMANIZER}}` from the shared `Social Post Humanizer` row.
+
 Redrafts all four social post options from a written brief, in place, without re-picking or re-drafting the episode from scratch. The resulting message also explains how to submit exact custom copy through the Telegram assistant.
 
 - **Workflow ID:** `G4GoqVPpUMJWoEmM` (stable identifier: the name)
@@ -19,6 +21,7 @@ Social Posts Changed
   -> Already Selected?        yes -> notice and stop
        no  -> Fetch Episode        title, type, summary, thumbnail caption, chapters
             -> Fetch Social Prompt  Airtable Prompts row "Social Post"
+            -> Fetch Humanizer Prompt  Airtable Prompts row "Social Post Humanizer"
             -> Build Revision Request
             -> Redraft with OpenRouter   google/gemini-3.7-flash
             -> Fetch Editor Prompt  Airtable Prompts row "Social Post Editor"
@@ -60,7 +63,7 @@ The brief is passed verbatim. It controls tone, angle, length and opening. It do
 | Node | Credential |
 |---|---|
 | `Social Posts Changed` | `Airtable [n8n] (PAT)` |
-| `Fetch Episode Posts`, `Fetch Episode`, `Fetch Social Prompt`, `Fetch Editor Prompt`, `Update Social Posts` | `Airtable PAT` (Bearer) |
+| `Fetch Episode Posts`, `Fetch Episode`, `Fetch Social Prompt`, `Fetch Humanizer Prompt`, `Fetch Editor Prompt`, `Update Social Posts` | `Airtable PAT` (Bearer) |
 | `Redraft with OpenRouter`, `Edit with OpenRouter` | `OpenRouter [n8n]` |
 | `Send Already Picked`, `Send Revised Message` | `Telegram [pod21_n8n_agent_bot]` |
 

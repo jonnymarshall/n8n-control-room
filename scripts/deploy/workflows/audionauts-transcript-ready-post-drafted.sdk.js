@@ -1,0 +1,97 @@
+import { workflow, node, trigger } from '@n8n/workflow-sdk';
+
+// Snapshot of live workflow jDEHmj4d0R4PPsiN, fetched 2026-11-23.
+// Parameters and node settings are intentionally kept verbatim from live.
+// Regenerate with: scripts/deploy/workflows/snapshot-sdk.sh jDEHmj4d0R4PPsiN audionauts-transcript-ready-post-drafted
+const liveNodes = [
+  {"id": "a1100000-0000-4000-8000-000000000001", "name": "Every Minute (Audionauts)", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.4, "position": [0, 300], "parameters": {"rule": {"interval": [{"field": "minutes", "minutesInterval": 1}]}}},
+  {"id": "a1100000-0000-4000-8000-000000000002", "name": "Find Audionauts Clip", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [220, 300], "onError": "continueErrorOutput", "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 5000, "parameters": {"method": "GET", "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6", "authentication": "genericCredentialType", "genericAuthType": "httpBearerAuth", "sendQuery": true, "queryParameters": {"parameters": [{"name": "view", "value": "viw7OScgqnRQdCLJz"}, {"name": "maxRecords", "value": "20"}, {"name": "sort[0][field]", "value": "Last Modified Time"}, {"name": "sort[0][direction]", "value": "asc"}]}, "options": {"timeout": 30000}}, "credentials": {"httpBearerAuth": {"id": "6kLezx6frdcTmewI", "name": "Airtable PAT"}}},
+  {"id": "a1100000-0000-4000-8000-000000000003", "name": "Pick Clip", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [440, 300], "onError": "continueErrorOutput", "parameters": {"jsCode": "// Why Code: the shared view can hold X episodes too, so pick the oldest row this flow owns.\nconst records = $input.first().json.records || [];\nconst hasSocial = (f) => Array.isArray(f['Social Posts']) && f['Social Posts'].length > 0;\nfor (const row of records) {\n  const f = row.fields || {};\n  if (String(f.Type || '').trim() !== 'Audionauts') continue;\n  if (String(f.Status || '').trim() !== 'AI Analysis Complete') continue;\n  if (hasSocial(f)) continue;\n  if (String(f['Workflow Lock'] || '').trim()) continue;\n  if (!String(f.Transcript || '').trim()) continue;\n  if (!String(f.Title || '').trim()) continue;\n  return [{ json: {\n    episodeRecordId: row.id,\n    episodeId: String(f.ID || '').trim() || 'no-id',\n    title: String(f.Title || '').trim(),\n    associated: String(f['Associated Episode'] || '').trim(),\n    transcript: String(f.Transcript || '').trim(),\n    clipGuests: Array.isArray(f['Guest Name']) ? f['Guest Name'].filter(Boolean) : (f['Guest Name'] ? [f['Guest Name']] : [])\n  }}];\n}\nreturn [];"}},
+  {"id": "d1100000-0000-4000-8000-000000000020", "name": "Claim Clip", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [550, 300], "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 5000, "parameters": {"method": "PATCH", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $('Pick Clip').first().json.episodeRecordId }}", "authentication": "genericCredentialType", "genericAuthType": "httpBearerAuth", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ fields: { 'Workflow Lock': 'audionauts-post ' + $now.toISO() } }) }}", "options": {"timeout": 30000}}, "credentials": {"httpBearerAuth": {"id": "6kLezx6frdcTmewI", "name": "Airtable PAT"}}},
+  {"id": "a1100000-0000-4000-8000-000000000004", "name": "Resolve Parent Episode", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [660, 300], "onError": "continueErrorOutput", "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 5000, "parameters": {"method": "GET", "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6", "authentication": "genericCredentialType", "genericAuthType": "httpBearerAuth", "sendQuery": true, "queryParameters": {"parameters": [{"name": "filterByFormula", "value": "={{ \"{ID}='\" + ($('Pick Clip').first().json.associated || '') + \"'\" }}"}, {"name": "maxRecords", "value": "1"}]}, "options": {"timeout": 30000}}, "credentials": {"httpBearerAuth": {"id": "6kLezx6frdcTmewI", "name": "Airtable PAT"}}},
+  {"id": "a1100000-0000-4000-8000-000000000005", "name": "Fetch Audionauts Prompts", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [880, 300], "onError": "continueErrorOutput", "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 5000, "parameters": {"method": "GET", "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tblhG1nw2P1k3CBVU", "authentication": "genericCredentialType", "genericAuthType": "httpBearerAuth", "sendQuery": true, "queryParameters": {"parameters": [{"name": "filterByFormula", "value": "OR({Name}='Audionauts Post',{Name}='Social Post Humanizer')"}, {"name": "maxRecords", "value": "2"}]}, "options": {"timeout": 30000}}, "credentials": {"httpBearerAuth": {"id": "6kLezx6frdcTmewI", "name": "Airtable PAT"}}},
+  {"id": "a1100000-0000-4000-8000-000000000006", "name": "Build Audionauts Request", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1100, 300], "onError": "continueErrorOutput", "parameters": {"jsCode": "// Why Code: fills the Audionauts brief with the clip transcript, the parent episode and the shared house rules.\nconst clip = $('Pick Clip').first().json;\nconst parentRec = ($('Resolve Parent Episode').first().json.records || [])[0];\nconst parent = parentRec ? (parentRec.fields || {}) : {};\nconst prompts = ($('Fetch Audionauts Prompts').first().json.records || []);\nconst fieldsOf = (name) => ((prompts.find(r => String(r.fields?.Name || '') === name) || {}).fields) || {};\nconst template = String(fieldsOf('Audionauts Post').Prompt || '');\nif (!template.trim()) throw new Error('Audionauts Post prompt row not found or empty');\nconst humanizer = String(fieldsOf('Social Post Humanizer').Prompt || '');\nif (!humanizer.trim()) throw new Error('Social Post Humanizer prompt row not found or empty');\n\nconst asList = (v) => Array.isArray(v) ? v.filter(Boolean) : (v ? [v] : []);\nconst parentGuests = asList(parent['Guest Name']);\nconst guests = (parentGuests.length ? parentGuests : asList(clip.clipGuests)).join(', ');\nconst parentTitle = String(parent.Title || '').trim();\nconst titleLine = parentTitle ? (parentTitle + ' (Audionauts clip: ' + clip.title + ')') : clip.title;\n\nconst filled = template\n  .split('{{TITLE}}').join(titleLine)\n  .split('{{GUESTS}}').join(guests || 'none listed')\n  .split('{{TRANSCRIPT}}').join(clip.transcript)\n  .split('{{HUMANIZER}}').join(humanizer)\n  .split('{{BRIEF}}').join('(none, first draft)')\n  .split('{{PREVIOUS}}').join('(none, first draft)');\n\nreturn [{ json: Object.assign({}, clip, { guests: guests || 'none listed', titleLine, requestBody: {\n  model: 'google/gemini-3.7-flash',\n  messages: [\n    { role: 'system', content: 'You write the Audionauts clip rundown. Follow the editorial brief exactly. Return only the JSON object, with no markdown fences, no explanation and no working.' },\n    { role: 'user', content: filled }\n  ],\n  temperature: 0.85,\n  max_tokens: 3000,\n  response_format: { type: 'json_object' }\n} } ) }];"}},
+  {"id": "a1100000-0000-4000-8000-000000000007", "name": "Draft Audionauts Post", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1320, 300], "onError": "continueErrorOutput", "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 5000, "parameters": {"method": "POST", "url": "https://openrouter.ai/api/v1/chat/completions", "authentication": "predefinedCredentialType", "nodeCredentialType": "openRouterApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json.requestBody) }}", "options": {"timeout": 120000}}, "credentials": {"openRouterApi": {"id": "fYdCNdLcAcCMjpnr", "name": "OpenRouter [n8n]"}}},
+  {"id": "a1100000-0000-4000-8000-000000000008", "name": "Parse Audionauts Draft", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1540, 300], "onError": "continueErrorOutput", "parameters": {"jsCode": "// Why Code: validates the single draft against the Audionauts hard limits before anything is written.\nconst LIMIT = 1000;\nconst BANNED = ['dive into','delve','unleash','game-changer','game changer','revolutionary','transform','landscape','unlock','journey','discover','testament','symphony','mind-blowing','cutting-edge','massive','foster','leverage','utilize','facilitate','empower','streamline','robust','paradigm shift','tapestry','realm','beacon','multifaceted','meticulous','intricate','paramount','transformative','elevate','embark','supercharge','harness','ever-evolving','this is huge','this changes everything','insane','wild','crazy','epic','ultimate','must-listen','unmissable'];\nconst BANNED_MOVES = ['here is the thing',\"here's the thing\",'let me be clear','what nobody tells you','the part everyone misses','most people get this wrong','what if i told you','plot twist','join me as i','i sit down with','in conclusion','ultimately,','overall,'];\nconst clip = $('Pick Clip').first().json;\nconst raw = $input.first().json?.choices?.[0]?.message?.content;\nif (typeof raw !== 'string' || !raw.trim()) throw new Error('No Audionauts draft returned for ' + clip.episodeId);\nconst parsed = (() => {\n  const cleaned = raw.replace(/^\\s*```(?:json)?/i, '').replace(/```\\s*$/i, '').trim();\n  try { return JSON.parse(cleaned); } catch (e) {}\n  const first = cleaned.indexOf('{');\n  const last = cleaned.lastIndexOf('}');\n  if (first >= 0 && last > first) { try { return JSON.parse(cleaned.slice(first, last + 1)); } catch (e) {} }\n  return null;\n})();\nif (!parsed || typeof parsed.body !== 'string' || !parsed.body.trim()) throw new Error('Audionauts draft for ' + clip.episodeId + ' had no body');\n\nlet body = parsed.body\n  .replace(/[\\u2014\\u2013]/g, ', ')\n  .replace(/[\\u2018\\u2019]/g, \"'\")\n  .replace(/[\\u201c\\u201d]/g, '\"')\n  .replace(/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/gu, ' ')\n  .replace(/[ \\t]+/g, ' ')\n  .replace(/ *\\n */g, '\\n')\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\nif (body.length > LIMIT) {\n  const cut = body.slice(0, LIMIT);\n  const at = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '), cut.lastIndexOf('\\n'));\n  if (at < LIMIT * 0.5) throw new Error('Audionauts draft for ' + clip.episodeId + ' is ' + body.length + ' characters with no sentence boundary to trim at');\n  body = cut.slice(0, at + 1).trim();\n}\nconst flat = body.toLowerCase();\nif (/\\bmatters?\\b|\\bmattering\\b/.test(flat)) throw new Error('Banned word \"matters\" in the Audionauts draft for ' + clip.episodeId);\nfor (const w of BANNED) { if (flat.includes(w)) throw new Error('Banned word \"' + w + '\" in the Audionauts draft for ' + clip.episodeId); }\nfor (const m of BANNED_MOVES) { if (flat.includes(m)) throw new Error('Banned move \"' + m + '\" in the Audionauts draft for ' + clip.episodeId); }\nif (/https?:\\/\\//i.test(body)) throw new Error('URL in the Audionauts draft for ' + clip.episodeId);\nconst angle = String(parsed.angle || 'Audionauts rundown').replace(/\\s+/g, ' ').trim().slice(0, 60);\nreturn [{ json: Object.assign({}, clip, { angle, body, characters: body.length }) }];"}},
+  {"id": "a1100000-0000-4000-8000-000000000009", "name": "Create Audionauts Social Post", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1760, 300], "onError": "continueErrorOutput", "parameters": {"method": "POST", "url": "https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbly8EpeOlYrXHYNE", "authentication": "genericCredentialType", "genericAuthType": "httpBearerAuth", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ records: [{ fields: { Name: $('Parse Audionauts Draft').first().json.episodeId + ' \\u00b7 R1 \\u00b7 O1', Episode: [$('Parse Audionauts Draft').first().json.episodeRecordId], Platform: 'Keet + Telegram', Status: 'Proposed', Option: 1, Round: 1, Copy: $('Parse Audionauts Draft').first().json.body, Angle: $('Parse Audionauts Draft').first().json.angle, Characters: $('Parse Audionauts Draft').first().json.characters } }], typecast: true }) }}", "options": {"timeout": 30000}}, "credentials": {"httpBearerAuth": {"id": "6kLezx6frdcTmewI", "name": "Airtable PAT"}}},
+  {"id": "a1100000-0000-4000-8000-000000000013", "name": "Build Audionauts Failure", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1760, 560], "parameters": {"jsCode": "const err = $input.first().json && $input.first().json.error;\nconst clip = (() => { try { return $('Pick Clip').first().json; } catch (e) { return {}; } })();\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst msg = String((err && (err.message || err.description)) || $input.first().json?.message || 'Unknown Audionauts post error');\nreturn [{ json: {\n  episodeRecordId: clip.episodeRecordId || '',\n  episodeId: clip.episodeId || 'no-id',\n  text: '\\u274c <b>Audionauts post failed</b>' + String.fromCharCode(10) + String.fromCharCode(10) + '<code>' + esc(clip.episodeId || 'no-id') + '</code> \\u00b7 ' + esc(clip.title || '') + String.fromCharCode(10) + String.fromCharCode(10) + '<b>Reason:</b> ' + esc(msg).slice(0, 1200) + String.fromCharCode(10) + String.fromCharCode(10) + 'If the clip is locked, clear <i>Workflow Lock</i> on the episode to retry.' + String.fromCharCode(10) + String.fromCharCode(10) + '\\u2699\\ufe0f <code>' + $workflow.id + '</code> \\u00b7 exec <code>' + $execution.id + '</code>'\n} }];"}},
+  {"id": "d1100000-0000-4000-8000-000000000021", "name": "Complete Clip", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.4, "position": [1980, 300], "onError": "continueErrorOutput", "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 5000, "parameters": {"method": "PATCH", "url": "=https://api.airtable.com/v0/app8Xw9Tq0XLjhmp9/tbl3uYLIvtB9APZp6/{{ $('Parse Audionauts Draft').first().json.episodeRecordId }}", "authentication": "genericCredentialType", "genericAuthType": "httpBearerAuth", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ fields: { Status: 'Audionauts Post Ready', 'Workflow Lock': '' } }) }}", "options": {"timeout": 30000}}, "credentials": {"httpBearerAuth": {"id": "6kLezx6frdcTmewI", "name": "Airtable PAT"}}},
+  {"id": "a1100000-0000-4000-8000-000000000011", "name": "Build Audionauts Message", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2200, 300], "parameters": {"jsCode": "const NL = String.fromCharCode(10);\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst j = $('Parse Audionauts Draft').first().json;\nconst text = [\n  '\\ud83d\\udfe1 <b>Audionauts post ready</b>',\n  '\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500',\n  '<code>' + esc(j.episodeId) + '</code> \\u00b7 ' + esc(j.title),\n  '',\n  '<b>' + esc(j.angle) + '</b>',\n  esc(j.body),\n  '',\n  '<i>' + j.characters + ' / 1000 characters \\u00b7 Keet and Telegram, same copy</i>',\n  '',\n  '\\ud83d\\udfe1 Reply <i>option 1</i> to pick it, <i>custom: your exact post</i> to use your own copy, or <i>revise: your feedback</i> for a redraft.',\n  '',\n  '\\u2699\\ufe0f <code>' + $workflow.id + '</code> \\u00b7 exec <code>' + $execution.id + '</code>'\n].join(NL);\nreturn [{ json: { text } }];"}},
+  {"id": "a1100000-0000-4000-8000-000000000015", "name": "Notify Audionauts Failure", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [2200, 560], "retryOnFail": true, "maxTries": 4, "waitBetweenTries": 5000, "webhookId": "42f705d0-3b31-4907-bda2-30182e5216e6", "parameters": {"chatId": "-5254203539", "text": "={{ $('Build Audionauts Failure').first().json.text }}", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}},
+  {"id": "a1100000-0000-4000-8000-000000000012", "name": "Send Audionauts Post", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [2420, 300], "retryOnFail": true, "maxTries": 4, "waitBetweenTries": 5000, "webhookId": "a82fc3dc-7590-48e9-beec-af7420f1ac9e", "parameters": {"chatId": "-5254203539", "text": "={{ $json.text }}", "additionalFields": {"appendAttribution": false, "parse_mode": "HTML"}}, "credentials": {"telegramApi": {"id": "INjDc84OskDdqiNR", "name": "Telegram [pod21_n8n_agent_bot]"}}}
+];
+
+// Node types that start an execution. Everything else is a regular step.
+const TRIGGER_TYPES = new Set([
+  'n8n-nodes-base.scheduleTrigger',
+  'n8n-nodes-base.webhook',
+  'n8n-nodes-base.formTrigger',
+  'n8n-nodes-base.airtableTrigger',
+  'n8n-nodes-base.telegramTrigger',
+  'n8n-nodes-base.gmailTrigger',
+  'n8n-nodes-base.executeWorkflowTrigger'
+]);
+
+const nodesByName = {};
+for (const live of liveNodes) {
+  const { type, typeVersion, credentials, ...config } = live;
+  if (credentials) {
+    config.credentials = Object.fromEntries(
+      Object.entries(credentials).map(([credentialType, reference]) => [credentialType, { id: reference.id, name: reference.name }])
+    );
+  }
+  nodesByName[live.name] = (TRIGGER_TYPES.has(type) ? trigger : node)({
+    type,
+    version: typeVersion,
+    config,
+    output: [{}]
+  });
+}
+
+// [source, sourceOutputIndex, target, targetInputIndex?]
+const connections = [
+  ['Every Minute (Audionauts)', 0, 'Find Audionauts Clip'],
+  ['Find Audionauts Clip', 0, 'Pick Clip'],
+  ['Find Audionauts Clip', 1, 'Build Audionauts Failure'],
+  ['Pick Clip', 0, 'Claim Clip'],
+  ['Pick Clip', 1, 'Build Audionauts Failure'],
+  ['Resolve Parent Episode', 0, 'Fetch Audionauts Prompts'],
+  ['Resolve Parent Episode', 1, 'Build Audionauts Failure'],
+  ['Fetch Audionauts Prompts', 0, 'Build Audionauts Request'],
+  ['Fetch Audionauts Prompts', 1, 'Build Audionauts Failure'],
+  ['Build Audionauts Request', 0, 'Draft Audionauts Post'],
+  ['Build Audionauts Request', 1, 'Build Audionauts Failure'],
+  ['Draft Audionauts Post', 0, 'Parse Audionauts Draft'],
+  ['Draft Audionauts Post', 1, 'Build Audionauts Failure'],
+  ['Parse Audionauts Draft', 0, 'Create Audionauts Social Post'],
+  ['Parse Audionauts Draft', 1, 'Build Audionauts Failure'],
+  ['Create Audionauts Social Post', 0, 'Complete Clip'],
+  ['Create Audionauts Social Post', 1, 'Build Audionauts Failure'],
+  ['Build Audionauts Message', 0, 'Send Audionauts Post'],
+  ['Claim Clip', 0, 'Resolve Parent Episode'],
+  ['Complete Clip', 0, 'Build Audionauts Message'],
+  ['Complete Clip', 1, 'Build Audionauts Failure'],
+  ['Build Audionauts Failure', 0, 'Notify Audionauts Failure']
+];
+
+const audionautsTranscriptReadyPostDrafted = workflow(
+  "jDEHmj4d0R4PPsiN",
+  "BA - Audionauts Transcript Ready > Keet and Telegram Post Drafted"
+).settings({
+  saveExecutionProgress: true,
+  saveManualExecutions: true,
+  saveDataErrorExecution: "all",
+  saveDataSuccessExecution: "all",
+  executionTimeout: 3600,
+  errorWorkflow: "9PMI1kuBjLW2YHwb",
+  timezone: "America/New_York",
+  executionOrder: "v1",
+  availableInMCP: true
+});
+
+for (const live of liveNodes) audionautsTranscriptReadyPostDrafted.add(nodesByName[live.name]);
+for (const [source, output, target, targetIndex = 0] of connections) {
+  audionautsTranscriptReadyPostDrafted.connect(nodesByName[source], output, nodesByName[target], targetIndex);
+}
+
+export default audionautsTranscriptReadyPostDrafted;
