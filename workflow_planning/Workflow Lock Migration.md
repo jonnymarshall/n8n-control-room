@@ -1,13 +1,13 @@
 # Workflow Lock migration
 
-**Status: Stages 0 to 4 are live. Stages 5 to 7 are planned and not started.**
-Written 2026-11-24. Last updated 2026-11-24 after Stage 4 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
+**Status: Stages 0 to 5 are live. Stages 6 and 7 are planned and not started.**
+Written 2026-11-24. Last updated 2026-11-24 after Stage 5 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
 
 ---
 
 ## Airtable cleanup tracker (start here)
 
-**Last checked 2026-11-24 22:56 UTC.** A status is deleted only after its stage has had **one clean real run**. Do not delete it in the same change that stops writing it; a rollback may need it.
+**Last checked 2026-11-24 23:07 UTC.** A status is deleted only after its stage has had **one clean real run**. Do not delete it in the same change that stops writing it; a rollback may need it.
 
 ### Pending right now
 
@@ -16,12 +16,15 @@ Written 2026-11-24. Last updated 2026-11-24 after Stage 4 shipped. The rule that
 | `Generating Metadata` | `Episodes.Status` | after one clean metadata run (Stage 2) | **PENDING.** No clean run since Stage 2 shipped at 20:31 UTC; no episode has moved through it. |
 | `Generating Artwork` | `Episodes.Status` | after one clean artwork run (Stage 3) | **PENDING.** No clean run since Stage 3 shipped at 22:37 UTC; no episode has moved through it. |
 | `Publishing` | `Episodes.Status` | after one clean publish run (Stage 4) | **PENDING.** No clean publish since Stage 4 shipped at 22:56 UTC; the ready view was empty at ship time. |
+| `Processing` | `Thumbnails.Status` | after one clean pick and one clean revision (Stage 5) | **PENDING.** No clean pick or revision since Stage 5 shipped at 23:07 UTC. |
 
 **How to confirm the run was clean:**
 
 - **Metadata:** an episode moved from `Ready for Metadata` to `AI Analysis Complete`, `Workflow Lock` is empty, and the execution succeeded.
 - **Artwork:** an episode reached `Awaiting Thumbnail Pick` (four `Thumbnails` rows) or `Awaiting Manual Artwork`, `Workflow Lock` is empty, and the execution succeeded.
 - **Publish:** an episode moved to `Scheduled to Publish`, its Fountain Publication is `Scheduled`, `Workflow Lock` is empty, and the execution succeeded. A large upload can take about 80 minutes; do not judge it early.
+- **Thumbnail pick:** a `Selected` row reached `Final`, the episode is `Artwork Ready`, the row's `Workflow Lock` is empty, and the execution succeeded.
+- **Thumbnail revision:** a `Revising` row reached `Final` with the new images, the row's `Workflow Lock` is empty, and the execution succeeded.
 
 Then delete the status from `Episodes.Status`. Airtable removes it from any view filter that mentions it.
 
@@ -35,7 +38,6 @@ Then delete the status from `Episodes.Status`. Airtable removes it from any view
 
 | Item | Where | Delete when |
 |---|---|---|
-| `Processing` | `Thumbnails.Status` | after Stage 5, one clean pick and one clean revision |
 | `Syncing` | `Publications.Sync Status` | after Stage 6, one clean content sync |
 | `Edited` | `Episodes.Status` | optional: delete if you never use it (only the upload guard mentions it) |
 | `Research Ready` | `Episodes.Status` | optional: only the AgentMail guard mentions it |
@@ -84,8 +86,8 @@ Table scope:
 | X social draft | `ntXHSW3AbNntnaj0` | `Ready for Social Posts` view | `Workflow Lock` (done 2026-11-24) | four `Social Posts` rows | none |
 | Metadata | `jroXHciDvy0sWlRM` (metadata branch) | `Ready for Metadata` view | `Workflow Lock` (done 2026-11-24) | `AI Analysis Complete` | `Generating Metadata` |
 | Artwork Path 1 | `mLAn4ya2AmZoHDUk` | `Ready for 16X9 Thumbnail` view | `Workflow Lock` (done 2026-11-24) | `Awaiting Thumbnail Pick` / `Awaiting Manual Artwork` | `Generating Artwork` |
-| Thumbnail pick | `mLAn4ya2AmZoHDUk` (Path 2) | `Thumbnails.Status = Selected` | `Thumbnails.Status = Processing` | `Final` / `Rejected` | `Processing` |
-| Thumbnail revision | `mLAn4ya2AmZoHDUk` (Path 3) | `Thumbnails.Status = Revising` | `Thumbnails.Status = Processing` | `Proposed` (new round) | `Processing` |
+| Thumbnail pick | `mLAn4ya2AmZoHDUk` (Path 2) | `Thumbnails.Status = Selected` | `Workflow Lock` (done 2026-11-24) | `Final` / `Rejected` | `Processing` |
+| Thumbnail revision | `mLAn4ya2AmZoHDUk` (Path 3) | `Thumbnails.Status = Revising` | `Workflow Lock` (done 2026-11-24) | `Proposed` (new round) | `Processing` |
 | Fountain publisher | `LTmRVKn9TWJd6Gtk` | `Ready for Publishing` view | `Workflow Lock` (done 2026-11-24) | `Scheduled to Publish` / `Publishing Failed` | `Publishing` |
 | Content sync | `WMZ0Zpin1Stn9uF1` | 15-minute schedule | `Publications.Sync Status = Syncing` | `Synced` / `Failed` | `Syncing` |
 | Reconciler | `guys-take-fountain-reconciler` | schedule | none (read and update) | `Published` / `Partially Published` | none |
@@ -198,11 +200,13 @@ Watch for: the largest, longest job in the system. Do this one on its own, not o
 
 ## Stage 5: Thumbnail pick and revision
 
-- **Branch:** `feat/lock-thumbnail-queues`
+- **Status:** **done, 2026-11-24.** Branch `feat/lock-thumbnail-queues`.
 - **Workflow:** `mLAn4ya2AmZoHDUk`, Paths 2 and 3.
-- **Table:** `Thumbnails`.
+- **Table:** `Thumbnails`. New `Thumbnails.Workflow Lock` field.
 
-Changes:
+Shipped: `Pick Queued?` and `Revision Queued?` refuse a locked row. `Claim Pick` writes `thumbnail-pick <timestamp>` and `Claim Revision` writes `thumbnail-revision <timestamp>`, leaving `Status` at `Selected` / `Revising`. `Mark Selected Final` and `Mark Row Revised Final` clear the lock at `Final`. A failure leaves the lock. The pick and revision views still need `Workflow Lock is empty`; the IF guards are the code backstop. The next real pick and the next real revision are the tests.
+
+Original checklist:
 
 1. Add `Thumbnails.Workflow Lock` (single line text).
 2. Add `Workflow Lock is empty` to the pick and revision views.
@@ -296,7 +300,7 @@ Removal notes:
 
 - **Safe to remove now:** `Scheduled`, `Transcript Ready`.
 - **Remove if unused:** `Edited`, `Research Ready`, `Stories Picked`. Removing any of them means updating the AgentMail guard lists and the metadata/script Airtable node option lists.
-- **Retire through the migration:** `Generating Metadata`, `Generating Artwork`, `Publishing`, plus `Thumbnails.Processing` and `Publications.Syncing`.
+- **Retire through the migration:** `Generating Metadata`, `Generating Artwork` and `Publishing` are retired by Stages 2 to 4; delete each after its clean run. `Thumbnails.Processing` is retired by Stage 5; delete after a clean pick and a clean revision. `Publications.Syncing` waits for Stage 6.
 - **Keep:** everything else. These are the human-facing lifecycle.
 - **Three episodes have no status.** Worth a look; they are not part of the status list.
 
