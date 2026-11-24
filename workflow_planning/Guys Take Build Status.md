@@ -123,7 +123,7 @@ Supporting workflows (same instance, not pipeline stages):
 
 ## Part 2 — System roadmap
 
-> **▶ NEXT PROJECT (set 2026-11-23): migrate every view-triggered workflow to `Workflow Lock`.** One generic claim field instead of a `<Stage> In Progress` status per stage. The Audionauts draft is the first user and the pattern is in `n8n_workflow_readmes/CONVENTIONS.md`. **Full per-stage plan, testing and rollback, plus the status audit: `workflow_planning/Workflow Lock Migration.md`.**
+> **▶ NEXT PROJECT (set 2026-11-23): migrate every view-triggered workflow to `Workflow Lock`.** One generic claim field instead of a `<Stage> In Progress` status per stage. The Audionauts draft is the first user and the pattern is in `n8n_workflow_readmes/CONVENTIONS.md`. **Full per-stage plan, testing and rollback, plus the status audit: `workflow_planning/Workflow Lock Migration.md`. The statuses still pending deletion are tracked at the top of that doc.**
 >
 > **Already done:** `Episodes.Workflow Lock` exists (single line text). The Audionauts draft claims with it and ends at `Audionauts Post Ready` (Stage 0). The X social draft claims with `x-social <timestamp>`, clears on success and leaves it on failure (Stage 1). The metadata run claims with `metadata <timestamp>`, leaves `Status` at `Ready for Metadata`, and clears the lock on every success exit (Stage 2). Artwork Path 1 claims with `artwork <timestamp>`, leaves `Status` alone and clears the lock on both success exits (Stage 3). The old `Audionauts Post Tried` field is deleted.
 >
