@@ -42,7 +42,7 @@
 
 # System Map — Guy's Take Production Pipeline
 
-*Last updated 2026-11-24 (Stage 4: the Fountain publisher now claims with `Workflow Lock`, leaves `Status` at `Ready to Publish` and clears it on success; `Publishing` is no longer written. Stage 3: artwork Path 1 claims with the lock. Stage 2: the metadata run claims with the lock. Stage 1: the X social draft claims with the lock. Also on 2026-11-23: stage 4e added, an Audionauts clip now gets one rundown when its transcript is saved, and picking it writes the same copy to the episode's Keet and Telegram publication rows. The voice and anti-slop rules live in one shared `Social Post Humanizer` prompt row used by the X writer, the X editor and the Audionauts writer. The shared `Ready for Social Posts` view is two OR-joined groups and requires `Workflow Lock is empty`; the Audionauts draft claims with that lock and ends at `Audionauts Post Ready`. Previously 2026-11-23 (the failure alert now explains n8n's harmless pre-flight regex timeout and says no action is needed). Previously 2026-11-17 (stage 4d added: X has its own readiness nudge on `Publications`. The draft stage now takes one episode per run from `Ready for Social Posts` and creates the `BA-xxxx - X` row before the social posts. `BA - Schedule Every 2h > X Post Readiness` reminds the team to pick the X post before publish and to store the X link after publish. Also on 2026-11-17, two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Artwork Paths 2 and 3 followed the same day: one pick or revision per run, claimed as `Thumbnails.Status = Processing` before the work starts. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off andbroken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
+*Last updated 2026-11-24 (Stage 5: the thumbnail pick and revision queues now claim with `Thumbnails.Workflow Lock`, leaving `Status` at `Selected` / `Revising`, and clear it at `Final`; `Processing` is no longer written. Stage 4: the Fountain publisher claims with the lock. Stage 3: artwork Path 1 claims with the lock. Stage 2: the metadata run claims with the lock. Stage 1: the X social draft claims with the lock. Also on 2026-11-23: stage 4e added, an Audionauts clip now gets one rundown when its transcript is saved, and picking it writes the same copy to the episode's Keet and Telegram publication rows. The voice and anti-slop rules live in one shared `Social Post Humanizer` prompt row used by the X writer, the X editor and the Audionauts writer. The shared `Ready for Social Posts` view is two OR-joined groups and requires `Workflow Lock is empty`; the Audionauts draft claims with that lock and ends at `Audionauts Post Ready`. Previously 2026-11-23 (the failure alert now explains n8n's harmless pre-flight regex timeout and says no action is needed). Previously 2026-11-17 (stage 4d added: X has its own readiness nudge on `Publications`. The draft stage now takes one episode per run from `Ready for Social Posts` and creates the `BA-xxxx - X` row before the social posts. `BA - Schedule Every 2h > X Post Readiness` reminds the team to pick the X post before publish and to store the X link after publish. Also on 2026-11-17, two stages now take **one row per run** from their views: the metadata stage (`Ready for Metadata`) and artwork Path 1 (`Ready for 16X9 Thumbnail`). Both used to accept every row a single Airtable poll returned, while every node reads `.first()`, so a second row was silently dropped and then unreachable because the poll cursor had already moved past it: `BA-KXqegO` sat unnoticed for 3 days 17 hours. Each now asks for the oldest single row every minute and claims it before anything else can fail. Do not describe either as running per upload. Artwork Paths 2 and 3 followed the same day: one pick or revision per run, claimed as `Thumbnails.Status = Processing` before the work starts. Previously 2026-11-16 (stage 4c added and then rebuilt the same day: after approval, `BA - Episode Approved > Social Posts Drafted` writes four platform-neutral social post options from the `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), posts them to Telegram, and `BA - Social Post Selected > X Publication Linked` puts the chosen copy on the episode's `BA-xxxx - X` row in `Publications`; `BA - Social Post Revising > Four Redrafted` handles a written revision brief. The rebuild uses the house P1/P2/P3 + CTA shape, caps the body at 280 characters, puts the CTA outside that count, and removes the transcript. `X` is in `Publications.Platform` and the X selection path was tested live. It does not change the Episode `Status`. Previously 2026-11-13 (stage 1, Weekly Research & Shortlisting, is **switched off andbroken**: Jonny unpublished it. If someone asks where the Friday digest went, say it is off
 on purpose and why; see its entry below. Also fixed the same day: the Fountain publisher was
 scheduling items with no description; see stage 5).
 Previously 2026-11-12 (stage 4b is now documented: `BA - Publish Readiness View Entered >
@@ -127,14 +127,14 @@ per-slot composition directions).*
 - Every trigger view should require `Workflow Lock is empty`.
 - If an episode is not moving and nothing looks wrong, read the lock. A stuck lock is a dead run, not a missing trigger.
 - To retry, clear `Workflow Lock` and make sure the episode is back at the status the stage expects.
-- The Audionauts draft (`jDEHmj4d0R4PPsiN`), the X social draft (`ntXHSW3AbNntnaj0`, Stage 1), the metadata run (`jroXHciDvy0sWlRM`, Stage 2), artwork Path 1 (`mLAn4ya2AmZoHDUk`, Stage 3) and the Fountain publisher (`LTmRVKn9TWJd6Gtk`, Stage 4) claim with it. The thumbnail queues and the content sync still use `<Stage> In Progress` statuses; they will migrate next.
-- **Pending Airtable cleanup (checked 2026-11-24):** `Generating Metadata`, `Generating Artwork` and `Publishing` can be deleted from `Episodes.Status` after their next clean run; none has had one yet. `Scheduled`, `Transcript Ready` and the `Audionauts Post Tried` field are already deleted. `Thumbnails.Processing` and `Publications.Syncing` wait for their stages. Full tracker: `workflow_planning/Workflow Lock Migration.md`.
+- The Audionauts draft (`jDEHmj4d0R4PPsiN`), the X social draft (`ntXHSW3AbNntnaj0`, Stage 1), the metadata run (`jroXHciDvy0sWlRM`, Stage 2), artwork Path 1 (`mLAn4ya2AmZoHDUk`, Stage 3), the Fountain publisher (`LTmRVKn9TWJd6Gtk`, Stage 4) and the thumbnail pick/revision queues (`mLAn4ya2AmZoHDUk`, Stage 5, on `Thumbnails.Workflow Lock`) claim with it. The content sync is the last stage to migrate.
+- **Pending Airtable cleanup (checked 2026-11-24):** `Generating Metadata`, `Generating Artwork` and `Publishing` on `Episodes.Status` and `Processing` on `Thumbnails.Status` can be deleted after their next clean run; none has had one yet. `Scheduled`, `Transcript Ready` and the `Audionauts Post Tried` field are already deleted. `Publications.Syncing` waits for Stage 6. Full tracker: `workflow_planning/Workflow Lock Migration.md`.
 
 ---
 
 ## The episode lifecycle (state machine)
 
-From 2026-11-23 the transient claim statuses shown below (`Generating Metadata`, `Generating Artwork`, `Publishing`) are being replaced by the generic `Workflow Lock`, one stage at a time. All three are already no longer written; they stay in the select until their cleanup. Until a stage is migrated, its claim status is still what takes the row out of the view. See `workflow_planning/Workflow Lock Migration.md`.
+From 2026-11-23 the transient claim statuses shown below (`Generating Metadata`, `Generating Artwork`, `Publishing`, and `Processing` on `Thumbnails`) are being replaced by the generic `Workflow Lock`, one stage at a time. All four are already no longer written; they stay in the select until their cleanup. Until a stage is migrated, its claim status is still what takes the row out of the view. See `workflow_planning/Workflow Lock Migration.md`.
 
 An episode moves through these `Status` values. Each arrow is either **[auto]**
 (an automation advances it) or **[human]** (someone sets it by hand, in Airtable
@@ -515,12 +515,12 @@ Three paths in one workflow.
         (A code guard also strips him, but keep him out of `Guests` anyway.)
   - [ ] `Transcript is not empty` is **not** a view condition, and neither is
         `Custom Image Prompt`; older versions of this checklist said both were.
-- **`Processing` on a Thumbnails row is a claim, not a finished state.** A pick or a
-  revision writes it the moment the run starts, so the row leaves its queue view and
-  cannot be started twice. Seeing it means the run has not finished; seeing it for more
-  than a few minutes means the run **died**, so set the row back to `Selected` (a pick) or
-  `Revising` (a revision) and the next minute will take it. `Final` is the finished state
-  for both.
+- **`Thumbnails.Workflow Lock` is the claim, not a finished state.** A pick writes
+  `thumbnail-pick <now>` and a revision writes `thumbnail-revision <now>` the moment the run
+  starts, so the row leaves its queue view and cannot be started twice. A non-empty lock for
+  more than a few minutes means the run **died**; clear it (the status is still `Selected` /
+  `Revising`) and the next minute will take it. `Final` is the finished state for both.
+  `Processing` is no longer written (Stage 5, 2026-11-24).
 - **A row already in the view may still not fire — but only on the change-poll paths.** Path 1 polls the view's **contents**, so a row in it is taken on the next minute and no timestamp trick is needed. Paths 2 and 3 (and every other stage still using an Airtable Trigger) poll `Last Modified Time` against a stored cursor, so a record that entered via a view filter change, or whose timestamp is older than the cursor, sits there with no error; a genuine change to the record re-fires it. A write that sets a field to the value it already holds does **nothing**: Airtable does not move `Last Modified Time` for it, so "re-save the same status" is never the fix.
 - **⚠️ How to RE-generate artwork for an episode that already has options.** The old
   options are **not** overwritten, replaced or reused. They block the trigger: the view
@@ -583,11 +583,11 @@ Three paths in one workflow.
 
 **Path 2 — Select.**
 - **Fires:** a one-minute poll takes the oldest `Thumbnails` row in the
-  `Ready for 1X1 & 9X16 Thumbnails *J*` view, **one per run**, and claims it as
-  `Status = Processing` before doing anything else. (The view was renamed `Selected` →
-  `Ready for 1X1 & 9X16 Thumbnails *J*` on 2026-08-20. Same view, same single condition
-  `Status = Selected`, **no type filter** — the name describes only one of the three
-  things it fires.)
+  `Ready for 1X1 & 9X16 Thumbnails *J*` view, **one per run**, and claims it with
+  `Workflow Lock = "thumbnail-pick <now>"` before doing anything else. (The view was renamed
+  `Selected` → `Ready for 1X1 & 9X16 Thumbnails *J*` on 2026-08-20. It filters
+  `Status = Selected` and requires `Workflow Lock is empty`, **no type filter** — the name
+  describes only one of the three things it fires.)
 - **Preconditions checklist:**
   - [ ] One `Thumbnails` row for the episode has `Status = Selected`.
 - **Does, for every episode type:** marks the other options `Rejected` and unlinks them,
@@ -608,8 +608,8 @@ Three paths in one workflow.
 
 **Path 3 — Revision (briefed, in-place, targeted).**
 - **Fires:** a one-minute poll takes the oldest row in the `Revision Requested` view
-  (`Status = Revising`), **one per run**, and claims it as `Status = Processing` before
-  doing anything else.
+  (`Status = Revising` and `Workflow Lock is empty`), **one per run**, and claims it with
+  `Workflow Lock = "thumbnail-revision <now>"` before doing anything else.
 - **What it's for:** re-doing the picked artwork with a written instruction, for one
   or more aspect ratios, without regenerating the 4 options or re-picking. Example:
   "make the background more red and lose the laptop, just the 9x16."
