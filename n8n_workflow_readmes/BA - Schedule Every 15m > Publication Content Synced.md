@@ -1,5 +1,7 @@
 # BA - Schedule Every 15m > Publication Content Synced
 
+> **2026-11-24 - the apply path claims with `Publications.Workflow Lock` (LIVE, published, Stage 6 of the migration).** When an approved change is applied, `Approved?` -> `Claim Sync` writes `content-sync <timestamp>` on the Publication row and leaves `Sync Status` alone. `Expand Live Publications` carries the lock, and `Compute Changes` skips a row whose lock is set (`runningFresh`), so the 15-minute tick cannot start a second apply during an 80-minute upload. The shared `Apply Fountain Sync` clears the lock in `Finish Sync` when it writes `Sync Status = Synced`. A failure leaves the lock, sets `Sync Status = Failed` and tells you to clear it. `Syncing` is no longer written and can be deleted after one clean sync. `versionId == activeVersionId` on both workflows, active, validation clean.
+
 > **2026-11-12 - Telegram messages restyled to `TELEGRAM-STYLE.md` (LIVE, published).** Status emoji first, blank-line blocks, BA- codes only, no `rec...` ids, machine payloads behind a spoiler. Wording and structure only: no trigger, logic, credential or output change. Audit with `scripts/query/telegram-style-audit.sh`.
 
 > **Find this workflow in n8n by name.** Workflow IDs can change when a workflow is rebuilt. ID at time of writing: `WMZ0Zpin1Stn9uF1`.
@@ -74,6 +76,7 @@ Every 15 Minutes
 3. **Prepare Update Job** joins them and lifts the `1x1` artwork `{ url, type, size, filename }`.
 4. **Route by Platform** sends each job to its adapter (Switch; a non-matching platform is dropped).
 5. **Fountain adapter:** calls the shared `Build Fountain Content` sub-workflow (`BA - Subworkflow - Build Fountain Content`) to build the Markdown description, then computes a content fingerprint. If it differs from the stored one it PATCHes `title` + `description`; if the artwork changed it uploads a new `ITEM_IMAGE` and PATCHes `image_id`; then it stores the new fingerprint and `Formatted Description` on the Publication.
+5a. **Approved apply:** when `Sync Approved` matches the proposal, `Claim Sync` writes `Workflow Lock = "content-sync <now>"` on the Publication, then `Apply Fountain Sync` applies the video swap and/or re-schedule. Its `Finish Sync` clears the lock and sets `Synced`; a failure leaves the lock and sets `Failed`. The lock is the guard that stops the next 15-minute tick starting a second apply during a long upload.
 6. **Telegram** on success or failure. A no-op run sends nothing.
 
 ---

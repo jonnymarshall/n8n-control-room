@@ -1,13 +1,13 @@
 # Workflow Lock migration
 
-**Status: Stages 0 to 5 are live. Stages 6 and 7 are planned and not started.**
-Written 2026-11-24. Last updated 2026-11-24 after Stage 5 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
+**Status: Stages 0 to 6 are live. Stage 7, the Airtable cleanup, is in progress and tracked at the top of this doc.**
+Written 2026-11-24. Last updated 2026-11-24 after Stage 6 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
 
 ---
 
 ## Airtable cleanup tracker (start here)
 
-**Last checked 2026-11-24 23:07 UTC.** A status is deleted only after its stage has had **one clean real run**. Do not delete it in the same change that stops writing it; a rollback may need it.
+**Last checked 2026-11-24 23:17 UTC.** A status is deleted only after its stage has had **one clean real run**. Do not delete it in the same change that stops writing it; a rollback may need it.
 
 ### Pending right now
 
@@ -17,6 +17,7 @@ Written 2026-11-24. Last updated 2026-11-24 after Stage 5 shipped. The rule that
 | `Generating Artwork` | `Episodes.Status` | after one clean artwork run (Stage 3) | **PENDING.** No clean run since Stage 3 shipped at 22:37 UTC; no episode has moved through it. |
 | `Publishing` | `Episodes.Status` | after one clean publish run (Stage 4) | **PENDING.** No clean publish since Stage 4 shipped at 22:56 UTC; the ready view was empty at ship time. |
 | `Processing` | `Thumbnails.Status` | after one clean pick and one clean revision (Stage 5) | **PENDING.** No clean pick or revision since Stage 5 shipped at 23:07 UTC. |
+| `Syncing` | `Publications.Sync Status` | after one clean content sync (Stage 6) | **PENDING.** No clean content sync since Stage 6 shipped at 23:17 UTC. |
 
 **How to confirm the run was clean:**
 
@@ -25,6 +26,7 @@ Written 2026-11-24. Last updated 2026-11-24 after Stage 5 shipped. The rule that
 - **Publish:** an episode moved to `Scheduled to Publish`, its Fountain Publication is `Scheduled`, `Workflow Lock` is empty, and the execution succeeded. A large upload can take about 80 minutes; do not judge it early.
 - **Thumbnail pick:** a `Selected` row reached `Final`, the episode is `Artwork Ready`, the row's `Workflow Lock` is empty, and the execution succeeded.
 - **Thumbnail revision:** a `Revising` row reached `Final` with the new images, the row's `Workflow Lock` is empty, and the execution succeeded.
+- **Content sync:** a Publication applied its approved changes, `Sync Status = Synced`, `Workflow Lock` is empty, and both the content sync and `Apply Fountain Sync` executions succeeded.
 
 Then delete the status from `Episodes.Status`. Airtable removes it from any view filter that mentions it.
 
@@ -38,7 +40,6 @@ Then delete the status from `Episodes.Status`. Airtable removes it from any view
 
 | Item | Where | Delete when |
 |---|---|---|
-| `Syncing` | `Publications.Sync Status` | after Stage 6, one clean content sync |
 | `Edited` | `Episodes.Status` | optional: delete if you never use it (only the upload guard mentions it) |
 | `Research Ready` | `Episodes.Status` | optional: only the AgentMail guard mentions it |
 | `Stories Picked` | `Episodes.Status` | optional: same |
@@ -89,7 +90,7 @@ Table scope:
 | Thumbnail pick | `mLAn4ya2AmZoHDUk` (Path 2) | `Thumbnails.Status = Selected` | `Workflow Lock` (done 2026-11-24) | `Final` / `Rejected` | `Processing` |
 | Thumbnail revision | `mLAn4ya2AmZoHDUk` (Path 3) | `Thumbnails.Status = Revising` | `Workflow Lock` (done 2026-11-24) | `Proposed` (new round) | `Processing` |
 | Fountain publisher | `LTmRVKn9TWJd6Gtk` | `Ready for Publishing` view | `Workflow Lock` (done 2026-11-24) | `Scheduled to Publish` / `Publishing Failed` | `Publishing` |
-| Content sync | `WMZ0Zpin1Stn9uF1` | 15-minute schedule | `Publications.Sync Status = Syncing` | `Synced` / `Failed` | `Syncing` |
+| Content sync | `WMZ0Zpin1Stn9uF1` | 15-minute schedule | `Workflow Lock` (done 2026-11-24) | `Synced` / `Failed` | `Syncing` |
 | Reconciler | `guys-take-fountain-reconciler` | schedule | none (read and update) | `Published` / `Partially Published` | none |
 | Notifications | publish readiness, X readiness | views / schedule | none (dedupe fields) | messages | none |
 
@@ -221,11 +222,13 @@ Watch for: the 2026-11-17 `Processing` claim fixed a real double-pick bug. Prove
 
 ## Stage 6: Content sync
 
-- **Branch:** `feat/lock-content-sync`
-- **Workflow:** `WMZ0Zpin1Stn9uF1`
-- **Table:** `Publications`.
+- **Status:** **done, 2026-11-24.** Branch `feat/lock-content-sync`.
+- **Workflow:** `WMZ0Zpin1Stn9uF1` (and its `Apply Fountain Sync` child).
+- **Table:** `Publications`. New `Publications.Workflow Lock` field.
 
-Changes:
+Shipped: `Mark Syncing` is replaced by `Claim Sync`, which writes `content-sync <timestamp>` and leaves `Sync Status` alone. `Expand Live Publications` carries the lock, and `Compute Changes` skips a locked row (`runningFresh`), replacing the old `Syncing` + 3-hour `Last Attempt` guard. `Apply Fountain Sync` clears the lock in `Finish Sync` when it writes `Synced`; a failure leaves the lock and sets `Failed`. The next real content sync is the test.
+
+Original checklist:
 
 1. Add `Publications.Workflow Lock` (single line text).
 2. Replace `Sync Status = Syncing` as the claim with `workflow-lock = "content-sync <now>"`.
@@ -239,6 +242,8 @@ Watch for: the content sync's `runningFresh` guard uses the `Syncing` status plu
 ---
 
 ## Stage 7: cleanup
+
+**Status: in progress.** The tracker at the top of this doc is the source of truth for what is safe to delete and what has already gone.
 
 - Remove the retired claim statuses after each stage has run cleanly:
   - `Generating Metadata`
@@ -300,7 +305,7 @@ Removal notes:
 
 - **Safe to remove now:** `Scheduled`, `Transcript Ready`.
 - **Remove if unused:** `Edited`, `Research Ready`, `Stories Picked`. Removing any of them means updating the AgentMail guard lists and the metadata/script Airtable node option lists.
-- **Retire through the migration:** `Generating Metadata`, `Generating Artwork` and `Publishing` are retired by Stages 2 to 4; delete each after its clean run. `Thumbnails.Processing` is retired by Stage 5; delete after a clean pick and a clean revision. `Publications.Syncing` waits for Stage 6.
+- **Retire through the migration:** `Generating Metadata`, `Generating Artwork` and `Publishing` are retired by Stages 2 to 4; delete each after its clean run. `Thumbnails.Processing` is retired by Stage 5; delete after a clean pick and a clean revision. `Publications.Syncing` is retired by Stage 6; delete after a clean content sync.
 - **Keep:** everything else. These are the human-facing lifecycle.
 - **Three episodes have no status.** Worth a look; they are not part of the status list.
 

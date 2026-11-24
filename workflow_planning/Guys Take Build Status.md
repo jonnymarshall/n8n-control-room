@@ -125,7 +125,7 @@ Supporting workflows (same instance, not pipeline stages):
 
 > **▶ NEXT PROJECT (set 2026-11-23): migrate every view-triggered workflow to `Workflow Lock`.** One generic claim field instead of a `<Stage> In Progress` status per stage. The Audionauts draft is the first user and the pattern is in `n8n_workflow_readmes/CONVENTIONS.md`. **Full per-stage plan, testing and rollback, plus the status audit: `workflow_planning/Workflow Lock Migration.md`. The statuses still pending deletion are tracked at the top of that doc.**
 >
-> **Already done:** `Episodes.Workflow Lock` exists (single line text). The Audionauts draft claims with it and ends at `Audionauts Post Ready` (Stage 0). The X social draft claims with `x-social <timestamp>`, clears on success and leaves it on failure (Stage 1). The metadata run claims with `metadata <timestamp>`, leaves `Status` at `Ready for Metadata`, and clears the lock on every success exit (Stage 2). Artwork Path 1 claims with `artwork <timestamp>`, leaves `Status` alone and clears the lock on both success exits (Stage 3). The Fountain publisher claims with `publishing <timestamp>`, leaves `Status` at `Ready to Publish` and clears the lock on success (Stage 4). The thumbnail pick and revision queues claim with `Thumbnails.Workflow Lock`, leave `Status` at `Selected` / `Revising` and clear it at `Final` (Stage 5). The old `Audionauts Post Tried` field is deleted.
+> **Already done:** `Episodes.Workflow Lock` exists (single line text). The Audionauts draft claims with it and ends at `Audionauts Post Ready` (Stage 0). The X social draft claims with `x-social <timestamp>`, clears on success and leaves it on failure (Stage 1). The metadata run claims with `metadata <timestamp>`, leaves `Status` at `Ready for Metadata`, and clears the lock on every success exit (Stage 2). Artwork Path 1 claims with `artwork <timestamp>`, leaves `Status` alone and clears the lock on both success exits (Stage 3). The Fountain publisher claims with `publishing <timestamp>`, leaves `Status` at `Ready to Publish` and clears the lock on success (Stage 4). The thumbnail pick and revision queues claim with `Thumbnails.Workflow Lock`, leave `Status` at `Selected` / `Revising` and clear it at `Final` (Stage 5). The content sync claims an approved apply with `Publications.Workflow Lock` and clears it at `Sync Status = Synced` (Stage 6). **All six stages of code are complete; Stage 7 is the Airtable cleanup of the retired statuses, tracked at the top of the migration doc.** The old `Audionauts Post Tried` field is deleted.
 >
 > **To migrate, one stage at a time:**
 > 1. Add `Workflow Lock is empty` to the stage's trigger view, and to the code guard as a backstop.
@@ -424,6 +424,15 @@ Channels: { Pod feed, X, YouTube, Rumble, Keet, Instagram, Nostr }.
 ---
 
 ## Change log
+
+- 2026-11-24 (Workflow Lock Stage 6, content sync) - **The content sync now claims an approved apply with `Publications.Workflow Lock` and no longer writes `Syncing`.**
+  - New field `Publications.Workflow Lock` (single line text). `Mark Syncing` is replaced by `Claim Sync`, which writes `content-sync <ISO timestamp>` and leaves `Sync Status` alone.
+  - `Expand Live Publications` carries the lock; `Compute Changes` skips a locked row (`runningFresh`), replacing the old `Sync Status = Syncing` + 3-hour `Last Attempt` guard.
+  - The shared `Apply Fountain Sync` clears the lock in `Finish Sync` when it writes `Sync Status = Synced`.
+  - A failure leaves the lock and sets `Sync Status = Failed`; both failure messages now say to clear it. Retry by clearing the lock and setting `Sync Status = Awaiting Approval` (or re-ticking `Sync Approved`).
+  - Published both workflows (`versionId == activeVersionId`), active, credentials intact, validation clean, snapshots refreshed.
+  - **Airtable cleanup:** after one clean content sync, delete `Syncing` from `Publications.Sync Status`.
+  - **Untested:** no real content sync since the change. **This completes the six code stages; the remaining work is the status cleanup.**
 
 - 2026-11-24 (Workflow Lock Stage 5, thumbnail pick and revision) - **The thumbnail queues now claim with `Thumbnails.Workflow Lock` and no longer write `Processing`.**
   - New field `Thumbnails.Workflow Lock` (single line text). `Pick Queued?` and `Revision Queued?` also require it empty.

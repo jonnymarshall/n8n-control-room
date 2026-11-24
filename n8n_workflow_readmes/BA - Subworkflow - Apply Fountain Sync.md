@@ -1,5 +1,7 @@
 # BA - Subworkflow - Apply Fountain Sync
 
+> **2026-11-24 - the sync now clears `Publications.Workflow Lock` on success (LIVE, published, Stage 6).** `Finish Sync` writes `Sync Status = Synced` and clears the lock in one PATCH. A failure leaves the lock and sets `Sync Status = Failed`; the failure message says to clear it before retrying. The parent content sync claims the lock before calling this sub-workflow. `versionId == activeVersionId`, active, 15 nodes, validation clean.
+
 > **2026-11-23 - the video swap's PATCH URL was never a real expression and is now fixed (LIVE, published).** `Attach New Video` held `=https://api.fountain.fm/v1/feeds/$('Input').first().json.feedId/items/$('Input')…` with no `{{ }}` around the two expressions, so n8n sent the literal text as the feed and item ids. A video swap therefore failed at that node and took the failure branch every time, so the row was marked `Sync Status = Failed` and no re-cut could reach Fountain through this path. The URL is now `=https://api.fountain.fm/v1/feeds/{{ $('Input').first().json.feedId }}/items/{{ $('Input').first().json.itemId }}`. The re-uploaded video now keeps the Frame.io filename (see `BA - Subworkflow - Upload Video to Fountain`). `versionId == activeVersionId`, active, 2 Fountain / 4 Airtable / 2 Telegram bindings intact. **Not yet exercised by a real video swap.**
 
 > **Find this workflow in n8n by name.** Workflow IDs can change when a workflow is rebuilt. ID at time of writing: `G1N3gUA2CUa8Q5sF`.
@@ -62,11 +64,11 @@ Every mutating step has `onError: continueErrorOutput`, wired to `Build Failure`
 
 - **Video swap** calls the `BA - Subworkflow - Upload Video to Fountain` sub-workflow (`XY4WfJ2XaBA9bPKY`), then attaches it with `{ audio_default_id: null, video_default_id: <new> }` in **one** PATCH. The `null` is what makes Fountain re-extract the audio from the new video; without it the old track stays, because a new video only brings its own audio when the slot is empty. It must be one request: a published item cannot be left without audio, so two sequential requests are rejected.
 - **Re-schedule** turns `releaseDay` + the show's `Default Publish Time` (`fountainSettings`) into a UTC instant, or *now + 1 hour* when the release day is today or already past.
-- **Finish Sync** writes `Content Fingerprint`, `Formatted Description`, `Sync Approved: false`, `Sync Status: Synced`.
+- **Finish Sync** writes `Content Fingerprint`, `Formatted Description`, `Sync Approved: false`, `Sync Status: Synced` and clears `Workflow Lock`.
 
 ## Failure branch
 
-`Build Failure` → `Mark Sync Failed` → `Notify Failure`. The row is set to `Sync Status: Failed` with the reason, `Sync Approved` is cleared, and the team group gets one message with the episode ID. `Build Failure` is a Code node (`telegramText`) because the reason has to be dug out of an error object.
+`Build Failure` → `Mark Sync Failed` → `Notify Failure`. The row is set to `Sync Status: Failed` with the reason, `Sync Approved` is cleared, the `Workflow Lock` is left in place, and the team group gets one message with the episode ID. Clear the lock and set `Sync Status = Awaiting Approval` (or re-tick `Sync Approved`) to retry. `Build Failure` is a Code node (`telegramText`) because the reason has to be dug out of an error object.
 
 ---
 
