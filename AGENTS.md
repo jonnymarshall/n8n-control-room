@@ -92,3 +92,5 @@ The `n8n-skills` knowledge base (from `github.com/czlonkowski/n8n-skills`, MIT) 
 - Never give the n8n agent write endpoints; read-only tools only.
 - Never trigger a workflow stage from the previous stage's workflow; trigger off Airtable state.
 - Never put a second Telegram Trigger on `@pod21_n8n_agent_bot`.
+- **Never use a status as a workflow lock in new work.** A view-triggered workflow claims its row with `Workflow Lock` (`<stage> <timestamp>`), clears it on success and leaves it on failure. See `n8n_workflow_readmes/CONVENTIONS.md`.
+- **Never create a test episode at a status another view watches.** Use `Recorded` with a `TEST` title, or flip into the target view only at the last moment, and delete the row plus every child record in the same session. On 2026-11-23 a temporary `Approved` episode triggered the artwork workflow and a real thumbnail message.

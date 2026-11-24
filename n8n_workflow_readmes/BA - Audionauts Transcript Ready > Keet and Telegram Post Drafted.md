@@ -128,7 +128,7 @@ End-to-end on a temporary Audionauts episode (`BA-S3aB4q`, parent `BA-QxQCXc`, r
 - wrote the `Keet + Telegram` row with `Round 1`, `Proposed`
 - the failure branch was exercised when the first two runs died on a Code-node syntax error
 
-That test used the old `Audionauts Post Tried` stamp. **The claim / lock / `Audionauts Post Ready` path was added after it and has not been run end to end yet:** it needs the corrected view filter (below), which is a manual UI change. Test rows, publications and episode were deleted.
+That test used the old `Audionauts Post Tried` stamp. **The claim / lock path has since run end to end on a real clip:** `BA-LZ1KhJ` went through the view search, claim, draft and `Complete Clip` on 2026-11-24, and is now `Audionauts Post Ready` with `Workflow Lock` empty and one `Keet + Telegram` row. The earlier test rows, publications and episode were deleted.
 
 `versionId == activeVersionId`, active, `availableInMCP`, credentials bound, validation clean, snapshot refreshed as of 2026-11-23.
 

@@ -1,13 +1,13 @@
 # BA - Episode Approved > Social Posts Drafted
 
-> **2026-11-23 - the view is shared with the Audionauts draft (LIVE, published).** `Ready for Social Posts` now also carries Audionauts clips at `AI Analysis Complete`, so the search fetches up to 20 rows and `Pick Episodes` keeps the oldest eligible episode, skipping `Type = Audionauts`. That keeps one episode per run and stops an Audionauts row from blocking the X queue. The view's `Summary` condition is now redundant for X (the code requires it) and can be removed if Audionauts clips arrive without one.
+> **2026-11-23 - the view is shared with the Audionauts draft (LIVE, published).** `Ready for Social Posts` now also carries Audionauts clips at `AI Analysis Complete`, so the search fetches up to 20 rows and `Pick Episodes` keeps the oldest eligible episode, skipping `Type = Audionauts`. That keeps one episode per run and stops an Audionauts row from blocking the X queue. The view is now two AND groups joined by OR, so `Summary is not empty` applies only to the X group (group 1). The Audionauts group does not require a summary, because those clips reach `AI Analysis Complete` with only a transcript.
 
 > **2026-11-23 - the shared humanizer is now a separate prompt row (LIVE, published).** The voice, rhythm, accuracy and banned-word rules moved out of `Social Post` and `Social Post Editor` and into `Social Post Humanizer` (`reciUfBMWFqmBMDd6`). A new `Fetch Humanizer Prompt` node runs after `Fetch Social Prompt`, and `Build Social Request` and `Build Edit Request` substitute `{{HUMANIZER}}` before the model call. The same row feeds the Audionauts writer, so one edit changes every social automation. Verified on a scratch copy against a temporary `Approved` episode: the assembled request contained the humanizer, no placeholder survived, and the four options passed `Parse Options`.
 
 Writes four platform-neutral social post options after an episode's AI metadata is signed off, writes them to the `Social Posts` table as `Proposed`, and posts them to the team group. The message also explains how to submit exact custom copy through the Telegram assistant.
 
 - **Workflow ID:** `ntXHSW3AbNntnaj0` (stable identifier: the name)
-- **Trigger:** Schedule every minute + Airtable search on the `Episodes` view `Ready for Social Posts` (`viw7OScgqnRQdCLJz`), `limit: 1`, sorted by `Last Modified Time` ascending
+- **Trigger:** Schedule every minute + Airtable search on the `Episodes` view `Ready for Social Posts` (`viw7OScgqnRQdCLJz`), up to 20 rows sorted by `Last Modified Time` ascending, then `Pick Episodes` keeps the oldest eligible one
 - **Status change:** none. This is a side stage; artwork and publishing own the Episode `Status`.
 - **Shared feature readme:** `Social Posts.md`
 
@@ -17,7 +17,8 @@ Writes four platform-neutral social post options after an episode's AI metadata 
 
 ```text
 Every Minute
-  -> Ready for Social Posts View   Airtable search, view viw7OScgqnRQdCLJz, limit 1
+  -> Ready for Social Posts View   Airtable search, view viw7OScgqnRQdCLJz, up to 20 rows
+  -> Pick Episodes                 oldest eligible X episode (skips Audionauts)
   -> Pick Episodes                 guard: status, no linked posts, title, summary
   -> Fetch Social Prompt           Airtable Prompts row "Social Post"
   -> Fetch Humanizer Prompt        Airtable Prompts row "Social Post Humanizer"
@@ -38,7 +39,7 @@ Every Minute
 
 ## Why it takes one episode per run
 
-The earlier version used an Airtable Trigger and processed every row a single poll returned, while the X-row creation and `Create Social Posts` read `.first()`. A live test with three queued episodes produced 12 social post rows and only one X row. The current pattern is the same one the metadata and artwork stages adopted on 2026-11-17: a schedule trigger plus an Airtable search on the view, `limit: 1`, oldest first. One run, one episode.
+The earlier version used an Airtable Trigger and processed every row a single poll returned, while the X-row creation and `Create Social Posts` read `.first()`. A live test with three queued episodes produced 12 social post rows and only one X row. The current pattern is the same one the metadata and artwork stages adopted on 2026-11-17: a schedule trigger plus an Airtable search on the view, oldest first. Since 2026-11-23 the view is shared with the Audionauts draft, so the search fetches up to 20 rows and `Pick Episodes` keeps the oldest eligible X episode. One run, one episode.
 
 The X row is created **before** the social post rows, so a failure after the X row does not leave an episode with posts but no X row. If `Create Social Posts` fails, the episode stays in the view and the next minute retries; the X row is already there, so `X Row Exists?` skips the create.
 
