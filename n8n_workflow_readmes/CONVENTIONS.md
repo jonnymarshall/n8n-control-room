@@ -175,7 +175,7 @@ A workflow that a view triggers owns one row at a time. Claim it with the generi
 
 **Why not one universal status?** `Status` answers "where is this episode" for Jonny and the assistant. Using it as the lock too is what produced all the stage-specific statuses, and a generic `In Progress` would lose which stage is stuck. The lock keeps the two jobs separate.
 
-**Migration status (2026-11-23):** the Audionauts draft is the first user. Metadata, artwork, thumbnail pick/revision, the Fountain publisher and the content sync still claim with `Generating Metadata`, `Generating Artwork`, `Processing` and `Publishing`. Migrate one stage at a time; add `Workflow Lock is empty` to a view when you touch it even before that stage is migrated. The plan lives at the top of Part 2 in `workflow_planning/Guys Take Build Status.md`.
+**Migration status (2026-11-24):** the Audionauts draft and the X social draft claim with the lock. Metadata, artwork, thumbnail pick/revision, the Fountain publisher and the content sync still claim with `Generating Metadata`, `Generating Artwork`, `Processing` and `Publishing`. Migrate one stage at a time; add `Workflow Lock is empty` to a view when you touch it even before that stage is migrated. The plan lives at the top of Part 2 in `workflow_planning/Guys Take Build Status.md`.
 
 ---
 

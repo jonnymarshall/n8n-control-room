@@ -125,7 +125,7 @@ Supporting workflows (same instance, not pipeline stages):
 
 > **▶ NEXT PROJECT (set 2026-11-23): migrate every view-triggered workflow to `Workflow Lock`.** One generic claim field instead of a `<Stage> In Progress` status per stage. The Audionauts draft is the first user and the pattern is in `n8n_workflow_readmes/CONVENTIONS.md`.
 >
-> **Already done:** `Episodes.Workflow Lock` exists (single line text), the Audionauts draft claims with it, success sets `Audionauts Post Ready`, and the old `Audionauts Post Tried` field is retired.
+> **Already done:** `Episodes.Workflow Lock` exists (single line text), the Audionauts draft claims with it and ends at `Audionauts Post Ready`, and the X social draft claims with `x-social <timestamp>`, clears on success and leaves it on failure (Stage 1). The old `Audionauts Post Tried` field is deleted.
 >
 > **To migrate, one stage at a time:**
 > 1. Add `Workflow Lock is empty` to the stage's trigger view, and to the code guard as a backstop.
@@ -424,6 +424,12 @@ Channels: { Pod feed, X, YouTube, Rumble, Keet, Instagram, Nostr }.
 ---
 
 ## Change log
+
+- 2026-11-24 (Workflow Lock Stage 1, X social draft) - **The X social draft now claims its episode with `Workflow Lock`, and the last references to the deleted `Scheduled` status are gone.**
+  - **Stage 1.** `Pick Episodes` skips any row with a non-empty `Workflow Lock`. The new `Claim Post` writes `x-social <ISO timestamp>` before the prompt fetches and model calls. The new `Clear Lock` clears it after `Create Social Posts`. Error outputs from the draft, the editor, the X-row create, the post create and the clear route to `Build X Failure` -> `Send X Failure`, which names the episode and says to clear the lock. No status changes; the four `Social Posts` rows remain the outcome. Published (`versionId == activeVersionId`), active, credentials intact, 21 nodes, validation clean, snapshot refreshed.
+  - **View still to change:** add `Workflow Lock is empty` to the X group of `Ready for Social Posts`. Until it is added, `Pick Episodes` still prevents a second run on a claimed row, but the row stays in the view while the draft runs.
+  - **AgentMail wording.** Removing `Scheduled` left two blocked-message strings in `DFkl8armVlXqBWWD`: the canceled guard said "acts on: Scheduled" (the condition already checks `Recording Scheduled`) and the confirmed guard listed `Scheduled` instead of `Recording Scheduled`. Both messages fixed, published, snapshot refreshed.
+  - **Untested:** no real X episode has run through the claim yet; the first one after the view change is the test. The happy path and a forced failure both need confirming.
 
 - 2026-11-23 (Audionauts social posts for Keet and Telegram, plus the shared humanizer) - **Audionauts clips now get their own post, and the social voice lives in one prompt row.**
   - **New flow, three workflows.** `BA - Audionauts Transcript Ready > Keet and Telegram Post Drafted` (`jDEHmj4d0R4PPsiN`, ACTIVE) runs every minute and searches Episodes for `Type = Audionauts`, `Status = AI Analysis Complete`, transcript present, `Social Posts` empty, `Workflow Lock` empty, title present, one clip per run oldest first. It reads the parent episode from `Associated Episode` for the real title and guest names, drafts ONE rundown from the clip transcript with the new `Audionauts Post` prompt plus `Social Post Humanizer`, validates it (under 1000 characters, no em/en dash, no banned words or moves, no URL, emoji stripped), writes one `Social Posts` row (`Platform = Keet + Telegram`, `Status = Proposed`, `Option = 1`) and posts `🟡 Audionauts post ready`. `BA - Audionauts Post Selected > Keet and Telegram Linked` (`e8tczdCg5MB0RSVP`, ACTIVE) creates or updates `BA-xxxx - Keet` and `BA-xxxx - Telegram` with the same copy, both `Pending`. `BA - Audionauts Post Revising > Redrafted` (`aRwDA0qtQnjXR0sr`, ACTIVE) rewrites the single row in place from a brief, increments `Round` and clears the brief.
