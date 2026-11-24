@@ -1,13 +1,13 @@
 # Workflow Lock migration
 
-**Status: Stages 0, 1, 2 and 3 are live. Stages 4 to 7 are planned and not started.**
-Written 2026-11-24. Last updated 2026-11-24 after Stage 3 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
+**Status: Stages 0 to 4 are live. Stages 5 to 7 are planned and not started.**
+Written 2026-11-24. Last updated 2026-11-24 after Stage 4 shipped. The rule that governs every stage is in `n8n_workflow_readmes/CONVENTIONS.md` ("Claim a row with `Workflow Lock`, not a stage status").
 
 ---
 
 ## Airtable cleanup tracker (start here)
 
-**Last checked 2026-11-24 22:45 UTC.** A status is deleted only after its stage has had **one clean real run**. Do not delete it in the same change that stops writing it; a rollback may need it.
+**Last checked 2026-11-24 22:56 UTC.** A status is deleted only after its stage has had **one clean real run**. Do not delete it in the same change that stops writing it; a rollback may need it.
 
 ### Pending right now
 
@@ -15,11 +15,13 @@ Written 2026-11-24. Last updated 2026-11-24 after Stage 3 shipped. The rule that
 |---|---|---|---|
 | `Generating Metadata` | `Episodes.Status` | after one clean metadata run (Stage 2) | **PENDING.** No clean run since Stage 2 shipped at 20:31 UTC; no episode has moved through it. |
 | `Generating Artwork` | `Episodes.Status` | after one clean artwork run (Stage 3) | **PENDING.** No clean run since Stage 3 shipped at 22:37 UTC; no episode has moved through it. |
+| `Publishing` | `Episodes.Status` | after one clean publish run (Stage 4) | **PENDING.** No clean publish since Stage 4 shipped at 22:56 UTC; the ready view was empty at ship time. |
 
 **How to confirm the run was clean:**
 
 - **Metadata:** an episode moved from `Ready for Metadata` to `AI Analysis Complete`, `Workflow Lock` is empty, and the execution succeeded.
 - **Artwork:** an episode reached `Awaiting Thumbnail Pick` (four `Thumbnails` rows) or `Awaiting Manual Artwork`, `Workflow Lock` is empty, and the execution succeeded.
+- **Publish:** an episode moved to `Scheduled to Publish`, its Fountain Publication is `Scheduled`, `Workflow Lock` is empty, and the execution succeeded. A large upload can take about 80 minutes; do not judge it early.
 
 Then delete the status from `Episodes.Status`. Airtable removes it from any view filter that mentions it.
 
@@ -33,7 +35,6 @@ Then delete the status from `Episodes.Status`. Airtable removes it from any view
 
 | Item | Where | Delete when |
 |---|---|---|
-| `Publishing` | `Episodes.Status` | after Stage 4, one clean publish run |
 | `Processing` | `Thumbnails.Status` | after Stage 5, one clean pick and one clean revision |
 | `Syncing` | `Publications.Sync Status` | after Stage 6, one clean content sync |
 | `Edited` | `Episodes.Status` | optional: delete if you never use it (only the upload guard mentions it) |
@@ -85,7 +86,7 @@ Table scope:
 | Artwork Path 1 | `mLAn4ya2AmZoHDUk` | `Ready for 16X9 Thumbnail` view | `Workflow Lock` (done 2026-11-24) | `Awaiting Thumbnail Pick` / `Awaiting Manual Artwork` | `Generating Artwork` |
 | Thumbnail pick | `mLAn4ya2AmZoHDUk` (Path 2) | `Thumbnails.Status = Selected` | `Thumbnails.Status = Processing` | `Final` / `Rejected` | `Processing` |
 | Thumbnail revision | `mLAn4ya2AmZoHDUk` (Path 3) | `Thumbnails.Status = Revising` | `Thumbnails.Status = Processing` | `Proposed` (new round) | `Processing` |
-| Fountain publisher | `LTmRVKn9TWJd6Gtk` | `Ready for Publishing` view | `Publishing` | `Scheduled to Publish` / `Publishing Failed` | `Publishing` |
+| Fountain publisher | `LTmRVKn9TWJd6Gtk` | `Ready for Publishing` view | `Workflow Lock` (done 2026-11-24) | `Scheduled to Publish` / `Publishing Failed` | `Publishing` |
 | Content sync | `WMZ0Zpin1Stn9uF1` | 15-minute schedule | `Publications.Sync Status = Syncing` | `Synced` / `Failed` | `Syncing` |
 | Reconciler | `guys-take-fountain-reconciler` | schedule | none (read and update) | `Published` / `Partially Published` | none |
 | Notifications | publish readiness, X readiness | views / schedule | none (dedupe fields) | messages | none |
@@ -176,18 +177,20 @@ Watch for: Path 1 also handles the manual-artwork branch. The claim and clear mu
 
 ## Stage 4: Fountain publisher
 
-- **Branch:** `feat/lock-publisher`
+- **Status:** **done, 2026-11-24.** Branch `feat/lock-publisher`.
 - **Workflow:** `LTmRVKn9TWJd6Gtk`
-- **View:** `Ready for Publishing` (`viwDfPHHKrgggdw20`).
+- **View:** `Ready for Publishing` (`viwDfPHHKrgggdw20`). `Workflow Lock is empty` still to add in the UI.
 
-Changes:
+Shipped: a new `Lock Free?` IF sits between `Should Run Fountain` true and the work; `Claim Publishing` writes `publishing <timestamp>` and leaves `Status` at `Ready to Publish`; the old `Claim Episode as Publishing` is removed. `Mark Episode Scheduled to Publish` sets `Scheduled to Publish` and clears the lock; `Mark Episode Publishing Failed` sets `Publishing Failed` and leaves the lock. The ready view was empty when this shipped, so the trigger re-baseline did not strand a row. The next real publish is the test; it takes up to about 80 minutes.
+
+Original checklist:
 
 1. Add `Workflow Lock is empty` to the view.
 2. Claim with `Workflow Lock = "publishing <now>"` right after the guard, before any upload.
 3. Remove the `Publishing` write.
 4. On success, set `Scheduled to Publish` and clear the lock.
 5. On failure, set `Publishing Failed` **and** leave the lock. Both are useful here: the failure status is the terminal state a human acts on, the lock records that the run died.
-6. Retire `Publishing` after a clean week.
+6. Retire `Publishing` after one clean publish.
 
 Watch for: the largest, longest job in the system. Do this one on its own, not on a release day, and watch the first full upload.
 
@@ -280,7 +283,7 @@ Counts are across all 88 Episodes. "Writer" is the workflow that sets the status
 | `Artwork Ready` | artwork | 0 | **Keep.** |
 | `Ready to Publish` | readiness / assistant | 0 | **Keep.** The publisher queue. |
 | `Scheduled to Publish` | publisher | 0 | **Keep.** |
-| `Publishing` | publisher | 0 | **Retire in Stage 4.** |
+| `Publishing` | publisher | 0 | **Retired in Stage 4 (2026-11-24).** Delete it from `Episodes.Status` after one clean publish. |
 | `Publishing Failed` | publisher / reconciler | 0 | **Keep.** Terminal failure a human acts on. |
 | `Partially Published` | reconciler | 0 | **Keep.** Multi-platform outcome. |
 | `Published` | reconciler / assistant | 79 | **Keep.** |

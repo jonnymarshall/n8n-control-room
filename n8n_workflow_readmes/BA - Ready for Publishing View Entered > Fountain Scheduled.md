@@ -1,5 +1,7 @@
 # BA - Ready for Publishing View Entered > Fountain Scheduled
 
+> **2026-11-24 - the publisher now claims with `Workflow Lock` (LIVE, published, Stage 4 of the migration).** `Ready for Publishing View` -> `Find Fountain Publication` -> `Guard Fountain Publication` -> `Should Run Fountain`; the true branch passes a new `Lock Free?` check, then `Claim Publishing` writes `publishing <timestamp>` and leaves `Status` at `Ready to Publish`. `Mark Episode Scheduled to Publish` sets `Scheduled to Publish` and clears the lock in one PATCH. `Mark Episode Publishing Failed` sets `Publishing Failed` and leaves the lock; clear it and put the episode back to `Ready to Publish` to retry. The old `Claim Episode as Publishing` no longer sets `Publishing`. **The `Ready for Publishing` view must add `Workflow Lock is empty`; the new `Lock Free?` step is the code backstop.** `Publishing` is no longer written and can be deleted after one clean publish. `versionId == activeVersionId`, active, 58 nodes, credentials intact, validation clean apart from the known `executeOnce` false positive.
+
 > **2026-11-23 - uploads now keep the Frame.io filename, and a re-upload replaces the audio too (LIVE, published).** Fountain's `POST /uploads` takes an optional `filename` for `ITEM_VIDEO` (and `ITEM_AUDIO`), shown on the episode in Fountain on the web; an upload cannot be renamed afterwards. `Validate Fountain Media` now sends the Frame.io file's own `name` verbatim (unsafe filename characters stripped; the extension kept, or added when Frame.io omits it), so a file on Fountain can be matched back to the exact Frame.io file it came from, including a swapped re-cut. If Frame.io returns no name it falls back to `episode-<BA-ID>` plus the real extension. The same release adds `audio_default_id: null` to `Update Fountain Item`'s PATCH. Fountain gives a new video its extracted audio only when the audio slot is empty, so a reused draft would otherwise keep the previous cut's audio; one PATCH is the only supported way to replace both, because a published item cannot be left without audio. Verified: `versionId == activeVersionId`, active, 16 Airtable / 9 Fountain / 2 Telegram / 1 Adobe bindings intact, validation clean apart from the known `executeOnce` false positive. **The next real publish is the test** for both the filename (Fountain had not documented the parameter when the change shipped) and the audio replacement.
 
 > **2026-11-13 - the item PATCH now includes the description (LIVE, published).** `Validate Fountain Media` rebuilt its payload from `Build Fountain Plan`, which is the pre-content copy, so the description that `Build Fountain Content` had just added was dropped two nodes before `Update Fountain Item`. Fountain accepted the PATCH without a description, and because the stored `Content Fingerprint` was computed from the version that still had it, the content-sync workflow saw no change and never repaired it. Found on `BA-HRwIMb` (scheduled for 14 Nov, item `UGFqEfoTKnoflNI1fcXf`): the live item had no description at all. The scheduled item was repaired directly from its `Formatted Description`; the workflow got one added line in `Validate Fountain Media` (`description: $('Finish Fountain Plan').first().json.description`). Published; `versionId` = `activeVersionId`; 16 Airtable, 9 `FOUNTAIN_API_KEY`, 2 Telegram and 1 `Adobe OAuth` bindings intact. The next real publish is the test.
@@ -23,7 +25,7 @@ Live state as of 2026-09-30: **active**, version `dbc1e3fd-15cc-4754-910e-940bbd
 
 This workflow publishes a ready Guy's Take episode to Fountain as a scheduled video podcast item. It:
 
-1. Claims the Episode by changing its status to `Publishing`.
+1. Claims the Episode with `Workflow Lock = "publishing <now>"`, leaving `Status` at `Ready to Publish`.
 2. Creates or resumes one Fountain row in `Publications`.
 3. Validates the episode metadata, media URLs, media sizes, and Fountain settings.
 4. Creates or reuses a Fountain draft item.
@@ -48,8 +50,8 @@ The workflow is guarded and resumable through the `Publications` row. It does no
 | Trigger view | `viwDfPHHKrgggdw20` |
 | Trigger field | `Last Modified Time` (`fld3Z4xdI4s2wVnLa`) |
 | Trigger Fields list | Empty, so the whole record is returned |
-| Success transition | Episode `Publishing` to `Scheduled`; Fountain Publication to `Scheduled` |
-| Failure transition | Episode to `Publishing Failed`; Fountain Publication to `Failed` |
+| Success transition | Episode `Ready to Publish` to `Scheduled to Publish`, lock cleared; Fountain Publication to `Scheduled` |
+| Failure transition | Episode to `Publishing Failed`, lock left set; Fountain Publication to `Failed` |
 | Notification destination | Telegram team group `-5254203539` |
 | Workflow timezone | `America/New_York` |
 | Execution timeout | 43,200 seconds (12 hours) |
@@ -60,7 +62,7 @@ The workflow is guarded and resumable through the `Publications` row. It does no
 
 The Airtable poller checks the trigger view every minute using `Last Modified Time`. A record must newly enter the view or have a later modification time than the poller's stored cursor. Merely leaving an old row in the view does not make it a dependable test.
 
-`Claim Episode as Publishing` runs first and changes `Status` to `Publishing`, which removes the record from the ready view before any long upload starts.
+`Find Fountain Publication` reads the Publication row, `Guard Fountain Publication` decides whether work may start, and `Should Run Fountain` splits. The true branch passes `Lock Free?`, then `Claim Publishing` writes `Workflow Lock = "publishing <now>"` and leaves `Status` at `Ready to Publish`. The lock removes the record from the ready view (once the view condition is added), before any long upload starts. If the lock is already set, the branch stops without touching the row.
 
 The view `viwDfPHHKrgggdw20` shows an episode only when **all** of these hold:
 
@@ -192,7 +194,7 @@ Limits enforced before upload:
 
 ### Airtable select values
 
-The workflow writes Episode statuses `Publishing`, `Scheduled`, and `Publishing Failed`. At snapshot time, `Scheduled` exists but `Publishing` and `Publishing Failed` are not listed choices on `Episodes.Status`. Writes use `typecast: true`, which may create missing choices when the token has permission. Add those choices by hand if select-option creation is not intended or the PAT cannot create them.
+The workflow writes Episode statuses `Scheduled to Publish` and `Publishing Failed`. `Publishing` is no longer written since Stage 4 (2026-11-24) and can be deleted after one clean publish. `Publishing Failed` exists. Writes use `typecast: true`, which may create missing choices when the token has permission. Add those choices by hand if select-option creation is not intended or the PAT cannot create them.
 
 `Publications.Platform` must include `Fountain`. `Publications.Status` must include:
 
@@ -343,7 +345,7 @@ Both media Wait nodes read `Upload Poll Seconds` from the Fountain settings row.
 
 Blocked states are `Uploading`, `Draft`, `Processing`, `Scheduled`, and `Published` — those mean work is already in flight or finished, so a re-trigger must not start a duplicate. There is no `Retry Requested` gate. A failure sets the Episode to `Publishing Failed` and out of the view, so re-entering the view is the only way to trigger a retry: moving the episode back is the retry action, and it is never automatic.
 
-Because the Episode was already claimed as `Publishing`, the false branch runs `Restore Guarded Episode Status`, which mirrors the Publication status: `Published` → `Published`, `Failed`/`Needs Attention` → `Publishing Failed`, anything else → `Scheduled`. This keeps a guarded no-op from leaving the Episode stuck in `Publishing` and avoids mislabelling a failed Publication as `Scheduled`.
+The false branch runs `Restore Guarded Episode Status`, which mirrors the Publication status. No claim has happened on that branch, so it does not touch the lock: `Published` → `Published`, `Failed`/`Needs Attention` → `Publishing Failed`, anything else → `Scheduled`. This keeps a guarded no-op from leaving the Episode stuck in `Publishing` and avoids mislabelling a failed Publication as `Scheduled`.
 
 When a run is allowed, `Upsert Fountain Publication`:
 
@@ -418,12 +420,14 @@ After all parts complete, the workflow stores the media ID in Airtable, calls Fo
 
 ```text
 Ready for Publishing View
-  -> Claim Episode as Publishing
   -> Find Fountain Publication
   -> Guard Fountain Publication
   -> Should Run Fountain
        false -> Restore Guarded Episode Status -> end
-       true  -> Upsert Fountain Publication
+       true  -> Lock Free?
+                 false -> end (another run owns the row)
+                 true  -> Claim Publishing   Workflow Lock = "publishing <now>"
+                       -> Upsert Fountain Publication
              -> Fetch Fountain Settings
              -> Fetch Publishing Links
              -> Fetch 1x1 Thumbnail
@@ -567,7 +571,7 @@ Do not test by moving a real episode into the view until the Fountain bearer bin
 - `n8n_validate_workflow` reports a **false positive** on the two Execute Command upload nodes: it insists `executeOnce` belongs at the node level, but the node reads it from `parameters` and ignores the node-level value. Runtime testing (3 items in → 3 items out) confirms `parameters.executeOnce: false` is correct; ignore the validator error.
 - The ready-view filters are hand-transcribed above (from the Airtable UI, 2026-10-01); the tools used here cannot read Airtable view filters, so re-check the view if the trigger misbehaves.
 - `Publishing Settings.Upload Poll Seconds` controls both Wait nodes, with a 30-second fallback. `Upload Poll Limit` is not used, so polling has no explicit count limit below the 12-hour workflow timeout.
-- `Episodes.Status` did not list `Publishing` or `Publishing Failed` when checked. The workflow relies on `typecast: true` or manual creation of those choices.
+- `Episodes.Status` now lists `Publishing Failed`. `Publishing` is no longer written (Stage 4) and can be deleted after one clean publish. The workflow still uses `typecast: true`, which may create a missing choice.
 - A failure before the Publication row exists cannot be fully recorded by the local failure branch.
 - Multipart upload retries each byte range, but the workflow does not resume a previous Fountain upload session across executions.
 
