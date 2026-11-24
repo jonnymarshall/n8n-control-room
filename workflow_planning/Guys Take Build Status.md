@@ -427,7 +427,7 @@ Channels: { Pod feed, X, YouTube, Rumble, Keet, Instagram, Nostr }.
 
 - 2026-11-24 (Workflow Lock Stage 2, metadata) - **The metadata run now claims its episode with `Workflow Lock` and no longer writes `Generating Metadata`.**
   - `Queued Episode?` now also requires `Workflow Lock` empty. `Set Generating Metadata` is replaced by `Claim Metadata`, which writes `metadata <ISO timestamp>` and leaves `Status` at `Ready for Metadata`.
-  - All three success exits clear the lock in the same PATCH that sets `AI Analysis Complete`: `Set Status AI Analysis Complete`, `Save Audionauts Transcript`, and `Skip to Analysed` (same-length re-upload). A failure leaves the lock; clear it to retry.
+  - All three success exits clear the lock in the same PATCH that sets `AI Analysis Complete`: `Set Status AI Analysis Complete`, `Save Audionauts Transcript`, and `Skip to Analysed` (same-length re-upload). A failure leaves the lock; clear it to retry. `Skip to Analysed` no longer swallows a failed status write (`onError` changed from `continueRegularOutput` to stop), so a failure there now alerts instead of leaving a silent lock.
   - The `Ready for Metadata` view must add `Workflow Lock is empty`. Until it does, `Queued Episode?` still refuses a locked row, but the row stays in the view while the run works.
   - Published (`versionId == activeVersionId`), active, credentials intact, 43 nodes, validation clean, snapshot refreshed.
   - **Airtable cleanup:** nothing to delete yet. Once one real metadata run has completed cleanly, delete the `Generating Metadata` option from `Episodes.Status`. The two Airtable node dropdown caches may still list it; that is cosmetic.
