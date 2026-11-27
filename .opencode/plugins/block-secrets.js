@@ -35,6 +35,9 @@ const SECRET_PATTERNS = [
   `${SEP}credentials\\.json\\b`,
   `${SEP}secrets?\\.json\\b`,
   `${SEP}service-account[A-Za-z0-9._-]*\\.json\\b`,
+  // opencode local service password + CLI auth (leaked 2026-11-23)
+  `\\.config/opencode/(?:service|cli)\\.json\\b`,
+  `${SEP}service\\.json\\b`,
   // SSH private keys
   `${SEP}id_(?:rsa|ed25519|ecdsa|dsa)(?:$|[^A-Za-z0-9])`,
   `\\.ssh/[A-Za-z0-9._-]*(?:_key|\\.key)\\b`,
