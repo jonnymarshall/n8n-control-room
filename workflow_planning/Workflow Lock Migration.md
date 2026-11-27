@@ -46,6 +46,37 @@ Then delete the status from `Episodes.Status`. Airtable removes it from any view
 
 ---
 
+## Verification (2026-11-27)
+
+**Read-only audit.** `scripts/query/workflow-locks.sh` lists every non-empty `Workflow Lock` across `Episodes`, `Thumbnails` and `Publications`, with the row's status, the lock value and its age. Run it after any incident, or whenever a row looks stuck. It exits `0` when clean, `1` when a lock exists (read the age before clearing it) and `2` when the query fails.
+
+**Result after the Airtable outage:** no locks in any of the three tables. Every failed run stopped at its first read, before the claim. The six Audionauts messages were a pre-claim soft-fail and wrote no lock either.
+
+**Code-path review of the live workflows.** Each claim is after the row is picked and before the first external or model call. Each guard reads the lock. Each success exit clears it in the same write as the outcome status. No failure branch clears it.
+
+| Stage | Claim | Guard | Success exit that clears | Failure |
+|---|---|---|---|---|
+| Audionauts draft | `Claim Clip`: `audionauts-post <now>` | `Pick Clip` skips a locked row | `Complete Clip`: `Audionauts Post Ready` + clear | lock stays; one message |
+| X social draft | `Claim Post`: `x-social <now>` | `Pick Episodes` skips a locked row | `Clear Lock` before `Build Social Message` | lock stays; `Build X Failure` says clear it |
+| Metadata | `Claim Metadata`: `metadata <now>` | `Queued Episode?` requires empty | `Set Status AI Analysis Complete`, `Save Audionauts Transcript`, `Skip to Analysed` (all three clear) | lock stays; global alert |
+| Artwork Path 1 | `Claim Artwork`: `artwork <now>` | `Generation Queued?` requires empty | `Mark Awaiting Pick`, `Mark Manual Artwork` | lock stays; global alert |
+| Thumbnail pick | `Claim Pick`: `thumbnail-pick <now>` | `Pick Queued?` requires empty | `Mark Selected Final` | lock stays; global alert |
+| Thumbnail revision | `Claim Revision`: `thumbnail-revision <now>` | `Revision Queued?` requires empty | `Mark Row Revised Final` | lock stays; global alert |
+| Publisher | `Claim Publishing`: `publishing <now>` | `Lock Free?` requires empty | `Mark Episode Scheduled to Publish` | lock stays; `Mark Episode Publishing Failed` sets the failure status and does **not** clear |
+| Content sync | `Claim Sync`: `content-sync <now>` | `Compute Changes` skips a row with `workflowLock` (`runningFresh`) | `Finish Sync` in `Apply Fountain Sync`: `Synced` + clear | `Mark Sync Failed` sets `Failed` and leaves the lock |
+
+**Still not done: a deliberate forced-failure run on each stage.** The code paths are reviewed, and the outage proved the pre-claim path, but no live run has been broken after a claim on purpose. Doing that means editing a production workflow, so it belongs in a scratch copy with a test row and Telegram pointed at Jonny's DM, one stage at a time:
+
+1. Pick one stage and a real row already in its queue. Metadata or thumbnail pick is the lowest risk; the publisher and content sync are the highest.
+2. Copy the workflow, point its Telegram sends at Jonny's DM (`1512868522`), and put a throwing Code node immediately after the claim. Do not edit the live workflow.
+3. Run the copy. Confirm the lock is written, the row leaves the view, and the copy sends one message that names the episode and says to clear the lock.
+4. Clear the lock, confirm the row is picked up again, then delete the copy and any test rows or child records in the same session.
+5. Do one stage per session. Never run the publisher or content sync test on a release day.
+
+Status of the five retired statuses in the live schema on 2026-11-27: `Generating Metadata`, `Generating Artwork`, `Publishing`, `Thumbnails.Processing` and `Publications.Syncing` all still exist. The table at the top of this doc remains the source of truth for when each is safe to delete.
+
+---
+
 ## Why
 
 `Episodes.Status` is doing two jobs: it tells a human (and the assistant) where an episode is, and it acts as the lock for whichever workflow currently owns the row. That is why the list keeps growing: `Generating Metadata`, `Generating Artwork`, `Publishing`, and so on. Each one exists only to take the row out of a view while a workflow runs.

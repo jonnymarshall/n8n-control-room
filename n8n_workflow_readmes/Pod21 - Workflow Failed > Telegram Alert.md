@@ -100,6 +100,7 @@ Wiring checklist (active workflows as of 2026-07-06):
 - **If this workflow itself fails** (e.g. Telegram unreachable beyond the retries), there is no meta-handler; the failure sits in its own execution list. Do NOT set this workflow's Error Workflow setting to itself (infinite loop).
 - **A failing Ops Log write is invisible by design** (alert still sends). If rows stop appearing, check the PAT's access to `appwcz1Bux9YLcZYm` first.
 - **Test procedure:** add a temporary Code node that throws (`throw new Error('test')`) to any wired workflow, run it, confirm the group message AND the Ops Log row, remove the node. If a manual test doesn't fire the error workflow, trigger the erroring workflow via a production execution once (some n8n versions only invoke error workflows for production runs).
+- **After a burst, check for stranded locks:** `./scripts/query/workflow-locks.sh` lists every non-empty `Workflow Lock` across Episodes, Thumbnails and Publications with its age. A 5xx can fail a run after its claim, and that lock is the only signal it died. On 2026-11-27 the answer was clean because every run failed before the claim, but the check is one command.
 
 ---
 
