@@ -425,6 +425,13 @@ Channels: { Pod feed, X, YouTube, Rumble, Keet, Instagram, Nostr }.
 
 ## Change log
 
+- 2026-11-27 (Workflow Lock audit script and verification) - **One command now lists every stuck lock, and every stage's claim and clear path was reviewed against the live workflows.**
+  - New read-only `scripts/query/workflow-locks.sh` checks `Episodes`, `Thumbnails` and `Publications` for a non-empty `Workflow Lock` and prints the row, status, lock value and age. Exit `0` clean, `1` lock found, `2` query failed.
+  - Result after the Airtable outage: no locks in any table. Every failed run stopped at its first read, before the claim.
+  - The code-path review is in `workflow_planning/Workflow Lock Migration.md` (`## Verification (2026-11-27)`): all six stages claim after the pick and before the work, guard on the lock, clear on every success exit, and leave it on failure.
+  - The live schema still has all five retired statuses (`Generating Metadata`, `Generating Artwork`, `Publishing`, `Thumbnails.Processing`, `Publications.Syncing`); the tracker remains the deletion schedule.
+  - **Still outstanding:** a deliberate forced-failure run on each stage. The safe scratch-copy procedure is in the migration doc; no live workflow was broken to test it.
+
 - 2026-11-27 (alert storm after an Airtable outage) - **An external Airtable 500 burst now sends one alert, not 84, and every failure is diagnosable from the Ops Log.**
   - **What happened:** Airtable returned HTTP 500 `SERVER_ERROR` for every request to the Guy's Take base from 10:56 to 11:02 UTC. Fourteen workflows failed, the error handler wrote 84 Ops Log rows and sent 84 Telegram messages, plus six "Audionauts post failed" messages from the draft's own soft-fail branch. All failed runs stopped at their first Airtable read, before any `Workflow Lock` claim. No rows were half-written, no locks were left, and no episode or queue row changed in the window. The lock work was not the cause; the outage exposed two pre-existing alerting gaps instead.
   - **Global handler (`9PMI1kuBjLW2YHwb`):** `Build Alert Message` classifies any 5xx (or Airtable `SERVER_ERROR`) as `check5xx` and now carries `httpCode` and `detail`. New `Upstream 5xx?` and `Already Alerted?` IFs plus `Find Recent Upstream Alert` (Airtable search of the Ops Log) throttle a burst to the first message plus at most one repeat every 15 minutes. Every failure is still logged. The Telegram text now reads from `Build Alert Message` so the 5xx path cannot lose the message. A search failure goes straight to the log: a total Airtable outage is quiet rather than a second storm.
