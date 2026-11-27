@@ -170,6 +170,7 @@ A workflow that a view triggers owns one row at a time. Claim it with the generi
 - **Claim after the pick and before any model call, upload or multi-step work.** The row then leaves the view immediately.
 - **On success, clear the lock and set the outcome status in one PATCH.**
 - **On failure, leave the lock and send the reason to Telegram.** A failed run must not retry itself every minute.
+- **A failure before the claim is outside the lock's protection.** The lock only stops a retry once the row has been claimed. A workflow can still fail at its first read, before any claim, and run again on the next poll. That path must not notify every poll: treat transient upstream errors (5xx, 429, DNS, network) on the pre-claim path as log-only, and notify only when the claim succeeded or the error is a real logic error. The Audionauts draft is the reference: `Build Audionauts Failure` -> `Notify About Failure?` separates the two cases, and `Log Audionauts Skip` records the quiet one in the Ops Log.
 - **Recovery is one action:** clear the lock, and put the episode back at the status the stage expects if a later step changed it.
 - **A non-empty lock always means a run owns the row or died.** That is the whole point; do not "fix" it by clearing the lock automatically.
 
@@ -291,7 +292,19 @@ Artwork` reads its triggers with `.first()` too, so it carries the same risk.
 
 ---
 
-## RULE: Agents create PRs; Jonny merges them
+## RULE: An upstream 5xx must not page once per poll
+
+A shared service returning HTTP 5xx will fail every poller at the same minute. The global error handler must not turn that into one Telegram message per failed poll.
+
+- `Build Alert Message` classifies a 5xx (or Airtable's `SERVER_ERROR`) as `check5xx`.
+- `Find Recent Upstream Alert` checks the Ops Log for an `(upstream 5xx)` row from the last 15 minutes. If one exists, the failure is logged and no message is sent.
+- The first 5xx of a burst still alerts, so a real outage is not silent. Later failures produce at most one repeat every 15 minutes.
+- Every failure keeps an Ops Log row. The `Detail` field carries the failed node, HTTP code, error, trigger-level flag, and execution, so the assistant can diagnose without the Telegram stream.
+- If the Ops Log itself is unreachable, the check fails quiet rather than flooding. That is a deliberate trade: a total Airtable outage can be silent, but it can never repeat the 2026-11-27 storm.
+
+**Why.** On 2026-11-27 Airtable returned 500 for every request to the content base for seven minutes. Fourteen workflows failed, the handler logged 84 rows, and it sent 84 Telegram messages. The cause was external; the flood was ours. Reference incident: `tmp/workflow_failure_runs_20261127.md`.
+
+
 
 **An agent never merges its own pull request, and never pushes straight to `main`.** The
 workflow is: branch, commit, push the branch, open the PR, **report the URL and stop**.

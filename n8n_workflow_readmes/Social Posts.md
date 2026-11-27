@@ -240,7 +240,7 @@ See `BA - Schedule Every 2h > X Post Readiness.md` for the exact conditions and 
 - Fires every minute, then searches the shared `Ready for Social Posts` view (`viw7OScgqnRQdCLJz`), up to 20 rows, oldest first. `Pick Clip` takes the oldest row with `Type = Audionauts`, `Status = AI Analysis Complete`, `Transcript` not empty, `Social Posts` empty, `Workflow Lock` empty and `Title` not empty. The view must include `AI Analysis Complete` in its Status filter and require `Workflow Lock is empty`.
 - Reads the parent episode (from `Associated Episode`) for the proper title and guest names, then drafts one rundown from the clip transcript with `Audionauts Post` + `Social Post Humanizer`.
 - Writes one `Proposed` row, `Platform = Keet + Telegram`, `Option = 1`, and posts `🟡 Audionauts post ready`.
-- Claims the row with `Workflow Lock` before the model call. On success it sets `Status = Audionauts Post Ready` and clears the lock; on failure the lock stays and the reason goes to Telegram, so a bad run cannot loop. Clear the lock to retry.
+- Claims the row with `Workflow Lock` before the model call. On success it sets `Status = Audionauts Post Ready` and clears the lock; on failure the lock stays and the reason goes to Telegram, so a bad run cannot loop. Clear the lock to retry. A transient upstream failure before the claim is different: nothing was written and no lock was set, so it is logged to the Ops Log as `Skipped` and sends nothing; the next poll retries. See the Audionauts draft readme.
 
 ### 6. Audionauts select — `BA - Audionauts Post Selected > Keet and Telegram Linked` (`e8tczdCg5MB0RSVP`, ACTIVE)
 

@@ -1,5 +1,7 @@
 # BA - Audionauts Transcript Ready > Keet and Telegram Post Drafted
 
+> **2026-11-27, pre-claim lookup failures stop paging every minute (LIVE, published).** During the Airtable incident the view search returned HTTP 500 on every poll. The old failure branch sent "Audionauts post failed / no-id / clear Workflow Lock" every minute, even though no clip had been picked and no lock existed. `Build Audionauts Failure` now tells a transient upstream error (5xx, 429, DNS, network) from a logic error, and whether `Claim Clip` actually ran. A transient failure **before** the claim is written to the Ops Log as `Skipped` and sends no Telegram; after the claim it still sends one message, because the lock is now holding the row out of the view. The message also stops saying "clear Workflow Lock" when there is no clip or no lock.
+
 > **Find this workflow in n8n by name.** Workflow IDs can change when a workflow is rebuilt. ID at time of writing: `jDEHmj4d0R4PPsiN`. Created 2026-11-23.
 
 Writes the short rundown that goes with an Audionauts clip once its transcript is saved, and posts it to the team group. One draft per clip, then the normal `option 1` / `revise:` replies. Selecting it fills the episode's Keet and Telegram publication rows with the same copy.
@@ -52,9 +54,15 @@ Every Minute
   -> Complete Clip             Status = "Audionauts Post Ready", Workflow Lock = ""
   -> Build Audionauts Message
   -> Send Audionauts Post      team group
+
+Any error
+  -> Build Audionauts Failure
+  -> Notify About Failure?
+       true  -> Notify Audionauts Failure   one Telegram message
+       false -> Log Audionauts Skip         Ops Log, Type = Skipped, no Telegram
 ```
 
-Every fallible step after the claim routes to `Build Audionauts Failure` -> `Notify Audionauts Failure`. Nothing writes the failure to Airtable: the lock left on the row is the signal, and the reason is in Telegram and the failure alert.
+Every fallible step after the claim routes to `Build Audionauts Failure`. That node decides whether the error is a transient upstream failure and whether the claim succeeded. A transient failure before the claim sends nothing and writes one `Skipped` row to the Ops Log, so a seven-minute Airtable outage does not produce seven messages. A failure after the claim still sends exactly one message, because the lock is now the only signal and a human has to clear it. A non-transient error before the claim also sends one message, because it will retry every minute until someone fixes it.
 
 ---
 
@@ -115,6 +123,7 @@ The Telegram message is `🟡 Audionauts post ready`, the BA code and title, the
 | Node | Credential |
 |---|---|
 | `Find Audionauts Clip`, `Claim Clip`, `Resolve Parent Episode`, `Fetch Audionauts Prompts`, `Create Audionauts Social Post`, `Complete Clip` | `Airtable PAT` (Bearer) |
+| `Log Audionauts Skip` | `Airtable [n8n] (PAT)` (Ops Log base `appwcz1Bux9YLcZYm`) |
 | `Draft Audionauts Post` | `OpenRouter [n8n]` |
 | `Send Audionauts Post`, `Notify Audionauts Failure` | `Telegram [pod21_n8n_agent_bot]` |
 
@@ -139,7 +148,8 @@ That test used the old `Audionauts Post Tried` stamp. **The claim / lock path ha
 - **The shared view is the gate.** `Ready for Social Posts` must include `AI Analysis Complete` in its Status filter and `Workflow Lock is empty`, or nothing reaches this workflow / a claimed clip does not leave it. Airtable's API cannot read or edit view filters, so that is a manual UI change and has to be checked after any view edit.
 - **The search needs `Last Modified Time` to sort.** It exists on `Episodes` (`fld3Z4xdI4s2wVnRa`).
 - **One row per clip.** Revisions rewrite the same row; they do not create four.
-- **A failure is one message, not a loop.** Clear `Workflow Lock` on the episode to retry after fixing the cause. The status stays at `AI Analysis Complete` unless the failure happened at `Complete Clip`.
-- **A stuck `Workflow Lock` always means a run died.** That is deliberate: it is the only way a failed run cannot retry itself every minute.
+- **A failure after the claim is one message, not a loop.** Clear `Workflow Lock` on the episode to retry after fixing the cause. The status stays at `AI Analysis Complete` unless the failure happened at `Complete Clip`.
+- **A lookup failure before the claim is not a failure you need to act on.** If Airtable returns a 5xx, 429 or a network error before `Claim Clip`, the run writes a `Skipped` row to the Ops Log and sends nothing. Nothing was written and the row is still unlocked, so the next poll retries. The message for a non-transient pre-claim error says "Nothing was written and no lock was set"; it does not tell you to clear a lock that does not exist.
+- **A stuck `Workflow Lock` always means a run died.** That is deliberate: it is the only way a failed run cannot retry itself every minute. A transient error after the claim still notifies, because the lock would otherwise be invisible.
 - **The transcript goes to the model in full.** That is what the format needs; a long clip costs more tokens than an X post.
 - `versionId == activeVersionId`, active, `availableInMCP`, error workflow `9PMI1kuBjLW2YHwb` as of 2026-11-23.
